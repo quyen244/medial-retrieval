@@ -1,0 +1,13 @@
+langchain
+langchain-text-splitters
+
+langchain-huggingface
+sentence-transformers
+langchain-qdrant
+qdrant-client
+
+# Ingestion
+datasets
+httpx
+trafilatura
+rich

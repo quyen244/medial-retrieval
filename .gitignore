@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+
+# Build and package artifacts
+build/
+dist/
+*.egg-info/
+
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+
+# Project data, caches, and MLflow artifacts
+/data/
+/cache/
+/mlruns/
+mlflow.db
+
+# Logs
+*.log
