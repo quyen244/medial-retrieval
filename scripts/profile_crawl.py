@@ -66,20 +66,33 @@ async def run(limit: int, concurrency: int, extract_workers: int) -> None:
     semaphore = asyncio.Semaphore(concurrency)
     done = 0
 
+    inflight = {"n": 0, "peak": 0}
+    samples_log = []
+
+    async def gauge():
+        while True:
+            await asyncio.sleep(2)
+            samples_log.append(inflight["n"])
+
     async def one(sample, client):
         nonlocal done
         async with semaphore:
+            inflight["n"] += 1
+            inflight["peak"] = max(inflight["peak"], inflight["n"])
             crawler = sites.crawler_for_domain(sample.domain)
             started = time.monotonic()
             outcome = await crawler.crawl_one(client, sample, config)
             timings["crawl_one"] += time.monotonic() - started
             store(outcome, crawler.name, out_dir)
+            inflight["n"] -= 1
             done += 1
 
     started = time.monotonic()
+    g = asyncio.create_task(gauge())
     async with build_client(30, concurrency) as client:
         await asyncio.gather(*(one(s, client) for s in samples))
     wall = time.monotonic() - started
+    g.cancel()
 
     await sites.close_all()
     extraction.shutdown_extraction_pool()

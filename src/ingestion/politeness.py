@@ -47,29 +47,26 @@ HOST_OVERRIDES: dict[str, HostLimits] = {
     "eutils.ncbi.nlm.nih.gov": HostLimits(max_concurrent=1, min_interval=0.34),
     "pubmed.ncbi.nlm.nih.gov": HostLimits(max_concurrent=1, min_interval=1.0),
 
-    # The four largest crawlable domains set the length of the whole run, so
-    # their ceiling was measured rather than assumed: 10 requests in one
-    # second returned 10/10 with p50 latency of 0.1-0.3s and no sign of
-    # strain. 5/s is half the rate that showed no stress, which leaves room
-    # for the site's own traffic while cutting the run from 21.5h to 8.6h.
-    # These four are the tail of the run: once the small domains are done,
-    # the clock is theirs alone, so they get the full rate they were measured
-    # to tolerate (10/s returned 10/10 with p50 latency of 0.1-0.3s).
-    "suckhoecongdongonline.vn": HostLimits(max_concurrent=8, min_interval=0.1),
-    "suckhoedoisong.vn": HostLimits(max_concurrent=8, min_interval=0.1),
-    "thanhnien.vn": HostLimits(max_concurrent=8, min_interval=0.1),
-    "nhathuoclongchau.com.vn": HostLimits(max_concurrent=8, min_interval=0.1),
+    # The three largest crawlable domains. A short probe said they tolerate
+    # 10 requests per second, and that probe was misleading: a burst of ten
+    # is not the same as hours of steady load. Five other domains were tuned
+    # from exactly that kind of evidence and ended up blocking this client
+    # outright. These get 5/s, which is half the probed figure, because they
+    # are the ones the corpus cannot afford to lose.
+    "suckhoecongdongonline.vn": HostLimits(max_concurrent=5, min_interval=0.2),
+    "suckhoedoisong.vn": HostLimits(max_concurrent=5, min_interval=0.2),
+    "thanhnien.vn": HostLimits(max_concurrent=5, min_interval=0.2),
 
-    # The opposite case. These sit behind an openresty rule that counts
-    # connections, not requests: at the default 6 in flight they answered 403
-    # to roughly a third of everything (9 of 13 articles each), and at 2 they
-    # answer normally. They are small enough that the slower rate costs
-    # minutes, while pushing them costs the documents entirely.
-    "baohaiphong.vn": HostLimits(max_concurrent=2, min_interval=0.5),
-    "baonghean.vn": HostLimits(max_concurrent=2, min_interval=0.5),
-    "baodanang.vn": HostLimits(max_concurrent=2, min_interval=0.5),
-    "hanoimoi.vn": HostLimits(max_concurrent=2, min_interval=0.5),
-    "mega.vietnamplus.vn": HostLimits(max_concurrent=2, min_interval=0.5),
+    # Currently refusing this client. Sustained crawling took all five from
+    # working to answering 403 even to a single slow request, so they are held
+    # at a trickle for whenever the block lifts. The circuit breaker stops the
+    # crawl from spending requests on them in the meantime.
+    "nhathuoclongchau.com.vn": HostLimits(max_concurrent=1, min_interval=2.0),
+    "baohaiphong.vn": HostLimits(max_concurrent=1, min_interval=2.0),
+    "baonghean.vn": HostLimits(max_concurrent=1, min_interval=2.0),
+    "baodanang.vn": HostLimits(max_concurrent=1, min_interval=2.0),
+    "hanoimoi.vn": HostLimits(max_concurrent=1, min_interval=2.0),
+    "mega.vietnamplus.vn": HostLimits(max_concurrent=1, min_interval=2.0),
 }
 
 

@@ -34,6 +34,30 @@ DEFAULT_MIN_CHARS = 300
 _HEADING_RE = re.compile(r"^#{1,6}\s+\S", re.MULTILINE)
 _HTML_LANG_RE = re.compile(r"<html[^>]*\blang=[\"']([^\"']+)[\"']", re.IGNORECASE)
 
+# Next.js apps that render a client-side 404 answer with HTTP 200: the page
+# shell loads fine, but the only content is a React payload saying the route
+# does not exist. trafilatura correctly extracts nothing from it, because
+# there is nothing there - the article was deleted, not mis-parsed. Found on
+# bachmai.gov.vn; the marker is Next.js's own default 404 copy, not anything
+# site-specific, so it should generalize to other Next.js sites in the corpus.
+_NEXTJS_SOFT_404_MARKER = "This page could not be found"
+
+
+def is_soft_404(html: str) -> bool:
+    """True when a 200 response is a client-rendered 404, not an article."""
+    return _NEXTJS_SOFT_404_MARKER in html
+
+
+def classify_empty_extraction(html: str) -> str:
+    """Why a 200 response with no extractable text happened.
+
+    Every HTML-based site crawler calls this when extraction comes back
+    empty, so the distinction is made once: "deleted_article" means the page
+    says so itself and retrying is pointless; "empty_extraction" covers
+    everything else - usually a challenge page, which can succeed later.
+    """
+    return "deleted_article" if is_soft_404(html) else "empty_extraction"
+
 
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()

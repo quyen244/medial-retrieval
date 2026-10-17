@@ -196,6 +196,29 @@ async def polite_get(
         return await client.get(url, headers=headers)
 
 
+def _is_permanent(exc: Exception) -> bool:
+    """True when retrying cannot possibly change the outcome.
+
+    A 404 or a wrong Content-Type describes the URL itself, not a transient
+    condition - the tenth attempt fails for exactly the same reason as the
+    first. Retrying these burns a worker slot on backoff sleeps (up to 7s
+    across the default 3 retries) for nothing, and at scale that adds up: in
+    one run, thousands of permanently-404 and image-typed URLs each cost
+    their worker several idle seconds, which is what made the whole crawl
+    look stalled despite still making progress.
+
+    Anti-bot blocks (UnexpectedStatusError, BlockedPageError) and 5xx/429 stay
+    retryable - those genuinely can resolve on a later attempt, as measured
+    earlier where 2 of 3 identical PubMed requests returned a block page and
+    one did not.
+    """
+    if isinstance(exc, NotHtmlError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code == 404
+    return False
+
+
 async def fetch_html(
     client: httpx.AsyncClient,
     url: str,
@@ -207,22 +230,27 @@ async def fetch_html(
 
     Returns (html, final_url, status_code). Raises FetchError when every
     attempt failed, including when the server answered but the body was not
-    an article. Retries are worth it even for blocks: anti-bot pages are
-    often served intermittently rather than permanently.
+    an article. Retries are worth it for blocks - anti-bot pages are often
+    served intermittently - but not for errors the URL itself guarantees,
+    which fail the same way every time; see _is_permanent.
     """
     last_error: Exception | None = None
+    attempts_made = 0
 
     for attempt in range(retries + 1):
+        attempts_made += 1
         try:
             response = await polite_get(client, url, policy, headers)
             html = validate_response(response)
             return html, str(response.url), response.status_code
         except (httpx.HTTPError, FetchError) as exc:
             last_error = exc
+            if _is_permanent(exc):
+                break
             if attempt < retries:
                 await asyncio.sleep(min(2**attempt, 8))
 
     raise FetchError(
-        f"Failed after {retries + 1} attempts: "
+        f"Failed after {attempts_made} attempt(s): "
         f"{type(last_error).__name__}: {last_error}"
     )

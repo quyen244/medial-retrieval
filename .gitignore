@@ -34,3 +34,6 @@ mlflow.db
 
 # Logs
 *.log
+
+
+/models

@@ -24,7 +24,7 @@ Measured over four articles: 0 characters before, 1,660-7,906 after.
 
 import httpx
 
-from src.ingestion.extraction import build_document_async
+from src.ingestion.extraction import build_document_async, classify_empty_extraction
 from src.ingestion.fetching import (
     BROWSER_HEADERS, FetchError, classify_failure, fetch_html,
 )
@@ -85,7 +85,7 @@ class BaoTayNinhCrawler(SiteCrawler):
         if document["quality"]["is_empty"]:
             return CrawlOutcome.failed(
                 sample,
-                reason="empty_extraction",
+                reason=classify_empty_extraction(html),
                 detail=f"HTTP {status}, {len(html)} bytes, nothing extracted "
                        "even after repairing the document",
             )

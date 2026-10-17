@@ -7,7 +7,7 @@ out clean this way, so this is the path most documents take.
 
 import httpx
 
-from src.ingestion.extraction import build_document_async
+from src.ingestion.extraction import build_document_async, classify_empty_extraction
 from src.ingestion.fetching import FetchError, classify_failure, fetch_html
 from src.ingestion.sites.base import CrawlConfig, CrawlOutcome, Sample, SiteCrawler
 
@@ -47,7 +47,7 @@ class GenericCrawler(SiteCrawler):
             # for a retry rather than storing.
             return CrawlOutcome.failed(
                 sample,
-                reason="empty_extraction",
+                reason=classify_empty_extraction(html),
                 detail=f"HTTP {status}, {len(html)} bytes of HTML, no text extracted",
             )
 

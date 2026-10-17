@@ -29,7 +29,7 @@ import asyncio
 
 from curl_cffi.requests import AsyncSession
 
-from src.ingestion.extraction import build_document_async
+from src.ingestion.extraction import build_document_async, classify_empty_extraction
 from src.ingestion.fetching import detect_block_page
 from src.ingestion.sites.base import CrawlConfig, CrawlOutcome, Sample, SiteCrawler
 
@@ -116,7 +116,7 @@ class ImpersonateCrawler(SiteCrawler):
         if document["quality"]["is_empty"]:
             return CrawlOutcome.failed(
                 sample,
-                reason="empty_extraction",
+                reason=classify_empty_extraction(response.text),
                 detail=f"HTTP 200, {len(response.text)} bytes, no text extracted",
             )
 
