@@ -1,0 +1,18 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Per-host limits:
+  default              6 concurrent, 0.20s apart (~5.0 req/s per host)
+  baodanang.vn         2 concurrent, 0.50s apart
+  baohaiphong.vn       2 concurrent, 0.50s apart
+  baonghean.vn         2 concurrent, 0.50s apart
+  eutils.ncbi.nlm.nih.gov 1 concurrent, 0.34s apart
+  hanoimoi.vn          2 concurrent, 0.50s apart
+  mega.vietnamplus.vn  2 concurrent, 0.50s apart
+  nhathuoclongchau.com.vn 8 concurrent, 0.10s apart
+  pubmed.ncbi.nlm.nih.gov 1 concurrent, 1.00s apart
+  suckhoecongdongonline.vn 8 concurrent, 0.10s apart
+  suckhoedoisong.vn    8 concurrent, 0.10s apart
+  thanhnien.vn         8 concurrent, 0.10s apart
+[progress] 5000/740598 excluded=105 skipped=4895
+[progress] 10000/740598 excluded=214 skipped=9786
+[progress] 15000/740598 excluded=321 failed=614 ok=4174 skipped=9883 too_short=8
+[progress] 20000/740598 excluded=427 failed=1090 ok=8586 skipped=9883 too_short=14

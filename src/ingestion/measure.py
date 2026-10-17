@@ -29,13 +29,14 @@ from rich.progress import (
 )
 from rich.table import Table
 
-from src.ingestion import storage
+from src.ingestion import sites, storage
 from src.ingestion.extraction import (
     DEFAULT_MIN_CHARS, count_headings, extract_markdown, extract_metadata,
 )
 from src.ingestion.fetching import (
     FetchError, build_client, classify_failure, fetch_html,
 )
+from src.ingestion.politeness import HostLimits, PolitenessPolicy
 from src.ingestion.utils import get_dataset
 
 
@@ -158,11 +159,14 @@ async def probe_page(
     semaphore: asyncio.Semaphore,
     sample: Sample,
     retries: int,
+    policy: PolitenessPolicy,
 ) -> PageProbe:
     """Fetch and extract one article without storing it. Never raises."""
     async with semaphore:
         try:
-            html, _final_url, status = await fetch_html(client, sample.url, retries)
+            html, _final_url, status = await fetch_html(
+                client, sample.url, retries, policy=policy
+            )
         except (FetchError, httpx.HTTPError) as exc:
             return PageProbe(
                 doc_id=sample.doc_id, domain=sample.domain, url=sample.url,
@@ -195,6 +199,9 @@ async def probe_all(
     random.Random(0).shuffle(shuffled)
 
     semaphore = asyncio.Semaphore(concurrency)
+    # The measurement run is a crawl too: one host must not receive ten
+    # back-to-back requests just because it is being evaluated.
+    policy = PolitenessPolicy(HostLimits(max_concurrent=1, min_interval=1.0))
     probes: list[PageProbe] = []
 
     columns = (
@@ -211,7 +218,9 @@ async def probe_all(
 
         async with build_client(timeout) as client:
             pending = [
-                asyncio.create_task(probe_page(client, semaphore, sample, retries))
+                asyncio.create_task(
+                    probe_page(client, semaphore, sample, retries, policy)
+                )
                 for sample in shuffled
             ]
             for coro in asyncio.as_completed(pending):
@@ -416,6 +425,24 @@ def load_corpus_pct() -> dict[str, float]:
     return {row["domain"]: row["pct"] for row in data["domains"]}
 
 
+def drop_handled_domains(samples: list[Sample]) -> tuple[list[Sample], list[str]]:
+    """Remove domains that already have a dedicated crawler.
+
+    Those are solved or known-blocked, and re-probing them with the generic
+    path would both waste requests and, in PubMed's case, repeat exactly the
+    access pattern that got this client blocked. What is worth measuring is
+    the territory no one has looked at yet.
+    """
+    kept, skipped = [], set()
+    for sample in samples:
+        crawler = sites.crawler_for_domain(sample.domain)
+        if crawler is sites.FALLBACK_CRAWLER:
+            kept.append(sample)
+        else:
+            skipped.add(f"{sample.domain} ({crawler.name})")
+    return kept, sorted(skipped)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Measure per-domain extraction quality on a sample of articles."
@@ -429,6 +456,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--retries", type=int, default=1)
     parser.add_argument("--min-chars", type=int, default=DEFAULT_MIN_CHARS)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--include-handled", action="store_true",
+                        help="Also probe domains that already have their own crawler")
     return parser.parse_args()
 
 
@@ -436,6 +465,13 @@ def main() -> int:
     args = parse_args()
 
     samples = select_samples(args.domains, args.per_domain, args.seed)
+    if not args.include_handled:
+        samples, skipped = drop_handled_domains(samples)
+        if skipped:
+            console.print(
+                f"[dim]Skipping {len(skipped)} domains that already have a "
+                f"crawler: {', '.join(skipped)}[/dim]\n"
+            )
     console.print(
         f"Sampling [bold]{args.per_domain}[/bold] articles from each of the "
         f"[bold]{args.domains}[/bold] largest domains "

@@ -1,50 +1,53 @@
 """Crawl the ViBioMIR corpus into per-domain JSON documents.
 
 Run:
-    python -m src.ingestion.crawler --concurrency 8 --sleep 1
+    python -m src.ingestion.crawler --concurrency 16
+    python -m src.ingestion.crawler --routes      # show which crawler owns what
 
-The pipeline is deliberately split across modules: fetching.py decides whether
-a response is real content, extraction.py turns HTML into the stored shape,
-storage.py decides where it lands. This file only wires them together and
-reports what happened.
+Each URL is routed to the crawler that owns its domain (see src/ingestion/sites),
+so a site that needs special handling gets it without complicating the rest.
+This file owns only the orchestration: how the work is ordered and paced,
+where results are stored, and what is written down when something fails.
+
+Pacing lives entirely in the per-host policy (see politeness.py). There is no
+global batch barrier: documents flow through a pool of workers that share one
+round-robin stream, so one slow host cannot stall the documents queued behind
+it. An earlier batch-based design took 3.6 seconds for a batch of 32 when 8 of
+them shared a host, against 0.08 seconds when they did not.
 """
 
 import argparse
 import asyncio
 import json
+import os
 import sys
-from collections import Counter
+from collections import Counter, deque
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-import httpx
-
-from src.ingestion import storage
-from src.ingestion.extraction import DEFAULT_MIN_CHARS, build_document
-from src.ingestion.fetching import (
-    FetchError, build_client, classify_failure, fetch_html,
+from src.ingestion import sites, storage
+from src.ingestion.categories import language_of
+from src.ingestion.extraction import (
+    DEFAULT_MIN_CHARS, shutdown_extraction_pool, start_extraction_pool,
 )
+from src.ingestion.fetching import build_client
+from src.ingestion.politeness import HostLimits, PolitenessPolicy
+from src.ingestion.sites import CrawlConfig, CrawlOutcome, Sample, SiteCrawler
 from src.ingestion.utils import get_dataset
 
 
 # Outcomes of processing one sample. Only OK means a usable article was stored.
 OK = "ok"
-SKIPPED = "skipped"          # already on disk from an earlier run
-TOO_SHORT = "too_short"      # stored, but almost certainly not an article
-EMPTY = "empty"              # extractor found no content; not stored
-FAILED = "failed"            # never got usable HTML; not stored
+SKIPPED = "skipped"        # already on disk from an earlier run
+TOO_SHORT = "too_short"    # stored, but probably not a real article
+FAILED = "failed"          # nothing usable retrieved; not stored
+EXCLUDED = "excluded"      # the source was deliberately dropped
 
-
-@dataclass(frozen=True)
-class Sample:
-    """One row of the corpus."""
-    doc_id: int
-    url: str
-
-    @property
-    def domain(self) -> str:
-        return storage.domain_of(self.url)
+# Statuses that leave the document still owing us a crawl. EXCLUDED is not one
+# of them: a dropped source is a decision, not a backlog item.
+RETRYABLE = (FAILED,)
 
 
 @dataclass(frozen=True)
@@ -52,20 +55,21 @@ class Result:
     """What happened to one sample, for logging and the final summary."""
     status: str
     sample: Sample
+    crawler: str = ""
     char_count: int = 0
     reason: str = ""    # short, groupable label
     detail: str = ""    # full message, for debugging one case
 
     @property
     def needs_retry_later(self) -> bool:
-        """Nothing usable was stored, so this document still owes us a crawl."""
-        return self.status in (FAILED, EMPTY)
+        return self.status in RETRYABLE
 
     def to_log_line(self) -> str:
         payload = {
             "status": self.status,
             "doc_id": self.sample.doc_id,
             "domain": self.sample.domain,
+            "crawler": self.crawler,
         }
         if self.char_count:
             payload["char_count"] = self.char_count
@@ -81,6 +85,7 @@ class Result:
             "doc_id": self.sample.doc_id,
             "domain": self.sample.domain,
             "url": self.sample.url,
+            "crawler": self.crawler,
             "status": self.status,
             "reason": self.reason,
             "detail": self.detail,
@@ -88,122 +93,250 @@ class Result:
         }
 
 
-@dataclass(frozen=True)
-class Options:
-    """Everything the pipeline needs that is not the sample itself."""
-    out_dir: Path
-    retries: int
-    min_chars: int
-    favor_precision: bool
-
-
-async def process_sample(
-    client: httpx.AsyncClient,
-    semaphore: asyncio.Semaphore,
-    sample: Sample,
-    options: Options,
-) -> Result:
-    """Fetch, extract and store one article. Never raises."""
-    if not storage.is_http_url(sample.url):
-        return Result(FAILED, sample, reason="bad_url", detail="not an http(s) URL")
-
-    path = storage.document_path(options.out_dir, sample.domain, sample.doc_id)
-    if path.exists():
-        return Result(SKIPPED, sample)
-
-    async with semaphore:
-        try:
-            html, final_url, status_code = await fetch_html(
-                client, sample.url, options.retries
-            )
-        except (FetchError, httpx.HTTPError) as exc:
-            return Result(
-                FAILED, sample,
-                reason=classify_failure(exc),
-                detail=f"{type(exc).__name__}: {exc}",
-            )
-
-    document = build_document(
-        html=html,
-        doc_id=sample.doc_id,
-        domain=sample.domain,
-        requested_url=sample.url,
-        final_url=final_url,
-        status_code=status_code,
-        min_chars=options.min_chars,
-        favor_precision=options.favor_precision,
-    )
-
-    chars = document["content"]["char_count"]
-    if document["quality"]["is_empty"]:
-        # A 200 with no extractable text is usually a JS challenge rather than
-        # a genuinely empty article, so it is worth recording for a retry.
+def store(outcome: CrawlOutcome, crawler_name: str, out_dir: Path) -> Result:
+    """Write a successful outcome to disk and describe what happened."""
+    if not outcome.ok:
+        status = EXCLUDED if outcome.reason == "excluded" else FAILED
         return Result(
-            EMPTY, sample,
-            reason="empty_extraction",
-            detail=f"HTTP {status_code}, {len(html)} bytes of HTML, no text extracted",
+            status, outcome.sample, crawler=crawler_name,
+            reason=outcome.reason, detail=outcome.detail,
         )
 
+    document = outcome.document
+    path = storage.document_path(
+        out_dir, outcome.sample.domain, outcome.sample.doc_id
+    )
     storage.save_document(path, document)
-    status = TOO_SHORT if document["quality"]["too_short"] else OK
-    return Result(status, sample, char_count=chars)
+
+    return Result(
+        TOO_SHORT if document["quality"]["too_short"] else OK,
+        outcome.sample,
+        crawler=crawler_name,
+        char_count=document["content"]["char_count"],
+    )
 
 
-def iter_samples(limit: int | None) -> list[Sample]:
-    """Load the corpus rows to crawl, in corpus order."""
+def interleave_by_domain(samples: list[Sample]) -> list[Sample]:
+    """Reorder so consecutive samples belong to different domains.
+
+    The corpus is stored grouped by domain: a thousand consecutive rows are
+    usually one site, and pubmed alone occupies 240,000 rows in a block. Left
+    in that order, every worker in the pool is pointed at the same server at
+    the same time, and the per-host limit throttles the entire run to one
+    site's pace.
+
+    Round-robin across domains fixes both halves of that: each host sees a
+    thin, spaced stream, while the pool stays busy because the hosts in flight
+    are all different.
+    """
+    buckets: dict[str, deque[Sample]] = {}
+    for sample in samples:
+        buckets.setdefault(sample.domain, deque()).append(sample)
+
+    queues = list(buckets.values())
+    ordered: list[Sample] = []
+    while queues:
+        for queue in queues:
+            ordered.append(queue.popleft())
+        queues = [queue for queue in queues if queue]
+    return ordered
+
+
+def load_samples(
+    limit: int | None,
+    interleave: bool = True,
+    language: str | None = None,
+) -> list[Sample]:
+    """Load the corpus rows to crawl.
+
+    `language` narrows the run to one language group, so the three groups can
+    be crawled separately - useful because they have different owners,
+    different blockers and very different sizes.
+    """
     data = get_dataset("corpus")["train"]
-    total = len(data) if limit is None else min(limit, len(data))
-    rows = data[:total]
-    return [Sample(doc_id, url) for doc_id, url in zip(rows["id"], rows["url"])]
+    rows = data[:]
+
+    samples = [
+        Sample(doc_id, url, storage.domain_of(url))
+        for doc_id, url in zip(rows["id"], rows["url"])
+    ]
+    if language:
+        samples = [s for s in samples if language_of(s.domain) == language]
+
+    if interleave:
+        samples = interleave_by_domain(samples)
+
+    # Limit last, and after interleaving: the corpus is grouped by domain, so
+    # taking the first N rows of it would sample one site rather than the run.
+    # Applied after the round-robin, --limit 400 spreads over every domain,
+    # which is what makes a short run a useful rehearsal for a long one.
+    return samples[:limit] if limit is not None else samples
+
+
+class Reporter:
+    """Collects results: counts them, logs the problems, buffers the backlog.
+
+    The ledger is flushed periodically rather than per document, so a run that
+    dies partway through still leaves behind nearly everything it learned
+    without paying for a file write per URL.
+    """
+
+    def __init__(self, out_dir: Path, total: int, flush_every: int, verbose: bool):
+        self.out_dir = out_dir
+        self.total = total
+        self.flush_every = flush_every
+        self.verbose = verbose
+        self.tally: Counter = Counter()
+        self.done = 0
+        self._pending: list[dict] = []
+
+    def record(self, result: Result) -> None:
+        self.tally[result.status] += 1
+        self.done += 1
+
+        # Successes are counted, not printed: a 1.2M-row run would otherwise
+        # bury the problems under a million good lines.
+        if self.verbose or result.status in (FAILED, TOO_SHORT):
+            print(result.to_log_line())
+
+        if result.needs_retry_later:
+            self._pending.append(result.to_failure_record())
+
+        if self.done % self.flush_every == 0:
+            self.flush()
+            self.print_progress()
+
+    def flush(self) -> None:
+        if self._pending:
+            storage.record_failures(self.out_dir, self._pending)
+            self._pending.clear()
+
+    def print_progress(self) -> None:
+        print(
+            f"[progress] {self.done}/{self.total} "
+            + " ".join(f"{name}={count}" for name, count in sorted(self.tally.items())),
+            file=sys.stderr,
+        )
+
+
+def partition_by_mode(
+    samples: list[Sample],
+) -> tuple[dict[SiteCrawler, list[Sample]], list[Sample]]:
+    """Split the work into bulk jobs and a per-URL stream.
+
+    A bulk crawler turns many documents into few requests and paces itself, so
+    it is handed its whole share at once. Everything else is crawled one URL
+    at a time by the worker pool.
+    """
+    bulk: dict[SiteCrawler, list[Sample]] = {}
+    stream: list[Sample] = []
+
+    for sample in samples:
+        crawler = sites.crawler_for_domain(sample.domain)
+        if crawler.prefers_bulk:
+            bulk.setdefault(crawler, []).append(sample)
+        else:
+            stream.append(sample)
+
+    return bulk, stream
 
 
 async def crawl(samples: list[Sample], args: argparse.Namespace) -> Counter:
-    """Run the whole corpus in batches, reporting as it goes."""
-    options = Options(
-        out_dir=Path(args.out),
+    """Crawl every sample, then report what happened."""
+    out_dir = Path(args.out)
+    policy = PolitenessPolicy(
+        HostLimits(
+            max_concurrent=args.per_host_concurrency,
+            min_interval=args.per_host_delay,
+        )
+    )
+    config = CrawlConfig(
         retries=args.retries,
         min_chars=args.min_chars,
         favor_precision=args.favor_precision,
+        policy=policy,
     )
-    semaphore = asyncio.Semaphore(args.concurrency)
-    tally: Counter = Counter()
+    print("Per-host limits:\n" + policy.describe(), file=sys.stderr)
 
-    async with build_client(args.timeout) as client:
-        for start in range(0, len(samples), args.batch_size):
-            batch = samples[start : start + args.batch_size]
+    reporter = Reporter(out_dir, len(samples), args.report_every, args.verbose)
+    bulk_jobs, stream = partition_by_mode(samples)
+    cursor = iter(stream)   # one shared position, consumed by every worker
 
-            results = await asyncio.gather(
+    try:
+        # The connection pool is sized to the workers; see build_client.
+        async with build_client(args.timeout, args.concurrency) as client:
+            await asyncio.gather(
                 *(
-                    process_sample(client, semaphore, sample, options)
-                    for sample in batch
-                )
+                    _run_bulk(client, crawler, group, config, out_dir, reporter)
+                    for crawler, group in bulk_jobs.items()
+                ),
+                *(
+                    _worker(client, cursor, config, out_dir, reporter)
+                    for _ in range(args.concurrency)
+                ),
             )
+    finally:
+        reporter.flush()
+        # Crawlers may hold a session open; the run owns shutting it down.
+        await sites.close_all()
+        shutdown_extraction_pool()
 
-            for result in results:
-                tally[result.status] += 1
-                # Successes are counted, not printed: a 1.2M-row run would
-                # otherwise bury the problems under a million good lines.
-                if args.verbose or result.status in (FAILED, EMPTY, TOO_SHORT):
-                    print(result.to_log_line())
+    reporter.print_progress()
+    return reporter.tally
 
-            # Write the backlog as we go, so a run that dies partway through
-            # still leaves behind what the per-domain crawlers will need.
-            storage.record_failures(
-                options.out_dir,
-                [r.to_failure_record() for r in results if r.needs_retry_later],
-            )
 
-            done = start + len(batch)
-            print(
-                f"[progress] {done}/{len(samples)} "
-                + " ".join(f"{name}={count}" for name, count in sorted(tally.items())),
-                file=sys.stderr,
-            )
+async def _run_bulk(
+    client,
+    crawler: SiteCrawler,
+    group: list[Sample],
+    config: CrawlConfig,
+    out_dir: Path,
+    reporter: Reporter,
+) -> None:
+    """Hand a bulk crawler its whole share in one call."""
+    todo = [s for s in group if not _already_stored(out_dir, s, reporter)]
+    if not todo:
+        return
+    for outcome in await crawler.crawl_many(client, todo, config):
+        reporter.record(store(outcome, crawler.name, out_dir))
 
-            if start + args.batch_size < len(samples):
-                await asyncio.sleep(args.sleep)
 
-    return tally
+async def _worker(
+    client,
+    stream: Iterator[Sample],
+    config: CrawlConfig,
+    out_dir: Path,
+    reporter: Reporter,
+) -> None:
+    """Pull samples one at a time until the stream is exhausted.
+
+    Every worker shares one iterator. Advancing it never awaits, so on a
+    single-threaded event loop no two workers can take the same sample.
+
+    There is deliberately no batch barrier here. A worker waiting on a slow
+    host holds up only itself, and because the stream is ordered round-robin
+    across domains, the next sample almost always belongs to a different host.
+    """
+    for sample in stream:
+        if _already_stored(out_dir, sample, reporter):
+            continue
+
+        if not storage.is_http_url(sample.url):
+            reporter.record(Result(
+                FAILED, sample, reason="bad_url", detail="not an http(s) URL"
+            ))
+            continue
+
+        crawler = sites.crawler_for_domain(sample.domain)
+        outcome = await crawler.crawl_one(client, sample, config)
+        reporter.record(store(outcome, crawler.name, out_dir))
+
+
+def _already_stored(out_dir: Path, sample: Sample, reporter: Reporter) -> bool:
+    if storage.document_path(out_dir, sample.domain, sample.doc_id).exists():
+        reporter.record(Result(SKIPPED, sample))
+        return True
+    return False
 
 
 def parse_args() -> argparse.Namespace:
@@ -214,39 +347,56 @@ def parse_args() -> argparse.Namespace:
                         help="Output directory; documents land in <out>/<domain>/")
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument("--retries", type=int, default=3)
-    parser.add_argument("--batch_size", type=int, default=200,
-                        help="Samples dispatched before pausing for --sleep")
-    parser.add_argument("--concurrency", type=int, default=8,
-                        help="Max requests in flight at once")
-    parser.add_argument("--sleep", type=float, default=1.0,
-                        help="Seconds to pause between batches")
+    parser.add_argument("--concurrency", type=int, default=150,
+                        help="Worker count: how many documents are in flight at once")
+    parser.add_argument("--extract-workers", type=int,
+                        default=max(2, (os.cpu_count() or 4) - 2),
+                        help="Processes used to parse HTML off the event loop")
+    parser.add_argument("--report-every", type=int, default=500,
+                        help="Documents between progress lines and ledger flushes")
     parser.add_argument("--min_chars", type=int, default=DEFAULT_MIN_CHARS,
                         help="Below this a document is stored but flagged too_short")
     parser.add_argument("--favor_precision", action="store_true",
                         help="Trim boilerplate harder, at the risk of losing text")
+    parser.add_argument("--per-host-concurrency", type=int, default=6,
+                        help="Max simultaneous requests to any single host")
+    parser.add_argument("--per-host-delay", type=float, default=0.2,
+                        help="Minimum seconds between requests to the same host")
+    parser.add_argument("--no-interleave", action="store_true",
+                        help="Keep corpus order instead of rotating across domains")
+    parser.add_argument("--language", choices=["vi", "zh", "en"],
+                        help="Crawl only one language group")
     parser.add_argument("--limit", type=int, default=None,
                         help="Process only the first N rows (for testing)")
     parser.add_argument("--verbose", action="store_true",
                         help="Log every document, not just the problems")
+    parser.add_argument("--routes", action="store_true",
+                        help="Print the domain routing table and exit")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+
+    if args.routes:
+        print("Domain routing:")
+        print(sites.describe_routing())
+        return 0
+
     try:
-        samples = iter_samples(args.limit)
-        tally = crawl_sync(samples, args)
+        samples = load_samples(
+            args.limit,
+            interleave=not args.no_interleave,
+            language=args.language,
+        )
+        tally = asyncio.run(crawl(samples, args))
     except Exception as exc:
         print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
     print("[summary] " + " ".join(f"{k}={v}" for k, v in sorted(tally.items())),
           file=sys.stderr)
-    return 0 if tally[FAILED] == 0 and tally[EMPTY] == 0 else 2
-
-
-def crawl_sync(samples: list[Sample], args: argparse.Namespace) -> Counter:
-    return asyncio.run(crawl(samples, args))
+    return 0 if tally[FAILED] == 0 else 2
 
 
 if __name__ == "__main__":

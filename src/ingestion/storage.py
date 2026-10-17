@@ -28,8 +28,17 @@ def document_path(out_dir: Path, domain: str, doc_id: int) -> Path:
     return out_dir / domain / f"{doc_id}.json"
 
 
+# Directories already created this run. A crawl writes one file per document
+# into 94 directories, so asking the filesystem to create each one a million
+# times is a syscall per document for no information.
+_known_dirs: set[Path] = set()
+
+
 def save_document(path: Path, document: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    parent = path.parent
+    if parent not in _known_dirs:
+        parent.mkdir(parents=True, exist_ok=True)
+        _known_dirs.add(parent)
     path.write_text(
         json.dumps(document, ensure_ascii=False, indent=2),
         encoding="utf-8",

@@ -11,3 +11,4 @@ datasets
 httpx
 trafilatura
 rich
+curl_cffi
