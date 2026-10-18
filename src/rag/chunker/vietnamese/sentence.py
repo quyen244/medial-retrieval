@@ -48,10 +48,14 @@ class VietnameseSentenceSplitter(BaseSentenceSplitter):
         # 2. Protect decimals (e.g., 3.14 or 1.000)
         protected = re.sub(r'(\d+)\.(\d+)', r'\1§DOT§\2', protected)
 
-        # 3. Standardize multi-dots (...) into unicode ellipsis (…) so it serves as a delimiter
+        # 3. Protect numbered lists / headings (e.g., "1. ", "2. ", "10. ", "IV. ")
+        protected = re.sub(r'(^|\n|\b)(\d+)\.\s+', r'\1\2§NUMDOT§ ', protected)
+        protected = re.sub(r'(^|\n|\b)([IVXLCDM]+)\.\s+', r'\1\2§ROMANDOT§ ', protected)
+
+        # 4. Standardize multi-dots (...) into unicode ellipsis (…) so it serves as a delimiter
         protected = re.sub(r'\.{3,}', '…', protected)
 
-        # 4. Split by sentence terminators: [.?!;…] followed by whitespace or line break
+        # 5. Split by sentence terminators: [.?!;…] followed by whitespace or line break
         # Regex captures delimiters to preserve them with the preceding sentence
         parts = re.split(r'([.?!;…]+(?:\s+|$))', protected)
 
@@ -67,10 +71,12 @@ class VietnameseSentenceSplitter(BaseSentenceSplitter):
         if current.strip():
             raw_sentences.append(current.strip())
 
-        # 5. Restore placeholders in all sentences
+        # 6. Restore placeholders in all sentences
         restored_sentences: List[str] = []
         for s in raw_sentences:
             s = s.replace("§DOT§", ".")
+            s = s.replace("§NUMDOT§", ".")
+            s = s.replace("§ROMANDOT§", ".")
             s = s.replace("…", "...")
             for i, abbr in enumerate(self.abbrs):
                 token = f"§ABBR_{i}§"

@@ -1,5 +1,7 @@
 import unittest
 from src.rag.chunker import (
+    clean_markdown_syntax,
+    VietnameseMarkdownCleaner,
     VietnameseHeadingPromoter,
     VietnameseSentenceSplitter,
     VietnameseHierarchicalChunker,
@@ -8,6 +10,7 @@ from src.rag.chunker import (
     BaseChunker,
     Chunk,
 )
+
 
 
 class TestVietnameseHeadingPromoter(unittest.TestCase):
@@ -180,5 +183,119 @@ class TestOCPDispatcher(unittest.TestCase):
         self.assertEqual(chunks[0].chunk_id, "ja_01")
 
 
+class TestVietnameseMarkdownCleaner(unittest.TestCase):
+    def setUp(self):
+        self.cleaner = VietnameseMarkdownCleaner()
+
+    def test_clean_markdown_syntax_headings_and_bold(self):
+        text = "## **1. Húng quế (Ocimum basilicum-Lamiaceae)**"
+        cleaned = clean_markdown_syntax(text)
+        self.assertEqual(cleaned, "1. Húng quế (Ocimum basilicum-Lamiaceae)")
+        self.assertNotIn("**", cleaned)
+        self.assertNotIn("##", cleaned)
+
+    def test_clean_markdown_syntax_inline_formatting(self):
+        text = "Tinh dầu **húng quế** rất tốt cho *sức khỏe*. __Lưu ý:__ Uống đủ nước."
+        cleaned = clean_markdown_syntax(text)
+        self.assertEqual(cleaned, "Tinh dầu húng quế rất tốt cho sức khỏe. Lưu ý: Uống đủ nước.")
+
+    def test_clean_markdown_syntax_preserves_numbers_and_emails(self):
+        text = "Đạt 99.5%, giá 1.500.000 VNĐ, liên hệ bs_lan@bv.vn hoặc phòng 10-A."
+        cleaned = clean_markdown_syntax(text)
+        self.assertEqual(cleaned, text)
+
+
+class TestHeadingToContentBinding(unittest.TestCase):
+    def setUp(self):
+        self.chunker = VietnameseHierarchicalChunker(
+            min_chunk_size=150,
+            target_chunk_size=250,
+            max_chunk_size=350,
+            overlap_ratio=0.10,
+        )
+
+    def test_heading_never_orphaned_at_chunk_end(self):
+        doc = {
+            "source": {"doc_id": 888, "title": "Test Binding"},
+            "content": {
+                "markdown": (
+                    "# Tiêu đề\n\n"
+                    "Đoạn văn mở đầu có độ dài vừa đủ để lấp đầy khoảng 150 ký tự trong bộ đệm hiện tại.\n\n"
+                    "## **Mục 1: Tiêu đề quan trọng**\n\n"
+                    "Nội dung giải thích chi tiết cho Mục 1 đi kèm ngay sau đó."
+                )
+            }
+        }
+        chunks = self.chunker.chunk(doc)
+        for c in chunks:
+            lines = [l.strip() for l in c.content.split("\n") if l.strip()]
+            # Ensure the last line of any chunk is not an orphan heading
+            last_line = lines[-1]
+            self.assertNotEqual(last_line, "Mục 1: Tiêu đề quan trọng")
+            self.assertFalse(last_line.startswith("##"))
+
+
+class TestCrossSectionGreedyMerge(unittest.TestCase):
+    def setUp(self):
+        self.chunker = VietnameseHierarchicalChunker(
+            min_chunk_size=400,
+            target_chunk_size=600,
+            max_chunk_size=900,
+            overlap_ratio=0.10,
+        )
+
+    def test_small_sections_merged_into_target_size(self):
+        # 5 small sections of ~80 characters each
+        sections = [
+            f"## Mục {i}\n\nNội dung chi tiết ngắn gọn của mục số {i} nhằm kiểm tra cơ chế gộp greedy."
+            for i in range(1, 6)
+        ]
+        doc = {
+            "source": {"doc_id": 777, "title": "Test Merge"},
+            "content": {"markdown": "\n\n".join(sections)}
+        }
+        chunks = self.chunker.chunk(doc)
+        # Instead of 5 separate chunks, greedy merge should combine them into fewer, target-sized chunks
+        self.assertLess(len(chunks), 4)
+        for c in chunks:
+            self.assertLessEqual(c.char_length, self.chunker.max_chunk_size)
+
+
+class TestChunkDualAPI(unittest.TestCase):
+    def test_object_and_dict_access(self):
+        chunk = Chunk(
+            chunk_id="test_c001",
+            chunk_index=0,
+            content="Nội dung kiểm thử",
+            char_length=17,
+            doc_id=123,
+            domain="test.vn",
+            title="Tiêu đề",
+            metadata={"word_count": 4, "custom_key": "custom_val"}
+        )
+        # Object attribute access
+        self.assertEqual(chunk.content, "Nội dung kiểm thử")
+        self.assertEqual(chunk.metadata["word_count"], 4)
+        self.assertEqual(chunk.doc_id, 123)
+
+        # Dict / indexing access
+        self.assertEqual(chunk["content"], "Nội dung kiểm thử")
+        self.assertEqual(chunk["doc_id"], 123)
+        self.assertEqual(chunk["domain"], "test.vn")
+        self.assertEqual(chunk["word_count"], 4)
+        self.assertEqual(chunk["custom_key"], "custom_val")
+        self.assertEqual(chunk.get("title"), "Tiêu đề")
+        self.assertEqual(chunk.get("nonexistent", "fallback"), "fallback")
+        self.assertIn("content", chunk)
+        self.assertIn("word_count", chunk)
+
+        # dict(chunk) conversion
+        as_dict = dict(chunk)
+        self.assertIsInstance(as_dict, dict)
+        self.assertEqual(as_dict["chunk_id"], "test_c001")
+        self.assertEqual(as_dict["content"], "Nội dung kiểm thử")
+
+
 if __name__ == "__main__":
     unittest.main()
+

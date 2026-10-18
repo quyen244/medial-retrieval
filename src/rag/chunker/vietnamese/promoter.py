@@ -32,13 +32,27 @@ class VietnameseHeadingPromoter(BasePreprocessor):
         """Count markdown headings (# to ######) in text."""
         return len(self.EXISTING_HEADING_PATTERN.findall(text))
 
+    def normalize_existing_headings(self, text: str) -> str:
+        """Strip redundant bold/italic wrappers inside existing markdown headings (e.g. ## **Title** -> ## Title)."""
+        def clean_heading_line(match):
+            hashes = match.group(1)
+            content = match.group(2).strip()
+            cleaned_content = re.sub(r'^\s*[*_]+\s*', '', content)
+            cleaned_content = re.sub(r'\s*[*_]+\s*$', '', cleaned_content)
+            cleaned_content = re.sub(r'\*\*(.+?)\*\*', r'\1', cleaned_content)
+            cleaned_content = re.sub(r'__(.+?)__', r'\1', cleaned_content)
+            return f"{hashes} {cleaned_content.strip()}"
+
+        return re.sub(r'^(#{1,6})\s+(.+?)$', clean_heading_line, text, flags=re.MULTILINE)
+
     def process(self, text: str, **kwargs) -> Tuple[str, Dict[str, Any]]:
         """Promote pseudo-headings to standard markdown headings with false-positive filtering."""
         if not text:
             return "", {"headings_before": 0, "promoted_count": 0, "headings_after": 0, "promoted_items": []}
 
-        # Normalize line breaks
+        # Normalize line breaks and clean markdown heading decorations
         normalized = text.replace('\r\n', '\n')
+        normalized = self.normalize_existing_headings(normalized)
         
         headings_before = self.count_headings(normalized)
 

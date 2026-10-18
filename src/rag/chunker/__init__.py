@@ -5,6 +5,8 @@ from src.rag.chunker.dispatcher import ChunkerDispatcher, default_dispatcher
 
 # Import strategies to ensure self-registration in registry
 from src.rag.chunker.vietnamese import (
+    clean_markdown_syntax,
+    VietnameseMarkdownCleaner,
     VietnameseHeadingPromoter,
     VietnameseSentenceSplitter,
     VietnameseHierarchicalChunker,
@@ -20,6 +22,8 @@ __all__ = [
     "ChunkerRegistry",
     "ChunkerDispatcher",
     "default_dispatcher",
+    "clean_markdown_syntax",
+    "VietnameseMarkdownCleaner",
     "VietnameseHeadingPromoter",
     "VietnameseSentenceSplitter",
     "VietnameseHierarchicalChunker",

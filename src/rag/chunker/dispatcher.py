@@ -69,12 +69,13 @@ class ChunkerDispatcher:
         self._instances[key] = instance
         return instance
 
-    def detect_language(self, doc: Dict[str, Any], explicit_lang: Optional[str] = None) -> str:
+    def detect_language(self, doc_or_text: Union[Dict[str, Any], str], explicit_lang: Optional[str] = None) -> str:
         """Extract language identifier from parameters or document metadata and normalize (e.g. vi-VN -> vi)."""
         lang = explicit_lang
         if not lang or not str(lang).strip():
-            source = doc.get("source", {})
-            lang = source.get("language") or source.get("language_category")
+            if isinstance(doc_or_text, dict):
+                source = doc_or_text.get("source", {})
+                lang = source.get("language") or source.get("language_category")
 
         if lang and isinstance(lang, str) and lang.strip():
             cleaned = lang.strip().lower()
@@ -88,16 +89,42 @@ class ChunkerDispatcher:
 
         return self.default_language
 
-    def dispatch(self, doc: Dict[str, Any], language: Optional[str] = None, **kwargs) -> List[Chunk]:
-        """Dispatch document to appropriate language chunker and return produced Chunks."""
-        target_lang = self.detect_language(doc, explicit_lang=language)
+    def chunk_text(
+        self,
+        text: str,
+        language: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> List[Chunk]:
+        """Chunk raw text string directly with optional initial metadata."""
+        target_lang = self.detect_language(text, explicit_lang=language)
         chunker = self._resolve_chunker(target_lang)
-        chunks = chunker.chunk(doc, **kwargs)
-        return chunks
+        return chunker.chunk_text(text, metadata=metadata, **kwargs)
 
-    def chunk(self, doc: Dict[str, Any], language: Optional[str] = None, **kwargs) -> List[Chunk]:
-        """Convenience alias for dispatch()."""
-        return self.dispatch(doc, language=language, **kwargs)
+    def dispatch(
+        self,
+        doc_or_text: Union[Dict[str, Any], str],
+        language: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> List[Chunk]:
+        """Dispatch document dict or raw text to appropriate language chunker."""
+        if isinstance(doc_or_text, str):
+            return self.chunk_text(doc_or_text, language=language, metadata=metadata, **kwargs)
+
+        target_lang = self.detect_language(doc_or_text, explicit_lang=language)
+        chunker = self._resolve_chunker(target_lang)
+        return chunker.chunk(doc_or_text, **kwargs)
+
+    def chunk(
+        self,
+        doc_or_text: Union[Dict[str, Any], str],
+        language: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> List[Chunk]:
+        """Convenience alias for dispatch() - seamlessly accepts both Document Dict and raw text str."""
+        return self.dispatch(doc_or_text, language=language, metadata=metadata, **kwargs)
 
 
 # Global default instance
