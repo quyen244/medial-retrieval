@@ -11,8 +11,20 @@ from src.rag.chunker.vietnamese import (
     VietnameseSentenceSplitter,
     VietnameseHierarchicalChunker,
 )
-from src.rag.chunker.english import EnglishChunker
-from src.rag.chunker.chinese import ChineseChunker
+from src.rag.chunker.english import (
+    EnglishMarkdownCleaner,
+    EnglishHeadingPromoter,
+    EnglishSentenceSplitter,
+    EnglishHierarchicalChunker,
+    EnglishChunker,
+)
+from src.rag.chunker.chinese import (
+    ChineseMarkdownCleaner,
+    ChineseHeadingPromoter,
+    ChineseSentenceSplitter,
+    ChineseHierarchicalChunker,
+    ChineseChunker,
+)
 
 __all__ = [
     "Chunk",
@@ -27,6 +39,14 @@ __all__ = [
     "VietnameseHeadingPromoter",
     "VietnameseSentenceSplitter",
     "VietnameseHierarchicalChunker",
+    "EnglishMarkdownCleaner",
+    "EnglishHeadingPromoter",
+    "EnglishSentenceSplitter",
+    "EnglishHierarchicalChunker",
     "EnglishChunker",
+    "ChineseMarkdownCleaner",
+    "ChineseHeadingPromoter",
+    "ChineseSentenceSplitter",
+    "ChineseHierarchicalChunker",
     "ChineseChunker",
 ]

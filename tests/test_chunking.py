@@ -5,11 +5,21 @@ from src.rag.chunker import (
     VietnameseHeadingPromoter,
     VietnameseSentenceSplitter,
     VietnameseHierarchicalChunker,
+    ChineseMarkdownCleaner,
+    ChineseHeadingPromoter,
+    ChineseSentenceSplitter,
+    ChineseHierarchicalChunker,
+    EnglishMarkdownCleaner,
+    EnglishHeadingPromoter,
+    EnglishSentenceSplitter,
+    EnglishHierarchicalChunker,
     ChunkerRegistry,
     ChunkerDispatcher,
     BaseChunker,
     Chunk,
 )
+from src.rag.chunker.chinese.cleaner import clean_markdown_syntax as clean_markdown_syntax_zh
+from src.rag.chunker.english.cleaner import clean_markdown_syntax as clean_markdown_syntax_en
 
 
 
@@ -140,6 +150,16 @@ class TestOCPDispatcher(unittest.TestCase):
         self.assertEqual(self.dispatcher.detect_language(doc_vi), "vi")
         self.assertEqual(self.dispatcher.detect_language(doc_en), "en")
 
+    def test_language_category_takes_priority_over_noisy_language(self):
+        """Regression test: source.language_category is curated ground truth and must win
+        over the frequently-wrong source.language (e.g. ask.39.net/www.youlai.cn are Chinese
+        content mislabeled language='en'; qdnd.vn/benhvienvietduc.org are Vietnamese content
+        mislabeled language='en-US')."""
+        doc_zh_mislabeled = {"source": {"language": "en", "language_category": "zh"}}
+        doc_vi_mislabeled = {"source": {"language": "en-US", "language_category": "vi"}}
+        self.assertEqual(self.dispatcher.detect_language(doc_zh_mislabeled), "zh")
+        self.assertEqual(self.dispatcher.detect_language(doc_vi_mislabeled), "vi")
+
     def test_dispatch_vi(self):
         doc = {
             "source": {"doc_id": 1, "language": "vi"},
@@ -175,6 +195,8 @@ class TestOCPDispatcher(unittest.TestCase):
                 return [Chunk(chunk_id="ja_01", chunk_index=0, content="こんにちは", char_length=5, doc_id=doc.get("source", {}).get("doc_id"), language="ja")]
             def chunk_text(self, text, metadata=None, **kwargs):
                 return []
+            def get_params(self):
+                return {}
 
         doc = {"source": {"doc_id": 99, "language": "ja"}, "content": {"markdown": "テスト"}}
         chunks = self.dispatcher.dispatch(doc)
@@ -259,6 +281,366 @@ class TestCrossSectionGreedyMerge(unittest.TestCase):
         self.assertLess(len(chunks), 4)
         for c in chunks:
             self.assertLessEqual(c.char_length, self.chunker.max_chunk_size)
+
+
+class TestChineseMarkdownCleaner(unittest.TestCase):
+    def setUp(self):
+        self.cleaner = ChineseMarkdownCleaner()
+
+    def test_clean_markdown_syntax_headings_and_bold(self):
+        text = "## **一、目的：**"
+        cleaned = clean_markdown_syntax_zh(text)
+        self.assertEqual(cleaned, "一、目的：")
+        self.assertNotIn("**", cleaned)
+        self.assertNotIn("##", cleaned)
+
+    def test_clean_markdown_syntax_inline_formatting_no_word_boundary_issue(self):
+        # CJK text has no whitespace around emphasis markers; the cleaner must still strip them.
+        text = "本病情况**单纯**依靠中医治疗效果较差。"
+        cleaned = clean_markdown_syntax_zh(text)
+        self.assertEqual(cleaned, "本病情况单纯依靠中医治疗效果较差。")
+        self.assertNotIn("*", cleaned)
+
+    def test_clean_markdown_syntax_strips_footnote_markup(self):
+        text = "绒毛膜癌并迅速扩散<sup>\\[1\\]</sup><sup>\\[2\\]</sup>。"
+        cleaned = clean_markdown_syntax_zh(text)
+        self.assertNotIn("<sup>", cleaned)
+        self.assertNotIn("</sup>", cleaned)
+        self.assertIn("绒毛膜癌并迅速扩散", cleaned)
+
+    def test_clean_markdown_syntax_strips_backlink_arrow(self):
+        text = "1. ↑ Seckl MJ, Sebire NJ. Lancet. 2010."
+        cleaned = clean_markdown_syntax_zh(text)
+        self.assertNotIn("↑", cleaned)
+
+    def test_clean_markdown_syntax_preserves_decimals(self):
+        text = "血糖为99.5%，剂量为1.5MU/d。"
+        cleaned = clean_markdown_syntax_zh(text)
+        self.assertEqual(cleaned, text)
+
+
+class TestChineseHeadingPromoter(unittest.TestCase):
+    def setUp(self):
+        self.promoter = ChineseHeadingPromoter()
+
+    def test_plain_chinese_numeral_promotion(self):
+        text = "上文内容。\n\n一、辨证选方\n\n治法：温肾扶阳，活血行瘀。"
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 1)
+        self.assertIn("一、辨证选方", res)
+        self.assertIn("####", res)
+
+    def test_parenthesized_chinese_numeral_promotion(self):
+        text = "上文内容。\n\n(一)发病原因\n\n发生原因至今不明。"
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 1)
+        self.assertIn("(一)发病原因", res)
+
+    def test_circled_numeral_promotion(self):
+        text = "上文。\n\n①术前准备：\n\n详细了解患者一般情况。"
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 1)
+
+    def test_bold_wrapped_promotion(self):
+        text = "上文。\n\n**一、目的：**\n\n对症治疗以减轻痛苦。"
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 1)
+        self.assertIn("一、目的：", res)
+        self.assertNotIn("**一、目的：**", res)
+
+    def test_false_positive_fused_list_item(self):
+        """A numbered list item whose body is fused on the same line/paragraph (not a
+        standalone short heading) must not be promoted."""
+        text = (
+            "上文。\n\n"
+            "1.营养不良学说 实验动物中缺乏叶酸可致胚胎死亡，推测母体缺乏叶酸可能和滋养细胞肿瘤的发生有关。\n\n"
+            "下文。"
+        )
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+
+    def test_false_positive_punctuation_in_body(self):
+        text = "上文。\n\n（2）连续应用可有嗜睡、乏力、疲劳，偶有腹泻；\n\n下文。"
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+
+    def test_false_positive_coordinate_list_item_ending_in_semicolon(self):
+        """A list item with no comma/period but ending in a coordinating semicolon (signalling
+        'more parallel items follow') must not be promoted - it is one item of a list, not a
+        heading for one. Regression for a real false positive found in www.a-hospital.com."""
+        text = "上文。\n\n（3）使用IFNα期间不宜驾驶车辆及操作机器；\n\n下文。"
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+
+    def test_false_positive_inline_bold_fused(self):
+        text = "上文。\n\n**一、  和年龄有关。**在屈光发育稳定期之前，远视度数会自行降低。\n\n下文。"
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+
+    def test_zero_headings_safe(self):
+        text = "普通的中文段落，不包含任何编号或标题。"
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+        self.assertEqual(res, text)
+
+
+class TestChineseSentenceSplitter(unittest.TestCase):
+    def setUp(self):
+        self.splitter = ChineseSentenceSplitter()
+
+    def test_decimal_and_latin_abbreviation_protection(self):
+        text = "患者血糖为99.5%，病情稳定。IFNα-2a使用剂量为1.5MU/d。你好吗？是的！"
+        sents = self.splitter.split_sentences(text)
+        self.assertEqual(len(sents), 4)
+        self.assertEqual(sents[0], "患者血糖为99.5%，病情稳定。")
+        self.assertEqual(sents[1], "IFNα-2a使用剂量为1.5MU/d。")
+        self.assertEqual(sents[2], "你好吗？")
+        self.assertEqual(sents[3], "是的！")
+
+    def test_ellipsis_normalization(self):
+        text = "这是一个例子......后续内容。"
+        sents = self.splitter.split_sentences(text)
+        self.assertEqual(len(sents), 2)
+        self.assertTrue(sents[0].startswith("这是一个例子"))
+
+
+class TestChineseHierarchicalChunker(unittest.TestCase):
+    def setUp(self):
+        self.chunker = ChineseHierarchicalChunker(
+            min_chunk_size=100,
+            target_chunk_size=200,
+            max_chunk_size=350,
+            overlap_ratio=0.15,
+        )
+
+    def test_chunking_with_promoted_heading(self):
+        doc = {
+            "source": {
+                "doc_id": 998,
+                "domain": "test.cn",
+                "final_url": "https://test.cn/article",
+                "title": "测试文章",
+                "language_category": "zh",
+            },
+            "content": {
+                "markdown": (
+                    "# 测试文章\n\n开篇段落介绍疾病的基本情况。\n\n"
+                    "一、辨证选方\n\n治法：温肾扶阳，活血行瘀，方药为少腹逐瘀汤加减。\n\n"
+                    "二、其它疗法\n\n中药大黄蛰虫丸具有祛瘀生新的作用，可用于治疗。"
+                )
+            }
+        }
+        chunks = self.chunker.chunk(doc)
+        self.assertGreater(len(chunks), 0)
+        for c in chunks:
+            self.assertEqual(c.doc_id, 998)
+            self.assertEqual(c.domain, "test.cn")
+            self.assertEqual(c.language, "zh")
+            self.assertTrue(c.chunk_id.startswith("998_c"))
+            self.assertGreater(c.char_length, 0)
+
+    def test_zero_heading_document(self):
+        doc = {
+            "source": {"doc_id": 200, "domain": "test.cn", "title": "无标题"},
+            "content": {"markdown": "这是一段不包含任何标题或特殊字符的普通中文段落内容。"}
+        }
+        chunks = self.chunker.chunk(doc)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0].chunk_index, 0)
+
+    def test_oversized_unbroken_text_sliced_by_character_count(self):
+        """CJK has no whitespace word boundary, so the oversized fallback must slice by raw
+        character count (not str.split()/word-based slicing like the Vietnamese chunker)."""
+        doc = {
+            "source": {"doc_id": 201, "domain": "test.cn", "title": "无标点文本块"},
+            "content": {"markdown": "甲" * 3000}
+        }
+        chunks = self.chunker.chunk(doc)
+        self.assertGreater(len(chunks), 1)
+        for c in chunks:
+            self.assertLessEqual(c.char_length, self.chunker.max_chunk_size)
+
+    def test_heading_never_orphaned_at_chunk_end(self):
+        doc = {
+            "source": {"doc_id": 202, "title": "绑定测试"},
+            "content": {
+                "markdown": (
+                    "# 标题\n\n"
+                    "开篇段落的长度足够填满当前缓冲区的大部分空间以便测试绑定机制是否正常工作。\n\n"
+                    "**一、重要事项：**\n\n"
+                    "紧随其后的详细说明内容立刻填补了这个标题。"
+                )
+            }
+        }
+        chunks = self.chunker.chunk(doc)
+        for c in chunks:
+            lines = [l.strip() for l in c.content.split("\n") if l.strip()]
+            last_line = lines[-1]
+            self.assertNotEqual(last_line, "一、重要事项：")
+            self.assertFalse(last_line.startswith("####"))
+
+
+class TestEnglishMarkdownCleaner(unittest.TestCase):
+    def setUp(self):
+        self.cleaner = EnglishMarkdownCleaner()
+
+    def test_clean_markdown_syntax_headings_and_bold(self):
+        text = "## **1. Background of the Study**"
+        cleaned = clean_markdown_syntax_en(text)
+        self.assertEqual(cleaned, "1. Background of the Study")
+        self.assertNotIn("**", cleaned)
+        self.assertNotIn("##", cleaned)
+
+    def test_clean_markdown_syntax_inline_formatting(self):
+        text = "The **serum level** was *significantly* elevated. __Note:__ Patient improved."
+        cleaned = clean_markdown_syntax_en(text)
+        self.assertEqual(cleaned, "The serum level was significantly elevated. Note: Patient improved.")
+
+    def test_clean_markdown_syntax_preserves_numbers_and_units(self):
+        text = "Ferritin was 296.3 +/- 61.9 ng/mL, p < 0.05, contact dr.smith@hospital.org."
+        cleaned = clean_markdown_syntax_en(text)
+        self.assertEqual(cleaned, text)
+
+
+class TestEnglishHeadingPromoter(unittest.TestCase):
+    def setUp(self):
+        self.promoter = EnglishHeadingPromoter()
+
+    def test_numeric_promotion(self):
+        text = "Introductory text.\n\n**1. Study Design**\n\nThis section describes the design."
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 1)
+        self.assertIn("## 1. Study Design", res)
+        self.assertNotIn("**1. Study Design**", res)
+
+    def test_roman_promotion(self):
+        text = "Introductory text.\n\n**IV) Clinical Recommendations**\n\nDetailed content follows."
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 1)
+        self.assertIn("## IV) Clinical Recommendations", res)
+
+    def test_letter_promotion(self):
+        text = "Introductory text.\n\n**A. Patient Selection**\n\nCriteria are described below."
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 1)
+        self.assertIn("## A. Patient Selection", res)
+
+    def test_false_positive_filter_intermediate_period(self):
+        text = "Intro.\n\n**1. Dr. A. reported findings**\n\nContent."
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+        self.assertIn("**1. Dr. A. reported findings**", res)
+
+    def test_false_positive_filter_length(self):
+        long_line = "**1. " + "A" * 120 + "**"
+        text = f"Intro.\n\n{long_line}\n\nContent."
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+
+    def test_false_positive_inline_bold(self):
+        text = "In the study, remember **1. Reduce caloric intake** for best results."
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+
+    def test_zero_headings_safe(self):
+        text = "A perfectly normal paragraph without any heading markers at all."
+        res, stats = self.promoter.process(text)
+        self.assertEqual(stats["promoted_count"], 0)
+        self.assertEqual(res, text)
+
+
+class TestEnglishSentenceSplitter(unittest.TestCase):
+    def setUp(self):
+        self.splitter = EnglishSentenceSplitter()
+
+    def test_scientific_abbreviation_protection(self):
+        text = "Dr. J. Smith et al. reported approx. 15% improvement vs. placebo. This was significant."
+        sents = self.splitter.split_sentences(text)
+        self.assertEqual(len(sents), 2)
+        self.assertIn("Dr. J. Smith et al.", sents[0])
+        self.assertIn("approx. 15% improvement vs. placebo.", sents[0])
+
+    def test_decimal_and_unit_protection(self):
+        text = "Serum ferritin was 296.3 +/- 61.9 ng/mL, p < 0.05. The difference was significant."
+        sents = self.splitter.split_sentences(text)
+        self.assertEqual(len(sents), 2)
+        self.assertEqual(sents[0], "Serum ferritin was 296.3 +/- 61.9 ng/mL, p < 0.05.")
+        self.assertEqual(sents[1], "The difference was significant.")
+
+
+class TestEnglishHierarchicalChunker(unittest.TestCase):
+    def setUp(self):
+        self.chunker = EnglishHierarchicalChunker(
+            min_chunk_size=100,
+            target_chunk_size=200,
+            max_chunk_size=350,
+            overlap_ratio=0.15,
+        )
+
+    def test_chunking_with_pubmed_style_structure(self):
+        doc = {
+            "source": {
+                "doc_id": 997,
+                "domain": "pubmed.ncbi.nlm.nih.gov",
+                "final_url": "https://pubmed.ncbi.nlm.nih.gov/12345/",
+                "title": "A Study of Disease X",
+                "language_category": "en",
+            },
+            "content": {
+                "markdown": (
+                    "# A Study of Disease X\n\n## Abstract\n\n"
+                    "### Background\n\nDisease X is a rare condition affecting the pulmonary system.\n\n"
+                    "### Methods\n\nWe enrolled 50 patients in a prospective cohort study design.\n\n"
+                    "### Results\n\nTreatment improved outcomes significantly across all cohorts.\n\n"
+                    "## Citation\n\nJ Doe\nJournal of Medicine. 2023.\nPMID: 99999"
+                )
+            }
+        }
+        chunks = self.chunker.chunk(doc)
+        self.assertGreater(len(chunks), 0)
+        for c in chunks:
+            self.assertEqual(c.doc_id, 997)
+            self.assertEqual(c.language, "en")
+            self.assertTrue(c.chunk_id.startswith("997_c"))
+            self.assertGreater(c.char_length, 0)
+
+    def test_zero_heading_document(self):
+        doc = {
+            "source": {"doc_id": 300, "domain": "test.en", "title": "No heading"},
+            "content": {"markdown": "A short single paragraph without any heading or special characters."}
+        }
+        chunks = self.chunker.chunk(doc)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0].chunk_index, 0)
+
+    def test_oversized_unbroken_text_sliced_safely(self):
+        doc = {
+            "source": {"doc_id": 301, "domain": "test.en", "title": "Blob"},
+            "content": {"markdown": "A" * 3000}
+        }
+        chunks = self.chunker.chunk(doc)
+        self.assertGreater(len(chunks), 1)
+        for c in chunks:
+            self.assertLessEqual(c.char_length, self.chunker.max_chunk_size)
+
+    def test_heading_never_orphaned_at_chunk_end(self):
+        doc = {
+            "source": {"doc_id": 302, "title": "Binding Test"},
+            "content": {
+                "markdown": (
+                    "# Title\n\n"
+                    "An opening paragraph long enough to fill most of the current buffer for this test.\n\n"
+                    "## **Section 1: Important Findings**\n\n"
+                    "Detailed explanation content for section one follows immediately after."
+                )
+            }
+        }
+        chunks = self.chunker.chunk(doc)
+        for c in chunks:
+            lines = [l.strip() for l in c.content.split("\n") if l.strip()]
+            last_line = lines[-1]
+            self.assertNotEqual(last_line, "Section 1: Important Findings")
+            self.assertFalse(last_line.startswith("##"))
 
 
 class TestChunkDualAPI(unittest.TestCase):

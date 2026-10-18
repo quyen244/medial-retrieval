@@ -12,7 +12,9 @@ class ChunkerDispatcher:
     """Language & Strategy Dispatcher adhering to the Open/Closed Principle (OCP).
     
     Responsibilities:
-    1. Inspects document metadata (doc['source']['language'] or 'language_category') or explicit parameter.
+    1. Inspects document metadata (doc['source']['language_category'] or 'language') or explicit parameter.
+       'language_category' is the curated ground-truth signal and takes priority since raw
+       'language' is frequently missing or wrong (see src.ingestion.categories.language_of).
     2. Automatically dispatches the document to the corresponding language-specific chunking strategy.
     3. Supports dynamic runtime registration of new languages/strategies without modifying dispatcher code.
     4. Provides safe fallback to default language ('vi') if an unrecognized language code is supplied.
@@ -75,7 +77,7 @@ class ChunkerDispatcher:
         if not lang or not str(lang).strip():
             if isinstance(doc_or_text, dict):
                 source = doc_or_text.get("source", {})
-                lang = source.get("language") or source.get("language_category")
+                lang = source.get("language_category") or source.get("language")
 
         if lang and isinstance(lang, str) and lang.strip():
             cleaned = lang.strip().lower()

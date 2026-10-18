@@ -57,18 +57,37 @@ def __to_txt(doc , chunks , root):
     
     print('Wrote successfully !!!')
     
-if __name__ == "__main__":
-    testset_file = r'D:\r2ai\data\testset\chunking_domain_sample.json'
-    md_folder = r'D:\r2ai\tmp\test_chunking'
+LANGUAGE_TESTSETS = {
+    "vi": r'D:\r2ai\data\testset\chunking_domain_sample.json',
+    "zh": r'D:\r2ai\data\testset\chunking_domain_sample_zh.json',
+    "en": r'D:\r2ai\data\testset\chunking_domain_sample_en.json',
+}
+
+
+def run(language: str) -> None:
+    """Chunk every doc in the given language's sample testset and write before/after .txt
+    dumps into tmp/test_chunking/<language>/. Each doc is routed via its curated
+    language_category (the dispatcher priority fixed in ChunkerDispatcher.detect_language),
+    not the raw/noisy source.language field."""
+    testset_file = LANGUAGE_TESTSETS[language]
+    md_folder = os.path.join(r'D:\r2ai\tmp\test_chunking', language)
 
     os.makedirs(md_folder, exist_ok=True)
-    
+
     with open(testset_file, 'r', encoding="utf-8") as f:
-            docs = json.load(f)
-            
+        docs = json.load(f)
+
     for doc in docs:
         chunks = chunk_document(doc)
-        
-        print(f"Produced {len(chunks)} chunks for doc_id {doc.get('source', {}).get('doc_id')}")
-        
-        __to_txt(doc, chunks , md_folder)
+
+        print(f"[{language}] Produced {len(chunks)} chunks for doc_id {doc.get('source', {}).get('doc_id')}")
+
+        __to_txt(doc, chunks, md_folder)
+
+
+if __name__ == "__main__":
+    import sys
+
+    languages = sys.argv[1:] or ["vi"]
+    for lang in languages:
+        run(lang)
