@@ -318,6 +318,36 @@ class TestChineseMarkdownCleaner(unittest.TestCase):
         cleaned = clean_markdown_syntax_zh(text)
         self.assertEqual(cleaned, text)
 
+    def test_unescapes_backslash_escaped_tilde(self):
+        """Regression for www.youlai.cn 3984400: the HTML->Markdown converter backslash-escapes
+        punctuation like '~' to prevent it being misread as strikethrough syntax. That escape is
+        a conversion artifact never present in the rendered page and must not leak into chunks."""
+        text = "有时10\\~几十不等，而感冒一般7\\~10天可自己恢复。"
+        cleaned = clean_markdown_syntax_zh(text)
+        self.assertNotIn("\\~", cleaned)
+        self.assertIn("10~几十不等", cleaned)
+        self.assertIn("7~10天", cleaned)
+
+    def test_unescapes_other_commonmark_escapes_without_misfiring(self):
+        """Generalizes beyond '~': other escaped punctuation observed in the zh corpus (ordered-
+        list periods, brackets, underscores, angle brackets) must also be un-escaped cleanly."""
+        self.assertEqual(clean_markdown_syntax_zh("1\\. 定期进行妇科检查"), "1. 定期进行妇科检查")
+        self.assertEqual(clean_markdown_syntax_zh("鼻\\[窦炎、扁桃体炎"), "鼻[窦炎、扁桃体炎")
+        self.assertEqual(clean_markdown_syntax_zh("休息\\_单纯隆鼻术者"), "休息_单纯隆鼻术者")
+        self.assertEqual(clean_markdown_syntax_zh("血糖浓度\\<2.5mmol/L"), "血糖浓度<2.5mmol/L")
+
+    def test_unescape_ordering_preserves_literal_escaped_emphasis_markers(self):
+        """Ordering regression: un-escaping must not run before emphasis-stripping. An
+        intentionally-escaped literal '\\*text\\*' (meant as literal asterisks, not markdown
+        italics) would otherwise be exposed to the emphasis regexes as bare '*text*' and get
+        stripped down to plain 'text', destroying the literal asterisks."""
+        self.assertEqual(clean_markdown_syntax_zh("\\*text\\*"), "*text*")
+        # A literal escaped '*' coexisting on the same line as real **bold** markup must not let
+        # the bold-stripping regex misfire across the escaped markers.
+        text = "公式为 a\\*b\\*c，并且**真正加粗**的内容"
+        cleaned = clean_markdown_syntax_zh(text)
+        self.assertEqual(cleaned, "公式为 a*b*c，并且真正加粗的内容")
+
 
 class TestChineseHeadingPromoter(unittest.TestCase):
     def setUp(self):
@@ -403,6 +433,38 @@ class TestChineseSentenceSplitter(unittest.TestCase):
         self.assertEqual(len(sents), 2)
         self.assertTrue(sents[0].startswith("这是一个例子"))
 
+    def test_preserves_paragraph_boundary_newline_between_sentences(self):
+        """Regression for qihuangzhishu.com 877312: a lone '\\n' between sentences marks a
+        blank-line-separated paragraph/list-item boundary collapsed earlier in the pipeline (by
+        MarkdownHeaderTextSplitter) and must survive, or "".join(sentences) at chunker call sites
+        fuses unrelated items together (the circled numerals ①②③ ran together with zero
+        separator before this fix)."""
+        text = (
+            "①必需适合身体需要的平衡膳食，含有充足的各种营养素。\n"
+            "②一般正常的食品均可采用。\n"
+            "③避免应用强烈辛辣刺激性的食品或调味品。"
+        )
+        sents = self.splitter.split_sentences(text)
+        self.assertEqual(len(sents), 3)
+        self.assertTrue(sents[0].endswith("\n"))
+        self.assertTrue(sents[1].endswith("\n"))
+        self.assertFalse(sents[2].endswith("\n"))
+        # "".join() is the deliberate zero-separator join used throughout chunker.py for normal
+        # Chinese prose; it must reproduce the original text exactly once sentences carry the
+        # boundary newline themselves.
+        self.assertEqual("".join(sents), text)
+
+    def test_no_spurious_newline_for_plain_inline_spacing(self):
+        """A sentence boundary with no original newline (ordinary intra-paragraph Chinese prose)
+        must stay joined with zero separator - Chinese has no inter-sentence whitespace, so the
+        fix must not inject a '\\n' where none existed in the source."""
+        text = "患者血糖为99.5%，病情稳定。你好吗？是的！"
+        sents = self.splitter.split_sentences(text)
+        self.assertEqual(len(sents), 3)
+        for s in sents:
+            self.assertFalse(s.endswith("\n"))
+        self.assertEqual("".join(sents), text)
+
 
 class TestChineseHierarchicalChunker(unittest.TestCase):
     def setUp(self):
@@ -478,6 +540,40 @@ class TestChineseHierarchicalChunker(unittest.TestCase):
             last_line = lines[-1]
             self.assertNotEqual(last_line, "一、重要事项：")
             self.assertFalse(last_line.startswith("####"))
+
+    def test_sentence_overlap_copy_matches_original_newline_exactly(self):
+        """Regression for www.a-hospital.com 2989615: the sentence-level overlap carried into the
+        next chunk must be byte-identical to the span it was copied from, including any
+        paragraph-boundary '\\n' between its sentences. Before the sentence-splitter fix, the
+        overlap copy (built via split_sentences()+"".join()) silently dropped a '\\n' that the
+        original chunk text still had, so the same source span disagreed between the two chunks."""
+        overlap_chunker = ChineseHierarchicalChunker(
+            min_chunk_size=100, target_chunk_size=200, max_chunk_size=350, overlap_ratio=0.9,
+        )
+        chunk_text = (
+            "前文内容介绍疾病的基本情况。\n\n"
+            "①原发性血小板增多症：亦首选IFNα，一般治疗3～12个月，血小板可降至正常；亦可与化疗联合应用。\n"
+            "（4）其它肿瘤：如黑色素瘤、肾细胞癌等。"
+        )
+        last_para = chunk_text.split("\n\n")[-1]
+        overlap = overlap_chunker._extract_sentence_overlap(chunk_text)
+        self.assertIn("\n", overlap)
+        self.assertEqual(overlap, last_para)
+
+    def test_max_chunk_size_invariant_holds_with_collapsed_paragraph_newlines(self):
+        """The sentence-splitter fix makes a sentence that ends on a collapsed paragraph boundary
+        one character longer (it now carries a trailing '\\n'). Confirm this extra character
+        never pushes a chunk over max_chunk_size when many such sentences are packed together."""
+        item = "①条款内容描述文字共二十个字。"
+        body = "\n".join([item] * 40)
+        doc = {
+            "source": {"doc_id": 203, "title": "条款列表"},
+            "content": {"markdown": "# 条款列表\n\n" + body},
+        }
+        chunks = self.chunker.chunk(doc)
+        self.assertGreater(len(chunks), 1)
+        for c in chunks:
+            self.assertLessEqual(c.char_length, self.chunker.max_chunk_size)
 
 
 class TestEnglishMarkdownCleaner(unittest.TestCase):

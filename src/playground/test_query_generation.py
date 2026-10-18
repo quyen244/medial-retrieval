@@ -10,7 +10,7 @@ vectorstore = VectorStore(encoder, url = 'http://localhost:6333', collection_nam
 def get_few_shot(chunk):
     results = vectorstore.retrieve(query=chunk, top_k = 2, verbose=True)
     print(results)
-    return [{'query' : res.text} for res in results]
+    return [{'query' : res.payload.get('text')} for res in results]
 
 def query_generator(chunk , few_shots):
     url = 'http://localhost:8000/v1/chat/completions'
@@ -37,25 +37,25 @@ def query_generator(chunk , few_shots):
     {few_shots}   
     OUTPUT FORMAT:
     Return in JSON
-    {
-        'query_1' : "first generated query",
-        'query_2' : "second generated query",
-    }
+    {{
+        "query_1": "first generated query",
+        "query_2": "second generated query"
+    }}
     """
     
     res = requests.post(url=url,
-                data={
+                json={
                     'model' : "Qwen/Qwen3-1.7B",
                     'messages' : [
                         {
                             "role": "user",
-                            "content": prompt 
+                            "content": prompt
                         }
                     ],
                 "temperature": 0.5,
                 "max_tokens": 512,
                 "chat_template_kwargs": {
-                    "enable_thinking": false
+                    "enable_thinking": False
                 }
                   })
     
@@ -79,15 +79,11 @@ if __name__ == '__main__':
         giảm đến 50%."""
         
     few_shots = get_few_shot(chunk)
-    res = query_generator(chunk, few_shot=few_shots)
+    res = query_generator(chunk, few_shots=few_shots)
+
+    res.raise_for_status()
     
-    print(res)
-    
-    if  hasattr(res , 'content'):
-        print(res.content)
-        
-    if  hasattr(res , 'text'):
-            print(res.text)
+    print(res.json()["choices"][0]["message"]["content"])
             
             
             
