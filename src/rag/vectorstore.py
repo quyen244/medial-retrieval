@@ -3,7 +3,7 @@ from uuid import uuid4
 from typing import Dict, Any, List, Optional, Union
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient, models
-from src.rag.chunking import default_dispatcher
+from src.rag.chunker import default_dispatcher
 
 class VectorStore:
     def __init__(
@@ -100,11 +100,12 @@ class VectorStore:
         ]
         # collection_name số ít
         self.client.upsert(collection_name=self.collection_name, points=points)
-
-    def upsert_doc(self, doc: Dict[str, Any]):
+        
+    def upsert_doc(self, doc: Dict[str, Any], versoning : bool = False):
         """Hàm tiện ích nhận doc thô, tự chunk và lưu trữ."""
-        chunks = default_dispatcher.chunk(doc)
+        chunks, params = default_dispatcher.chunk(doc , versoning)
         self.upsert_chunks(chunks)
+        return params
 
     def retrieve(self, query: str, top_k: int = 5, verbose: bool = False):
         query_vector = self.encoder.encode(query, normalize_embeddings=True).tolist()

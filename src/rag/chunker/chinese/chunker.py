@@ -19,6 +19,13 @@ class ChineseChunker(BaseChunker):
             chunk_overlap=chunk_overlap,
             separators=["\n\n", "\n", "。", "！", "？", "；", " "],
         )
+        
+    def get_params(self):
+        return {
+            'chunk_size' : self.chunk_size,
+            'chunk_overlap' : self.chunk_overlap,
+            'splitter' : self.splitter
+        }
 
     def chunk_text(self, text: str, metadata: Optional[Dict[str, Any]] = None, **kwargs) -> List[Chunk]:
         doc = {"source": metadata or {}, "content": {"markdown": text}}

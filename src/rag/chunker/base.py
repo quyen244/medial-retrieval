@@ -37,3 +37,8 @@ class BaseChunker(ABC):
     def chunk_text(self, text: str, metadata: Optional[Dict[str, Any]] = None, **kwargs) -> List[Chunk]:
         """Chunk raw text with optional initial metadata."""
         pass
+    
+    @abstractmethod
+    def get_params(self):
+        """Return parameters of a chunker."""
+        pass

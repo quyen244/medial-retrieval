@@ -38,10 +38,10 @@ class VietnameseHierarchicalChunker(BaseChunker):
 
     def __init__(
         self,
-        min_chunk_size: int = 800,
-        target_chunk_size: int = 1000,
-        max_chunk_size: int = 1500,
-        overlap_ratio: float = 0.12,
+        min_chunk_size: int = 600,
+        target_chunk_size: int = 800,
+        max_chunk_size: int = 1000,
+        overlap_ratio: float = 0.15,
         headers_to_split: Optional[List[tuple]] = None,
         promoter: Optional[VietnameseHeadingPromoter] = None,
         cleaner: Optional[VietnameseMarkdownCleaner] = None,
@@ -60,7 +60,19 @@ class VietnameseHierarchicalChunker(BaseChunker):
             headers_to_split_on=self.headers_to_split,
             strip_headers=False,
         )
-
+    def get_params(self):
+        return {
+            'min_chunk_size' : self.min_chunk_size,
+            'target_chunk_size' : self.target_chunk_size,
+            'max_chunk_size' : self.max_chunk_size,
+            'overlap_ratio' : self.overlap_ratio, 
+            'headers_to_split' : self.DEFAULT_HEADERS,
+            'promoter' : self.promoter,
+            'cleaner' : self.cleaner ,
+            'sentence_splitter' : self.sentence_splitter,
+            'section_splitter' : self.section_splitter
+        }
+        
     def _build_composite_heading_path(self, headings: List[str], doc_title: str = "") -> str:
         """Construct hierarchical breadcrumb path from collected headings and document title."""
         clean_title = clean_markdown_syntax(doc_title).strip()

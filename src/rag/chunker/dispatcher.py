@@ -106,6 +106,7 @@ class ChunkerDispatcher:
         doc_or_text: Union[Dict[str, Any], str],
         language: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+         versoning : bool = False,
         **kwargs
     ) -> List[Chunk]:
         """Dispatch document dict or raw text to appropriate language chunker."""
@@ -114,18 +115,23 @@ class ChunkerDispatcher:
 
         target_lang = self.detect_language(doc_or_text, explicit_lang=language)
         chunker = self._resolve_chunker(target_lang)
-        return chunker.chunk(doc_or_text, **kwargs)
+        
+        if versoning == True:
+            chunker.chunk(doc_or_text, **kwargs) , chunker.get_params()
+        return chunker.chunk(doc_or_text, **kwargs) 
 
     def chunk(
         self,
         doc_or_text: Union[Dict[str, Any], str],
         language: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        versoning : bool = False,
         **kwargs
     ) -> List[Chunk]:
         """Convenience alias for dispatch() - seamlessly accepts both Document Dict and raw text str."""
-        return self.dispatch(doc_or_text, language=language, metadata=metadata, **kwargs)
-
+        return self.dispatch(doc_or_text, language=language, metadata=metadata, versoning=versoning, **kwargs)
+    
 
 # Global default instance
 default_dispatcher = ChunkerDispatcher(default_language="vi")
+

@@ -37,3 +37,5 @@ mlflow.db
 
 
 /models
+
+/tmp
