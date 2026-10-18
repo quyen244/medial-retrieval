@@ -1,6 +1,30 @@
+"""RAG Chunking Module for Media & Medical Document Retrieval.
+
+Supports backward-compatible simple splitters as well as the new Open/Closed (OCP)
+multi-tier language dispatcher and Vietnamese hierarchical chunker.
+"""
+import os
+import json
+from typing import Any, Dict, List, Optional
 from langchain_text_splitters import (
     RecursiveCharacterTextSplitter, 
-    MarkdownHeaderTextSplitter
+    MarkdownHeaderTextSplitter,
+)
+
+# Export OCP modular components
+from src.rag.chunker import (
+    Chunk,
+    BaseChunker,
+    BasePreprocessor,
+    BaseSentenceSplitter,
+    ChunkerRegistry,
+    ChunkerDispatcher,
+    default_dispatcher,
+    VietnameseHeadingPromoter,
+    VietnameseSentenceSplitter,
+    VietnameseHierarchicalChunker,
+    EnglishChunker,
+    ChineseChunker,
 )
 
 headers = [
@@ -9,50 +33,31 @@ headers = [
     ("###", "h3"),
 ]
 
-
 REGISTRY_SPLITTERS = {
-    'markdown' : MarkdownHeaderTextSplitter,
-    'recursive' : RecursiveCharacterTextSplitter
+    'markdown': MarkdownHeaderTextSplitter,
+    'recursive': RecursiveCharacterTextSplitter,
 }
 
-SAMPLE_1 = """
-
-# AWS Lambda
-
-AWS Lambda cho phép chạy code mà không cần quản lý server.
-
-## Configuration
-
-### Memory
-Có thể cấu hình bộ nhớ từ 128 MB trở lên.
-Với hai chiến lược cụ thể nhắm vào mục tiêu đích là nhóm người bệnh trẻ, hiện đại cần chủ động thời gian và nhóm người bệnh có điều kiện kinh tế nhưng không muốn xa quê hương mà vẫn được điều trị bệnh với chất lượng quốc tế ngay tại quê nhà trong sự chăm sóc và tình yêu thương của gia đình, người thân thì có thể nói đây là những mục tiêu mang đầy tính nhân văn và thiết thực trong thời đại công nghệ số của Bệnh viện Bạch Mai."
-
-
-### Timeout
-Timeout xác định thời gian tối đa một lần chạy.
-Mặc định là 3 giây.
-
-## Pricing
-
-Bạn trả phí dựa trên số lần gọi và thời gian chạy.
-
-"""
 recursive_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=150,
-    chunk_overlap=30,
+    chunk_size=850,
+    chunk_overlap=150,
     length_function=len,
 )
 
 
-def run(name : str, **kwargs):
+def chunk_document(doc: Dict[str, Any], language: Optional[str] = None, **kwargs) -> List[Chunk]:
+    """Top-level convenience function to chunk any document via the language dispatcher."""
+    return default_dispatcher.dispatch(doc, language=language, **kwargs)
+
+
+def run(name: str, doc: str, **kwargs):
+    """Legacy runner for backward compatibility."""
     print('=' * 50)
     print(f"{name} splitter")
     print('=' * 50)
     
-    splitter = REGISTRY_SPLITTERS[name](
-         **kwargs
-    )
-    sections = splitter.split_text(SAMPLE_1)
+    splitter = REGISTRY_SPLITTERS[name](**kwargs)
+    sections = splitter.split_text(doc)
     
     chunks = recursive_splitter.split_documents(sections)
 
@@ -60,11 +65,22 @@ def run(name : str, **kwargs):
         print(f"\n{'=' * 20} CHUNK {i + 1} {'=' * 20}")
         print("Metadata:", chunk.metadata)
         print("Content:", chunk.page_content)
+
+
 if __name__ == "__main__":
-    run('markdown' , headers_to_split_on=headers,
-            strip_headers=False)
+    sample_file = r'D:\r2ai\data\raw_documents\baodanang.vn\28721.json'
+    testset_file = r'D:\r2ai\data\testset\chunking_domain_sample.json'
     
-  
-
-
-
+    target_path = sample_file if os.path.exists(sample_file) else testset_file
+    print(f"Loading sample from: {target_path}")
+    
+    with open(target_path, 'r', encoding="utf-8") as f:
+        data = json.load(f)
+        
+    doc = data[0] if isinstance(data, list) else data
+    chunks = chunk_document(doc)
+    
+    print(f"Produced {len(chunks)} chunks for doc_id {doc.get('source', {}).get('doc_id')}")
+    for c in chunks[:3]:
+        print(f"\n--- Chunk {c.chunk_id} ({c.char_length} chars, heading: '{c.heading_path}') ---")
+        print(c.content[:200] + "...")
