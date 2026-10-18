@@ -69,6 +69,8 @@ BLOCK_PAGE_MARKERS = (
     "enable javascript and cookies to continue",
     "verifying you are human",
     "请开启cookie",
+    "滑动拼图验证",
+    "verify.html",
 )
 
 # An interstitial is always a small page. Requiring that stops the markers

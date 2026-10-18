@@ -89,6 +89,14 @@ class PubMedCrawler(SiteCrawler):
         self._limiter = RateLimiter(rate)
 
     @property
+    def request_hosts(self) -> tuple[str, ...]:
+        return ("eutils.ncbi.nlm.nih.gov",)
+
+    @property
+    def bulk_batch_size(self) -> int:
+        return BATCH_SIZE
+
+    @property
     def prefers_bulk(self) -> bool:
         """One request serves hundreds of documents, so never split the work."""
         return True

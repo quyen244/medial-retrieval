@@ -10,21 +10,18 @@ vectorstore = VectorStore(encoder, url = 'http://localhost:6333', collection_nam
 dataset = get_dataset('query')
 
 print("dataset : " ,dataset)
-
-def smoke_test():
-    first_doc = dataset['train'][0]
     
-    print('First doc : ' , first_doc)
+if __name__ == "__main__":  
     
-    vectorstore.upsert_doc(first_doc)
+    texts = list(map( lambda x : x['query'] , dataset['train']))
+    
+    print(texts[:5])
+    print()
 
-    query = 'bạn em thắc mắc về vấn đề đau răng'
+    vectorstore.upsert_texts(texts)
+
+    query = 'bạn em thắc mắc về vấn đề đau răng âm ỉ hơn 1 tuần'
     
     vectorstore.retrieve(query = query, verbose=True)
-    
-
-if __name__ == "__main__":  
-    smoke_test()
-
 
 

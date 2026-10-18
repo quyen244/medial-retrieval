@@ -284,7 +284,10 @@ async def crawl(samples: list[Sample], args: argparse.Namespace) -> Counter:
         favor_precision=args.favor_precision,
         policy=policy,
     )
-    print("Per-host limits:\n" + policy.describe(), file=sys.stderr)
+    active_hosts = set()
+    for domain in {sample.domain for sample in samples}:
+        active_hosts.update(sites.crawler_for_domain(domain).request_hosts)
+    print("Per-host limits:\n" + policy.describe(active_hosts), file=sys.stderr)
 
     reporter = Reporter(out_dir, len(samples), args.report_every, args.verbose)
     breaker = CircuitBreaker(args.circuit_threshold)
@@ -364,8 +367,11 @@ async def _run_bulk(
     ]
     if not todo:
         return
-    for outcome in await crawler.crawl_many(client, todo, config):
-        reporter.record(store(outcome, crawler.name, out_dir))
+    batch_size = crawler.bulk_batch_size or len(todo)
+    for start in range(0, len(todo), batch_size):
+        batch = todo[start : start + batch_size]
+        for outcome in await crawler.crawl_many(client, batch, config):
+            reporter.record(store(outcome, crawler.name, out_dir))
 
 
 async def _worker(

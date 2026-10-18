@@ -12,3 +12,4 @@ httpx
 trafilatura
 rich
 curl_cffi
+python-dotenv

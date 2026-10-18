@@ -67,6 +67,16 @@ class SiteCrawler(ABC):
     name: str = "base"
     domains: tuple[str, ...] = ()
 
+    @property
+    def request_hosts(self) -> tuple[str, ...]:
+        """Hosts this crawler actually sends requests to."""
+        return self.domains
+
+    @property
+    def bulk_batch_size(self) -> int | None:
+        """Maximum useful group size for one bulk call, if bounded."""
+        return None
+
     @abstractmethod
     async def crawl_one(
         self, client: httpx.AsyncClient, sample: Sample, config: CrawlConfig

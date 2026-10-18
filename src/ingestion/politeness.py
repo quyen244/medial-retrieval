@@ -15,6 +15,7 @@ otherwise a per-host limit simply makes the whole run as slow as one host.
 """
 
 import asyncio
+import os
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -41,10 +42,21 @@ class HostLimits:
 
 # Hosts that need gentler treatment than the default, usually because they
 # have already shown they will block a client that pushes.
+
+# NCBI rate limits: 3 req/s anonymous, 10 req/s with API key.
+# Detected once at import time; PubMedCrawler also has its own RateLimiter
+# that enforces the same ceiling — this is the backstop for the pipeline.
+_NCBI_API_KEY = os.environ.get("NCBI_API_KEY", "")
+_ncbi_eutils_limits = (
+    HostLimits(max_concurrent=3, min_interval=0.10)  # 10 req/s with key
+    if _NCBI_API_KEY
+    else HostLimits(max_concurrent=1, min_interval=0.34)  # 3 req/s anonymous
+)
+
 HOST_OVERRIDES: dict[str, HostLimits] = {
-    # NCBI documents 3 requests/second without an API key. The PubMed crawler
-    # also rate limits itself; this is the backstop.
-    "eutils.ncbi.nlm.nih.gov": HostLimits(max_concurrent=1, min_interval=0.34),
+    # The PubMed crawler's internal RateLimiter is the primary throttle;
+    # this backstop matches it so the pipeline never adds extra waiting.
+    "eutils.ncbi.nlm.nih.gov": _ncbi_eutils_limits,
     "pubmed.ncbi.nlm.nih.gov": HostLimits(max_concurrent=1, min_interval=1.0),
 
     # The three largest crawlable domains. A short probe said they tolerate
@@ -148,15 +160,19 @@ class PolitenessPolicy:
                 await asyncio.sleep(delay)
             yield
 
-    def describe(self) -> str:
-        lines = [
-            f"  default              {self.default.max_concurrent} concurrent, "
-            f"{self.default.min_interval:.2f}s apart "
-            f"(~{self.default.requests_per_second:.1f} req/s per host)"
-        ]
-        for host, limits in sorted(self.overrides.items()):
+    def describe(self, hosts: set[str] | None = None) -> str:
+        active_hosts = set(self.overrides) if hosts is None else hosts
+        lines = []
+        if hosts is None or any(host not in self.overrides for host in hosts):
+            lines.append(
+                f"  default              {self.default.max_concurrent} concurrent, "
+                f"{self.default.min_interval:.2f}s apart "
+                f"(~{self.default.requests_per_second:.1f} req/s per host)"
+            )
+        for host in sorted(active_hosts & self.overrides.keys()):
+            limits = self.overrides[host]
             lines.append(
                 f"  {host:20s} {limits.max_concurrent} concurrent, "
                 f"{limits.min_interval:.2f}s apart"
             )
-        return "\n".join(lines)
+        return "\n".join(lines) if lines else "  no active hosts"
