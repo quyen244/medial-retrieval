@@ -6,39 +6,29 @@ import requests
 def spelling_generator(query):
     url = 'http://localhost:8000/v1/chat/completions'
     
-    prompt = f"""    
-    Bạn là chuyên gia tiếng việt, kiểm tra 1 câu query có sai chính tả hay không ? nếu sai thì chỉnh lại cho đúng + bằng chứng sai.
-
-    query : {query}
-
-    output : 
-        trả về định dạng JSON theo format.
-
-        {{
-            'wrong_spelling' : <có sai chính tả không ?> thuộc [true, false],
-            'final_query' : <câu query cuối cùng, nếu sai thì sửa không thì giữ nguyên câu query>,
-            'evidence' : <danh sách các từ vựng sai>
-        }}
-        
-    ví dụ : 
-    query = "Bạn em khôn đau răng mà vẫn bị đau âm ỉ miện"
-    {{
-            'wrong_spelling' : True,
-            'final_query' : "Bạn em không đau răng mà vẫn bị đau âm ỉ miệng",
-            'evidence' :['khôn' , 'miện']
-    }}
-    """
-    
     res = requests.post(url=url,
                 json={
                     'model' : "Qwen/Qwen3-1.7B",
                     'messages' : [
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
+                          {
+                "role": "system",
+                "content": """
+                    Bạn là bộ sửa lỗi nhận dạng giọng nói tiếng Việt.
+                    Chỉ sửa các từ bị nhận dạng sai dựa trên ngữ cảnh.
+                    Giữ nguyên ý nghĩa và cấu trúc câu.
+                    Không tự ý diễn đạt lại.
+                    Chỉ trả về câu đã sửa.
+                    """
+            },
+            {
+                "role": "user",
+                "content": (
+                    'Câu: "Tôi thường xuân đi học mỗi ngày."\n'
+                    "Hãy sửa lỗi nhận dạng giọng nói."
+                )
+            }
                     ],
-                "temperature": 0.5,
+                "temperature": 0,
                 "max_tokens": 512,
                 "chat_template_kwargs": {
                     "enable_thinking": False

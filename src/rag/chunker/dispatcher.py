@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from src.rag.chunker.base import BaseChunker
 from src.rag.chunker.models import Chunk
@@ -108,30 +108,39 @@ class ChunkerDispatcher:
         doc_or_text: Union[Dict[str, Any], str],
         language: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-         versoning : bool = False,
+        versioning: bool = False,
         **kwargs
-    ) -> List[Chunk]:
-        """Dispatch document dict or raw text to appropriate language chunker."""
+    ) -> Union[List[Chunk], Tuple[List[Chunk], Any]]:
+        """Dispatch document dict or raw text to appropriate language chunker.
+
+        When versioning=True, returns a (chunks, params) tuple instead of just
+        chunks, so callers (e.g. mlflow logging) can capture the exact chunker
+        configuration that produced the result.
+        """
         if isinstance(doc_or_text, str):
-            return self.chunk_text(doc_or_text, language=language, metadata=metadata, **kwargs)
+            chunks = self.chunk_text(doc_or_text, language=language, metadata=metadata, **kwargs)
+            if versioning:
+                target_lang = self.detect_language(doc_or_text, explicit_lang=language)
+                return chunks, self._resolve_chunker(target_lang).get_params()
+            return chunks
 
         target_lang = self.detect_language(doc_or_text, explicit_lang=language)
         chunker = self._resolve_chunker(target_lang)
-        
-        if versoning == True:
-            chunker.chunk(doc_or_text, **kwargs) , chunker.get_params()
-        return chunker.chunk(doc_or_text, **kwargs) 
+
+        if versioning:
+            return chunker.chunk(doc_or_text, **kwargs), chunker.get_params()
+        return chunker.chunk(doc_or_text, **kwargs)
 
     def chunk(
         self,
         doc_or_text: Union[Dict[str, Any], str],
         language: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        versoning : bool = False,
+        versioning: bool = False,
         **kwargs
-    ) -> List[Chunk]:
+    ) -> Union[List[Chunk], Tuple[List[Chunk], Any]]:
         """Convenience alias for dispatch() - seamlessly accepts both Document Dict and raw text str."""
-        return self.dispatch(doc_or_text, language=language, metadata=metadata, versoning=versoning, **kwargs)
+        return self.dispatch(doc_or_text, language=language, metadata=metadata, versioning=versioning, **kwargs)
     
 
 # Global default instance

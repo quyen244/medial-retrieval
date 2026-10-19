@@ -17,9 +17,9 @@ if __name__ == "__main__":
         with open(sample_file , 'r', encoding='utf-8') as f:
             doc = json.load(f)
         
-        params = vectorstore.upsert_doc(doc, versoning=True)
-        
-        mlflow.log_params(params)
+        params = vectorstore.upsert_doc(doc, versioning=True)
+
+        mlflow.log_params({k: str(v) for k, v in params.items()})
         
         query = 'khói thuốc lá chứa bao nhiêu chất độc ?'
         
