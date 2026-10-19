@@ -1,24 +1,37 @@
-# Pipeline sinh nhãn cho reranker - chốt phương án
+# Pipeline sinh nhãn cho reranker - bản chốt
 
-Phiên bản 2026-10-19.
-Mục tiêu: sinh tập nhãn `(query, doc, utility)` để fine-tune reranker đa ngữ, trong điều kiện không có nhãn vàng nào từ ban tổ chức.
+Phiên bản 2026-10-19, sau khi chốt điều lệ và đo bộ từ vựng.
+Mục tiêu: sinh tập nhãn `(query, doc, utility)` để fine-tune reranker đa ngữ, không có nhãn vàng nào từ ban tổ chức.
 Chấm bằng F2, deadline 31/10.
 
 ---
 
-## 0. Hai lỗi phải sửa trước khi làm gì khác
+## 0. Ba quyết định đã chốt
 
-### 0.1 Reranker hiện tại là model chỉ biết tiếng Anh
+| | Quyết định | Hệ quả |
+|---|---|---|
+| QĐ 1 | **Chỉ dùng open-weights ≤15B, phát hành trước 01/08/2026.** Cấm model đóng | Không có đường tắt bằng API. Trần cho phép là 14B, ta chọn **8B** cho nhẹ máy |
+| QĐ 2 | **5.000 chunk nguồn → ~5.100 query cuối cùng** | ~5 giờ GPU, xong trong ngày, không cần chạy qua đêm |
+| QĐ 3 | **Có gán tay 100 query dev set** | 3-4 giờ, làm xen kẽ lúc máy chạy |
+
+Điều lệ không phân biệt model dùng để nộp và model dùng để sinh dữ liệu, nên áp cùng một giới hạn cho cả hai.
+Đây là cách đọc an toàn.
+
+---
+
+## 1. Hai lỗi phải sửa trước khi làm gì khác
+
+### 1.1 Reranker hiện tại là model chỉ biết tiếng Anh
 
 `sft-reranker/main.py` đang fine-tune `cross-encoder/ms-marco-MiniLM-L-6-v2`.
 Model này train trên MS MARCO tiếng Anh, tokenizer và vốn từ đều là tiếng Anh.
-Query của cuộc thi 100% tiếng Việt, tài liệu đa số tiếng Anh.
+Query 100% tiếng Việt, tài liệu đa số tiếng Anh.
 Cặp vi→en sẽ không bao giờ hoạt động với backbone này, bất kể dữ liệu train tốt đến đâu.
 
 Thay bằng `BAAI/bge-reranker-v2-m3` (568M, đa ngữ, cùng họ với BGE-M3 đang dùng làm retriever).
-Đây là thay đổi bắt buộc, không phải tối ưu hóa.
+Bắt buộc, không phải tối ưu hóa.
 
-### 0.2 Loss hiện tại là BinaryCrossEntropy pointwise
+### 1.2 Loss hiện tại là BinaryCrossEntropy pointwise
 
 `BinaryCrossEntropyLoss` chấm từng cặp độc lập, không học được thứ tự tương đối.
 Với F2 cần nhiều positive mỗi query và cần điểm số hiệu chỉnh được, loss đúng là listwise có nhãn mềm.
@@ -26,46 +39,86 @@ Chi tiết ở bước 6.
 
 ---
 
-## 1. Chốt phần cứng và mô hình
+## 2. Phần cứng và mô hình
 
 Một GPU 5060 Ti 16GB.
-Nút cổ chai là **prefill** (giai đoạn nạp prompt), không phải decode, vì khâu chấm điểm có prompt rất dài và output rất ngắn.
+Nút cổ chai là **prefill**, không phải decode, vì khâu chấm điểm có prompt rất dài và output rất ngắn.
 
-| Vai trò | Model | VRAM | Lý do chọn |
-|---|---|---|---|
-| Sinh query | Qwen3-8B-AWQ (4-bit) | ~5,5 GB weights | Mạnh đều cả vi/en/zh, tắt được thinking mode |
-| Chấm utility, tầng 2 | Cùng model trên, dùng lại server | dùng chung | Không đổi model giữa chừng, đỡ thời gian nạp |
-| Chấm utility, tầng 1 | `BAAI/bge-reranker-v2-m3` | ~1,2 GB | Lọc thô, rẻ hơn hàng chục lần |
-| Student reranker | `BAAI/bge-reranker-v2-m3` | ~10 GB khi train | Backbone đa ngữ, cùng họ retriever |
-| Router | **không train model**, chạy Qwen3-8B một lượt rồi cache | - | Xem mục 9 |
+| Vai trò | Model | Ghi chú |
+|---|---|---|
+| Sinh query + chấm tầng 2 | **Qwen3-8B-AWQ** (4-bit) | ~5,5 GB weights. Thoải mái trên 16 GB, batch được sâu nên throughput cao |
+| Chấm tầng 1 | `BAAI/bge-reranker-v2-m3` | ~1,2 GB. Lọc thô, rẻ hơn hàng chục lần |
+| Student reranker | `BAAI/bge-reranker-v2-m3` | ~10 GB khi train LoRA |
 
-Quy tắc VRAM: **chạy tuần tự, không chạy song song**.
-vLLM với `--gpu-memory-utilization 0.85` sẽ chiếm khoảng 13,6 GB, không còn chỗ cho BGE-M3 hay quá trình train.
-Dừng vLLM trước khi train.
+Cấu hình vLLM:
+
+```
+--quantization awq
+--gpu-memory-utilization 0.88 --max-model-len 8192
+--enable-prefix-caching
+```
+
+8B để lại ~8 GB cho KV cache, đủ batch sâu nên prefill chạy gần mức trần của card.
+Không cần `--kv-cache-dtype fp8` ở kích thước này.
+
+**Ghi chú về trần chất lượng:** điều lệ cho phép tới 15B, và chất lượng teacher là trần của reranker.
+Nếu sau khi soát tay 50 cặp ở cổng chặn mà thấy 8B chấm sai nhiều, phương án B là dùng 14B cho riêng bước chấm tầng 2 (bước đắt nhất nhưng cũng quyết định chất lượng nhất), giữ 8B cho bước sinh query.
+
+Quy tắc VRAM: **chạy tuần tự, không song song**. Dừng vLLM trước khi train.
 
 ---
 
-## 2. Sơ đồ E2E
+## 3. Sơ đồ E2E
 
 ```mermaid
 flowchart TD
-    A["Corpus chunks trong Qdrant<br/>1,22 M tài liệu"] --> B["1. Chọn chunk nguồn<br/>query-aware, nghiêng về EN"]
-    Q["1.200 query thật<br/>collection query_documents"] -.few-shot theo độ dài.-> C
+    A["Corpus Qdrant<br/>1,22 M tài liệu"] --> B["1. Chọn 5.000 chunk nguồn<br/>query-aware · EN 60% VI 30% ZH 10%"]
+    Q["1.200 query thật"] -.few-shot theo độ dài.-> C
     Q -.embedding để chọn chunk.-> B
-    B --> C["2. Sinh query VI<br/>Qwen3-8B, hai chế độ dài/ngắn"]
-    C --> D["3. Lọc round-trip<br/>chỉ retrieval, không LLM"]
-    D --> E["4. Lấy ứng viên<br/>hybrid search top 20<br/>trộn chunk gốc vào, ẩn danh"]
-    E --> F["5a. Tầng 1: bge-reranker-v2-m3<br/>chấm thô cả 20"]
-    F --> G["5b. Tầng 2: Qwen3-8B<br/>chỉ chấm 10 cái mơ hồ nhất<br/>thang 0-3"]
-    G --> H["6. Tập nhãn mềm"]
-    H --> I["7. Fine-tune reranker<br/>listwise + KL"]
-    I --> J["8. Hiệu chỉnh cutoff cho F2"]
+    V["Bộ từ vựng<br/>ICD vi-en-zh + thực thể Latin"] -.ràng buộc từ ngữ.-> C
+    B --> C["2. Sinh query VI<br/>Qwen3-8B · 66% ngắn, 34% kể bệnh"]
+    C --> D["3. Lọc round-trip<br/>chỉ retrieval"]
+    D --> E["4. Lấy 16 ứng viên<br/>+ chunk gốc trộn vào ẩn danh"]
+    V -.sibling ICD.-> E
+    E --> F["5a. Tầng 1: bge-reranker-v2-m3<br/>chấm cả 16"]
+    F --> G["5b. Tầng 2: Qwen3-8B<br/>chấm 8 cái mơ hồ nhất · thang 0-3"]
+    G --> H["6. Tập nhãn mềm<br/>~5.100 nhóm listwise"]
+    H --> I["7. Fine-tune LoRA<br/>listwise KL"]
+    I --> J["8. Hiệu chỉnh cutoff F2"]
     DEV["dev set 100 query gán tay"] -.-> J
 ```
 
 ---
 
-## 3. Từng bước
+## 4. Phễu số lượng
+
+```
+ 5.000 chunk nguồn        EN 3.000 · VI 1.500 · ZH 500
+    × 2 query mỗi chunk
+10.000 query sinh ra       5.000 lời gọi LLM
+    × 0,60 lọc round-trip
+ 6.000 query giữ lại
+    × 0,85 phải có >=1 positive
+ 5.100 query cuối cùng  =  5.100 nhóm listwise
+    × 16 ứng viên
+81.600 cặp được chấm      trong đó 40.800 cặp qua tầng 2
+    |
+~15.300 positive (điểm 3 và 2)
+~56.100 negative (điểm 0)
+~10.200 bỏ đi    (điểm 1, không dùng làm negative)
+```
+
+**Một chunk nguồn cho ra:** 2 query → ~1,2 query sống sót → ~1,0 nhóm listwise → ~12 cặp có nhãn dùng được.
+
+Chunk nguồn **không chắc** có mặt trong output.
+Nó bị trộn vào pool ẩn danh và chấm như mọi ứng viên khác.
+Nếu nó không đủ bằng chứng trả lời chính câu hỏi sinh ra từ nó, nó thành negative hoặc bị bỏ. Đó là chủ đích.
+
+Các tỷ lệ 0,60 và 0,85 là **giả định chưa đo**. Pilot 300 chunk tồn tại chính là để thay chúng bằng số thật.
+
+---
+
+## 5. Từng bước
 
 ### Bước 1 - Chọn chunk nguồn
 
@@ -74,10 +127,7 @@ Câu hỏi thật tập trung vào sản phụ khoa, nhi, da liễu, nam khoa, t
 
 - Encode 1.200 query thật bằng BGE-M3, cluster thành khoảng 30 cụm.
 - Với mỗi cụm, truy xuất top-N chunk gần nhất từ Qdrant làm chunk nguồn.
-- Tỷ lệ ngôn ngữ chunk nguồn: **EN 60%, VI 30%, ZH 10%**.
-
-Không chia đều ba ngôn ngữ.
-EN chiếm đa số vì đó là nơi bằng chứng thật nằm, và vì cặp vi→en là thứ reranker cần học nhất.
+- Tỷ lệ ngôn ngữ: **EN 60%, VI 30%, ZH 10%**, bám theo nơi bằng chứng thật nằm.
 
 Output `data/labeling/source_chunks.jsonl`:
 
@@ -87,21 +137,22 @@ Output `data/labeling/source_chunks.jsonl`:
 
 ### Bước 2 - Sinh query tiếng Việt
 
-Một lời gọi sinh 2 query từ 1 chunk, nhưng **hai chế độ riêng biệt**, không trộn trong cùng prompt.
+Một lời gọi sinh 2 query từ 1 chunk, **hai chế độ riêng biệt**, không trộn trong cùng prompt.
 
 | Chế độ | Tỷ lệ | Mô tả | Khớp với |
 |---|---|---|---|
 | `short` | 66% | Câu hỏi gọn, 8-25 từ | 66,3% tập thật dưới 30 từ |
 | `narrative` | 34% | Bệnh nhân kể bệnh, 40-150 từ, có chi tiết thừa | 33,8% tập thật trên 30 từ |
 
-Few-shot lấy từ collection `query_documents`, nhưng **stratify theo độ dài của chế độ đang sinh**.
+Few-shot lấy từ collection `query_documents`, **stratify theo độ dài của chế độ đang sinh**.
 Hiện tại `get_few_shot()` chỉ lấy top-2 theo similarity, nên chế độ `narrative` gần như không bao giờ có mẫu đúng dạng.
 
-Ba ràng buộc bắt buộc trong prompt:
+Bốn ràng buộc bắt buộc trong prompt:
 
 1. **Luôn sinh ra tiếng Việt**, kể cả khi chunk là tiếng Anh hoặc tiếng Trung.
-2. **Dùng từ bệnh nhân hay dùng**, không bê nguyên thuật ngữ lâm sàng trong chunk. Đây là chỗ bộ từ vựng ở mục 8 giúp.
+2. **Dùng từ bệnh nhân hay dùng**, không bê nguyên thuật ngữ lâm sàng trong chunk.
 3. **Không nhắc tới tài liệu**: cấm "theo đoạn trên", "nghiên cứu này".
+4. Nếu chunk chứa thực thể Latin (tên thuốc, xét nghiệm, vắc xin, hội chứng), **giữ nguyên nó trong query**. Đó là mỏ neo truy xuất bất biến ngôn ngữ.
 
 Output `data/labeling/gen_queries.jsonl`:
 
@@ -112,62 +163,48 @@ Output `data/labeling/gen_queries.jsonl`:
 ### Bước 3 - Lọc round-trip
 
 Không dùng LLM judge để chọn câu hỏi.
-Dùng chính retriever: khách quan hơn, và rẻ hơn hàng trăm lần.
+Dùng chính retriever: khách quan hơn, rẻ hơn hàng trăm lần.
 
-Với mỗi query sinh ra, chạy `hybrid_search(query, top_k=50)`.
-Giữ query nếu `src_chunk_id` nằm trong top-50, loại nếu không.
-Query bị loại là query quá mơ hồ hoặc lạc đề so với chunk nguồn.
-
-Ghi lại **thứ hạng** của chunk gốc, vì nó là tín hiệu độ khó miễn phí dùng cho router sau này:
-
-```json
-{"qid": "g000123", "src_rank": 7, "kept": true}
-```
+`hybrid_search(query, top_k=50)`, giữ query nếu `src_chunk_id` nằm trong top-50.
+Ghi lại thứ hạng của chunk gốc.
 
 Tỷ lệ giữ kỳ vọng 50-75%.
-Nếu dưới 40%, prompt sinh query đang có vấn đề, dừng lại sửa trước khi chạy tiếp.
+Dưới 40% thì prompt sinh query đang có vấn đề, dừng lại sửa.
 
 ### Bước 4 - Lấy ứng viên
 
-`hybrid_search(query, top_k=20)`, không lọc ngôn ngữ.
-Sau đó **trộn chunk gốc vào pool mà không gắn nhãn gì**, xáo thứ tự.
+`hybrid_search(query, top_k=16)`, không lọc ngôn ngữ.
+Trộn chunk gốc vào pool **không gắn nhãn gì**, xáo thứ tự.
 
 Đây là điểm khác quan trọng nhất so với cách làm thông thường.
 Nếu mặc định chunk gốc là positive, bạn dạy reranker đếm từ trùng, vì query được viết ra từ chính chunk đó nên luôn mượn thuật ngữ của nó.
 
-Chốt **20 ứng viên**, không phải 50 như bài báo.
-Lý do thuần ngân sách tính toán, xem mục 4.
+**Tùy chọn, bật sau khi pilot chạy ổn:** thêm 2 hard negative là tài liệu về bệnh **cùng chương ICD, khác mã** với bệnh trong query.
+Cùng chuyên khoa, cùng vốn từ, nhưng câu trả lời sai. Negative loại này khó hơn hẳn negative ngẫu nhiên.
 
 ### Bước 5 - Chấm utility hai tầng
 
-**Tầng 1 (rẻ):** `bge-reranker-v2-m3` chấm cả 20 ứng viên, vài mili-giây mỗi cặp.
+**Tầng 1:** `bge-reranker-v2-m3` chấm cả 16 ứng viên.
 
-**Tầng 2 (đắt):** Qwen3-8B chỉ chấm 10 ứng viên: 6 cái điểm cao nhất, cộng 4 cái quanh ngưỡng mơ hồ.
-Những cái tầng 1 chấm rất thấp thì tin luôn là irrelevant, không phí lời gọi 8B.
+**Tầng 2:** Qwen3-8B chỉ chấm 8 ứng viên: 5 cái điểm cao nhất, cộng 3 cái quanh ngưỡng mơ hồ.
+Cái nào tầng 1 chấm rất thấp thì tin luôn là irrelevant.
 
 Prompt tầng 2 đặt **query trước, tài liệu sau**.
-Thứ tự này quan trọng: vLLM có prefix caching tự động, nên phần `instruction + query` dùng chung cho cả 10 tài liệu chỉ được nạp một lần.
-Tiết kiệm khoảng 40% prefill.
+Thứ tự này quan trọng: prefix caching làm phần `instruction + query` chỉ nạp một lần cho cả 8 tài liệu.
+Đây là lý do ngân sách tính toán ở mục 6 khả thi.
 
-Thang điểm 4 mức, không nhị phân:
+| Điểm | Nghĩa | Thành |
+|---|---|---|
+| 3 | Trả lời trực tiếp và đầy đủ | positive, trọng số 1,0 |
+| 2 | Có bằng chứng hữu ích nhưng chưa đủ | positive, trọng số 0,6 |
+| 1 | Cùng chủ đề, không trả lời được | **bỏ khỏi tập train** |
+| 0 | Không liên quan | negative |
 
-| Điểm | Nghĩa |
-|---|---|
-| 3 | Trả lời trực tiếp và đầy đủ câu hỏi |
-| 2 | Chứa bằng chứng hữu ích nhưng chưa đủ |
-| 1 | Cùng chủ đề, không trả lời được |
-| 0 | Không liên quan |
-
-Quy tắc chuyển sang nhãn train:
-
-- `3` và `2` thành positive, trọng số `1,0` và `0,6`.
-- `0` thành negative.
-- `1` thì **loại khỏi tập train**, không dùng làm negative.
-
-Lý do loại điểm 1: trong 1,22 M tài liệu, một câu hỏi như "viêm kết mạc trẻ sơ sinh" có hàng chục tài liệu đúng.
+Điểm 1 bị vứt chứ không dùng làm negative.
+Trong 1,22 M tài liệu, một câu hỏi như "viêm kết mạc trẻ sơ sinh" có hàng chục tài liệu đúng.
 Dùng điểm 1 làm negative là tự tạo negative giả.
 
-Tiêu chí loại cả query: nếu không ứng viên nào đạt điểm 2 trở lên, bỏ query đó.
+Loại cả query nếu không ứng viên nào đạt điểm 2 trở lên.
 
 Output `data/labeling/judged.jsonl`:
 
@@ -185,14 +222,12 @@ Backbone `BAAI/bge-reranker-v2-m3`, LoRA r=16 trên attention, bf16, grad checkp
 Loss: **listwise KL divergence** giữa phân phối điểm teacher và phân phối logit của student trên cùng một nhóm ứng viên.
 Không dùng BCE pointwise, không dùng softmax cross-entropy một positive.
 
-Lý do: F2 nặng recall, cần nhiều positive mỗi query và cần điểm số có thể đặt ngưỡng.
+F2 nặng recall, cần nhiều positive mỗi query và cần điểm số có thể đặt ngưỡng.
 Softmax một positive chỉ tối ưu hạng 1, đúng cho nDCG@1, sai cho F2.
-
-Một nhóm train bằng 1 query cộng toàn bộ ứng viên đã chấm, nhãn mềm chuẩn hóa thành phân phối.
 
 ### Bước 7 - Hiệu chỉnh cutoff
 
-Sau khi train, quét `k` từ 3 tới 30 trên dev set gán tay, chọn `k` tối đa F2.
+Quét `k` từ 3 tới 30 trên dev set gán tay, chọn `k` tối đa F2.
 Đừng fix top-k cứng.
 
 Với 6 tài liệu đúng, hệ thống trả 10 cái đúng 5 (F2 = 0,735) thắng hệ thống trả 3 cái đúng cả 3 (F2 = 0,556).
@@ -200,267 +235,187 @@ Số tài liệu tối ưu cho F2 thường lớn hơn trực giác rất nhiề
 
 ---
 
-## 4. Ngân sách tính toán, và vì sao hôm nay không xong
+## 6. Ngân sách tính toán
 
-Ước tính cho 5.000 query sau lọc, 20 ứng viên mỗi query.
-Giả định prefill khoảng 3.000 tok/s cho Qwen3-8B-AWQ trên 5060 Ti.
-**Đây là ước tính, chưa đo.** Việc đầu tiên hôm nay là đo lại.
+Giả định prefill ~3.000 tok/s cho Qwen3-8B-AWQ. **Ước tính, chưa đo.** Bước 2 lộ trình sẽ thay bằng số thật.
 
-| Bước | Khối lượng | Thời gian ước tính |
+| Bước | Khối lượng | Ước tính |
 |---|---|---|
 | 1. Chọn chunk | encode + cluster | 20 phút |
-| 2. Sinh query | ~4.000 lời gọi, prompt ~1.000 tok | 45 phút |
+| 2. Sinh query | 5.000 lời gọi | ~1 giờ |
 | 3. Lọc round-trip | chỉ retrieval | 15 phút |
 | 4. Lấy ứng viên | chỉ retrieval | 20 phút |
-| 5a. Tầng 1 | 100.000 cặp, model 568M | 30 phút |
-| 5b. Tầng 2 | 50.000 cặp, có prefix caching | **4-6 giờ** |
-| 6. Train | LoRA 568M, 3 epoch | 1-2 giờ |
+| 5a. Tầng 1 | 81.600 cặp, model 568M | 25 phút |
+| 5b. Tầng 2 | 40.800 cặp, có prefix caching | **~2 giờ** |
+| 6. Train | LoRA 568M, 3 epoch | 1-1,5 giờ |
 
-Bước 5b một mình chiếm hơn nửa tổng thời gian.
-Nếu bỏ cascade hai tầng và cho 8B chấm thẳng cả 20 ứng viên của 8.000 query, con số là **khoảng 20 giờ**.
-Đó là lý do có cascade.
+Tổng **~5 giờ**. Xong trong ngày, không cần chạy qua đêm.
+Vẫn phải có checkpoint và resume, vì cổng chặn có thể bắt chạy lại.
 
-**Kết luận thẳng: không thể sinh xong nhãn trong hôm nay.**
-Hôm nay là ngày dựng và kiểm chứng trên quy mô nhỏ, rồi thả chạy qua đêm.
-Cố nhồi cả vào một ngày sẽ dẫn tới chạy 6 tiếng xong mới phát hiện prompt sai.
+Prefix caching là thứ làm bước 5b khả thi.
+Không có nó, cùng khối lượng đó mất khoảng 3,5 giờ thay vì 2.
 
 ---
 
-## 5. Lộ trình hôm nay
+## 7. Bộ từ vựng - đã đo, và kết luận ngược với dự đoán ban đầu
 
-| Khối | Việc | Tiêu chí xong |
+Hai file có sẵn trong `data/knowledge/`.
+Tôi đã đo độ phủ của chúng trên chính 1.200 query thật.
+
+### 7.1 Kết quả đo
+
+| File | Quy mô | Phủ 1.200 query | Ngôn ngữ |
+|---|---|---|---|
+| `icd10_vn_aliases_v1.csv` | 12.919 mã, 16.894 alias | **39,2%** sau khi lọc nhiễu | chỉ tiếng Việt |
+| `rxnorm_concepts_final.csv` | 229.134 concept, 51.627 tên hoạt chất/biệt dược | **4,3%** | chỉ tiếng Anh |
+
+Số liệu bối cảnh, đo trên cùng 1.200 query:
+
+- Chỉ **16,0%** query chứa từ "thuốc".
+- Chỉ **11,8%** query có token Latin viết hoa giữa câu.
+
+### 7.2 Đính chính
+
+Tôi đã nói "query nhắc tên thuốc liên tục" và xếp bảng tên thuốc là tầng ưu tiên số 1.
+**Số đo cho thấy điều đó sai.** Tên thuốc chỉ xuất hiện ở ~16% query, và RxNorm bắt được ~4%.
+
+RxNorm thiên về thị trường Mỹ nên bỏ sót biệt dược Việt Nam ("Bralcib", "Cozaar XQ", "procare diamond").
+Nó bắt tốt hoạt chất quốc tế (paracetamol, meloxicam, duphaston, estradiol).
+
+Danh sách token Latin hay gặp thật ra không phải chủ yếu là thuốc:
+
+```
+Covid, AstraZeneca, HBsAg, HBeAg, Doppler, Basedow,
+Trisomy, Down, Edward, Zona, Prolactin, Cobas, Avastin
+```
+
+Đó là **xét nghiệm, vắc xin, hội chứng mang tên riêng** - cũng là mỏ neo bất biến ngôn ngữ y hệt tên thuốc.
+Nên bảng cần xây không phải "bảng thuốc" mà là **bảng thực thể Latin**, rộng hơn.
+
+### 7.3 Chốt ba việc
+
+**A. Bảng ICD song ngữ vi-en. XONG.**
+
+Ban đầu tôi định cho LLM dịch 12.919 tên bệnh, mất ~30 phút GPU.
+Với `icd10cm_2027.csv` bạn vừa thêm, việc đó thành một phép **join**: không cần GPU, và chính xác thay vì sinh ra.
+
+`scripts/build_icd_bilingual.py` → `data/vocab/icd_bilingual.tsv`, **10.752 dòng**.
+
+| Bước ghép | Số mã |
+|---|---|
+| Khớp mã tuyệt đối | 5.078 |
+| Gom mã con CM về mã cha WHO | 5.674 |
+| Bỏ chương Z/V/W/X/Y/U | 1.868 |
+| Không khớp được | 299 |
+
+Hai xử lý cần thiết, đã làm trong script:
+
+1. ICD-10-CM chi tiết hơn ICD-10 WHO (bản Việt dùng), chỉ 42,7% mã khớp tuyệt đối.
+   Phần còn lại gom mã con về mã cha, chọn tên **chung nhất** (ưu tiên "unspecified", rồi tên ngắn nhất).
+   Lấy bừa một mã con sẽ cho thuật ngữ quá hẹp, ví dụ `A01.0` ra "Typhoid arthritis" thay vì "Typhoid fever".
+2. ICD-10-CM gắn định tố không có trong bản WHO: "right side", "initial encounter", "first trimester", "without bleeding".
+   Phải cắt cả đầu lẫn đuôi, nếu không thuật ngữ mở rộng sẽ nhiễu.
+
+Kết quả kiểm tra tay:
+
+```
+Chảy nước mắt sống                  [H04.2] -> epiphora
+Viêm kết mạc và/hoặc túi lệ sơ sinh [P39.1] -> Neonatal conjunctivitis and dacryocystitis
+Viêm âm đạo cấp tính                [N76.0] -> Acute vaginitis
+Nhiễm trùng đường hô hấp trên cấp   [J06.9] -> Acute upper respiratory infection
+```
+
+Bảng phủ **38,9%** của 1.200 query thật, và mỗi lần khớp cho ra một cầu nối vi→en dùng được ngay.
+
+**B. Tiếng Trung: bỏ.**
+
+Corpus zh chỉ phủ 4,1%, nên thuật ngữ tiếng Trung gần như không có tài liệu để khớp vào.
+Không đáng 30 phút GPU và thêm một cột phải bảo trì.
+
+**C. Bảng thực thể Latin, gộp RxNorm với cái đào từ query.**
+
+Lấy RxNorm `tty` ∈ `{IN, PIN, BN, MIN}` làm nền (51.627 tên).
+Bổ sung bằng cách quét token Latin viết hoa giữa câu trong 1.200 query **và** trong corpus tiếng Việt, cho LLM phân loại là thuốc / xét nghiệm / vắc xin / hội chứng / không phải.
+Phạm vi bổ sung vài trăm mục, không phải vài chục nghìn.
+
+**Tầng dân gian ↔ lâm sàng: hoãn lại.**
+Nó vẫn đúng về nguyên tắc, nhưng bảng ICD đã phủ 39,2% rồi, và việc A có lợi ích cao hơn rõ rệt trên cùng một giờ bỏ ra.
+Quay lại làm nếu bước 5 chạy ổn và còn thời gian.
+
+### 7.4 Dùng ở khâu nào
+
+| Khâu | Dùng | Làm gì |
 |---|---|---|
-| 1 | Trả lời 2 câu hỏi điều lệ ở mục 7 | Biết teacher được phép lớn tới đâu |
-| 2 | Sửa backbone sang `bge-reranker-v2-m3` trong `sft-reranker/main.py` | Train thử 10 dòng chạy không lỗi |
-| 3 | Dựng vLLM với Qwen3-8B-AWQ, **đo prefill thật** bằng 200 prompt mẫu | Có số tok/s thật, thay vào bảng mục 4 |
-| 4 | **Bắt đầu gán tay 100 query dev set** | Việc quan trọng nhất trong ngày, xem mục 6 |
-| 5 | Viết bước 1-2-3, chạy pilot 300 query | Có `gen_queries.jsonl` |
-| 6 | **Soát tay 30 query sinh ra** | Phân phối độ dài khớp chưa, có leak thuật ngữ không, tỷ lệ round-trip bao nhiêu |
-| 7 | Viết bước 4-5, chạy pilot trên 300 query đã lọc | Có `judged.jsonl` |
-| 8 | **Soát tay 50 cặp đã chấm** | Teacher chấm đúng không. Sai nhiều thì sửa prompt rồi lặp lại khối 7 |
-| 9 | Thả chạy full qua đêm | Có checkpoint, resume được, ghi log tiến độ |
+| Bước 2, sinh query | **Có, chính yếu** | Chunk EN → tra ICD ra tên bệnh tiếng Việt → chèn vào prompt làm ràng buộc từ ngữ. Ép query dùng giọng Việt thay vì dịch máy móc, đồng thời chống rò rỉ xuất xứ |
+| Bước 3, round-trip | Không | |
+| Bước 4, ứng viên | Tùy chọn | Thêm hard negative cùng chương ICD khác mã |
+| Bước 5, chấm utility | Không | Judge đọc cả hai bên, không cần bảng |
+| Bước 6, train | Không | |
+| Inference | **Có** | THÊM tên bệnh EN và thực thể Latin vào nhánh sparse. Giữ nguyên từ gốc bệnh nhân, không thay thế |
+| Hậu xử lý | **Không** | Không có chỗ nào |
 
-Khối 6 và khối 8 là cổng chặn.
-Nếu khối 8 cho thấy teacher chấm sai nhiều, **không được thả chạy qua đêm** - sẽ tạo ra 5.000 query nhãn rác và mất trọn một đêm.
-
-Tổng khoảng 2-3 giờ chạy máy, phần còn lại là viết code và soát tay.
-Khối 4 làm xen kẽ trong lúc máy chạy.
+Nguyên tắc ở inference: **append, không substitute**.
+Nghiên cứu reformulation query y tế sang thuật ngữ chuyên môn cho 42% tốt hơn, 19% tệ hơn, 39% không đổi.
+Trong khi chỉ *thêm* biểu thức chuyên môn vào cho cải thiện ổn định.
+Với F2 thiên recall, append là lựa chọn đúng.
 
 ---
 
-## 6. Dev set gán tay - làm trước tất cả
+## 8. Dev set gán tay
 
 100 query lấy từ chính 1.200 query thật, stratify theo độ dài: 40 ngắn, 30 vừa, 30 kể bệnh dài.
-Với mỗi query, chạy hybrid search top-20, tự đọc và đánh 0-3 theo đúng thang ở bước 5.
+Mỗi query chạy hybrid search top-20, tự đọc và đánh 0-3 theo đúng thang ở bước 5.
 
-Khoảng 2.000 cặp phải đọc.
-Nghe nhiều, nhưng phần lớn loại được trong 2 giây.
-Ước tính 3-4 giờ, làm xen kẽ trong lúc máy chạy pilot.
+Khoảng 2.000 cặp phải đọc, phần lớn loại được trong 2 giây. Ước tính 3-4 giờ.
 
-Không có nó thì mọi thay đổi ở trên đều không đo được, và đo bằng chính teacher đã dùng để train là vòng luẩn quẩn.
-100 nhãn tay có giá trị đo lường cao hơn 10.000 nhãn nhiễu.
-
-Dev set này còn dùng để hiệu chỉnh cutoff ở bước 7, nên nó bắt buộc phải tồn tại.
+Không có nó thì mọi thay đổi đều không đo được, và đo bằng chính teacher đã dùng để train là vòng luẩn quẩn.
+Dev set này còn dùng để hiệu chỉnh cutoff ở bước 7, nên bắt buộc phải tồn tại.
 
 ---
 
-## 7. Hai câu hỏi điều lệ cần trả lời trong 15 phút đầu ngày
+## 9. Lộ trình hôm nay
 
-| Câu hỏi | Ảnh hưởng nếu được phép |
-|---|---|
-| Thể lệ có cấm dùng model lớn hơn 15B để **sinh dữ liệu train** không? | Thuê API model lớn làm teacher rẻ hơn và tốt hơn nhiều so với 8B local, đồng thời bỏ được phần lớn ngân sách GPU ở mục 4 |
-| Thể lệ có cấm train trên chính 1.200 query submission không? | Pseudo-label trực tiếp trên 1.200 query là đòn bẩy lớn nhất, loại bỏ hoàn toàn vấn đề lệch phân phối |
+| | Việc | Tiêu chí xong |
+|---|---|---|
+| 1 | Sửa backbone sang `bge-reranker-v2-m3` trong `sft-reranker/main.py` | Train thử 10 dòng chạy không lỗi |
+| 2 | Dựng vLLM với Qwen3-8B-AWQ, **đo prefill thật** bằng 200 prompt mẫu | Có số tok/s thật, thay vào bảng ngân sách |
+| ~~3~~ | ~~Dựng bảng ICD song ngữ~~ | **XONG** - `data/vocab/icd_bilingual.tsv`, 10.752 dòng |
+| 4 | Viết bước 1-2-3, chạy pilot 300 chunk | Có `gen_queries.jsonl` |
+| 5 | **CỔNG CHẶN: soát tay 30 query sinh ra** | Phân phối dài/ngắn khớp chưa? Có bê nguyên thuật ngữ chunk không? Tỷ lệ round-trip bao nhiêu? Dưới 40% thì sửa prompt, chạy lại |
+| 6 | Viết bước 4-5, chạy chấm trên ~306 query pilot | Có `judged.jsonl`, ~25 phút GPU |
+| 7 | **CỔNG CHẶN: soát tay 50 cặp đã chấm** | Teacher chấm đúng không? Sai nhiều thì sửa prompt, lặp lại bước 6 |
+| 8 | Thả chạy full 5.000 chunk | Có checkpoint, resume được, ghi log tiến độ |
 
-Cả hai câu đều thay đổi phần còn lại của kế hoạch, nên phải trả lời trước khi viết code.
+Xen kẽ lúc máy chạy: **gán tay 100 query dev set**.
 
----
-
-## 8. Bộ từ vựng y khoa đa ngữ
-
-**Có nên làm: có. Nhưng không phải ICD trước.**
-
-ICD là bảng phân loại dùng cho **thống kê và thanh toán bảo hiểm**, viết bằng văn phong lâm sàng chính thức.
-Bản dịch tiếng Việt là dịch sát nghĩa, không chứa một từ nào mà bệnh nhân thật sự dùng.
-Khớp query bệnh nhân với thuật ngữ ICD trực tiếp cho recall rất thấp.
-ICD vẫn có chỗ dùng, nhưng không phải chỗ bạn đang nghĩ.
-
-### Ba tầng, xếp theo lợi ích trên mỗi giờ bỏ ra
-
-**Tầng 1 - Bảng tên thuốc. Làm trước, lợi nhất.**
-
-Query thật nhắc tên thuốc liên tục: "Dapoxetine (Priligy)", "Bralcib", "Cozaar XQ 5/50mg".
-Tên thuốc là mỏ neo truy xuất chính xác cao nhất, và gần như bất biến qua ngôn ngữ.
-"Dapoxetine" viết giống nhau trong tài liệu Việt và Anh, gần giống trong tài liệu Trung.
-
-Cần ánh xạ: hoạt chất (INN) ↔ tên biệt dược ↔ cách viết trong tài liệu tiếng Việt ↔ tên tiếng Trung.
-Nguồn khả dĩ: danh mục INN của WHO, RxNorm, DrugBank, cổng dữ liệu thuốc của Cục Quản lý Dược Việt Nam.
-Độ tin cậy của tôi về tên và tình trạng truy cập của từng nguồn này là **trung bình**, cần kiểm tra trực tiếp trước khi dựa vào.
-
-**Tầng 2 - Bảng bệnh ba ngôn ngữ.**
-
-Dùng **Wikidata** làm xương sống thay vì ICD.
-Lý do: Wikidata mang theo cả nhãn chính lẫn **alias** ở nhiều ngôn ngữ, còn ICD chỉ có một tên chính thức cho mỗi mã.
-Alias mới chính là thứ bạn cần.
-
-Truy vấn SPARQL lấy mọi thực thể có mã ICD-10, kèm nhãn và alias ở `vi`, `en`, `zh`.
-Vẫn gắn mã ICD vào mỗi dòng, nhưng mã dùng cho mục đích ở dưới, không dùng để khớp văn bản.
-
-**Tầng 3 - Từ điển bình dân ↔ lâm sàng tiếng Việt. Không có sẵn, phải tự đào.**
-
-Đây là khoảng trống lớn nhất, và cũng là thứ không đối thủ nào có.
-Bệnh nhân viết "ghèn mắt", "cô bé", "ngứa vùng kín"; tài liệu viết "dử mắt", "âm hộ", "viêm âm đạo".
-Không bảng thuật ngữ chính thức nào chứa cặp này.
-
-Đào từ chính corpus của bạn.
-Bài trên Vinmec, suckhoedoisong thường tự chú giải:
-
-```
-hay còn gọi là X
-còn gọi là X
-(dân gian gọi là X)
-X (tên khoa học: Y)
-Y (thường gọi là X)
-```
-
-Regex trên toàn bộ chunk tiếng Việt, giữ cặp xuất hiện từ 3 lần trở lên, soát tay danh sách cuối.
-Chi phí khoảng 1 giờ, cho ra vài nghìn cặp đặc thù đúng miền của bạn.
-
-### Ba chỗ dùng, theo thứ tự quan trọng
-
-**1. Khai thác hard negative có nguyên tắc.**
-
-Đây là chỗ dùng giá trị nhất, và là lý do mã ICD vẫn đáng có.
-
-Hai bệnh cùng chương ICD nhưng khác mã là **hard negative gần như hoàn hảo**: cùng chuyên khoa, cùng vốn từ, nhưng câu trả lời sai.
-Ví dụ query về tắc lệ đạo bẩm sinh, lấy negative là tài liệu về viêm kết mạc sơ sinh - cùng chương mắt, triệu chứng gần giống, điều trị khác hẳn.
-
-Negative lấy ngẫu nhiên thì quá dễ, reranker không học được gì.
-Negative lấy từ top-k retriever thì hay dính false negative.
-Negative lấy theo anh em cùng chương ICD thì vừa khó **vừa** chắc chắn sai.
-Không nguồn nào khác cho bạn thứ đó.
-
-**2. Neo thuật ngữ khi sinh query từ chunk tiếng Anh.**
-
-Khi sinh query tiếng Việt từ chunk tiếng Anh, model 8B hay phiên âm máy móc hoặc dịch từng chữ, ra thứ tiếng Việt không ai nói.
-Tra chunk ra các thuật ngữ lâm sàng, tra bảng lấy từ tiếng Việt tương ứng (ưu tiên từ bình dân ở tầng 3), chèn vào prompt như ràng buộc từ vựng.
-
-Đây đồng thời là cơ chế chống rò rỉ xuất xứ: ép query dùng **từ khác** với chunk nguồn, nên chunk gốc không còn thắng chỉ nhờ trùng từ.
-Một mũi tên hai đích.
-
-**3. Mở rộng query lúc inference.**
-
-Query tiếng Việt nhắc "xuất tinh sớm", thêm "premature ejaculation" vào nhánh sparse/BM25 trước khi truy xuất.
-Dense BGE-M3 xử lý vi↔en tạm ổn ở mức ngữ nghĩa chung, nhưng thuật ngữ y khoa chính là chỗ nó yếu nhất.
-Nhánh sparse thì hoàn toàn không bắc cầu được ngôn ngữ nếu không có bảng này.
-
-Lưu ý: mở rộng query **tăng recall, giảm precision**.
-Với F2 đó là đánh đổi có lợi. Với F1 thì chưa chắc.
-
-### Chốt phạm vi cho 12 ngày còn lại
-
-Đừng xây bộ thuật ngữ đầy đủ. Làm đúng mức này:
-
-- Tầng 3, đào từ corpus: **làm hôm nay**, 1 giờ, lợi ích lớn nhất trên mỗi giờ bỏ ra.
-- Tầng 1, tên thuốc: làm ngày mai, giới hạn ở hoạt chất thật sự xuất hiện trong 1.200 query và trong corpus. Có lẽ vài trăm cái, không phải vài chục nghìn.
-- Tầng 2, Wikidata ba ngôn ngữ: làm nếu bước 5 chạy ổn và còn thời gian. Chủ yếu để khai thác hard negative.
-
-Nguyên tắc lọc: thuật ngữ nào không xuất hiện trong 1.200 query hoặc trong corpus thì không đưa vào bảng.
-Bảng 2.000 dòng đúng miền có ích hơn bảng 80.000 dòng đầy đủ nhưng không bao giờ khớp cái gì.
+**Không được thả chạy qua đêm nếu cổng chặn số 7 chưa qua.**
+Sai ở đó nghĩa là 5.000 query nhãn rác và mất trọn một đêm.
 
 ---
 
-## 9. Query router - chốt phương án
-
-### 9.1 Không train router <1B
+## 10. Query router - hoãn
 
 1.200 query **chính là tập submission và đã biết trước**.
-Không có traffic online, không có query lạ xuất hiện lúc inference.
-Nghĩa là không có bài toán latency nào cần giải.
+Không có traffic online, nên không có bài toán latency nào cần giải.
+Chạy model một lượt rồi cache JSONL là đủ; distill xuống <1B chỉ thêm mất mát.
 
-Chạy Qwen3-8B một lượt trên 1.200 query là việc của vài chục phút GPU, làm một lần, cache ra JSONL, dùng mãi.
-Distill xuống <1B để rồi chạy nó trên đúng tập mà model thầy đã gán nhãn được là **mất mát thuần**: trần chất lượng của student bằng đúng chất lượng nhãn của thầy, cộng thêm sai số distillation.
+Trục `easy/medium/hard` trong `test_query_router.py` đo **độ khó của việc trả lời**, trong khi cuộc thi chấm F2 trên tài liệu **truy xuất**.
+Hai đại lượng này đảo dấu trên chính ví dụ của bạn: "Uống quá liều Cozaar XQ" khó trả lời nhưng rất dễ truy xuất, "Viêm lưỡi kéo dài có sao không" dễ trả lời nhưng rất khó truy xuất.
 
-Chỉ train router nếu một trong hai điều sau đúng:
-- Cần route bên trong một vòng lặp, hàng chục nghìn lần (ví dụ route lại từng sub-query sinh động).
-- Ban tổ chức yêu cầu nộp hệ thống chạy end-to-end có giới hạn thời gian.
+Nếu quay lại làm router sau khi xong reranker, hai nguyên tắc bắt buộc:
 
-### 9.2 Bỏ trục easy / medium / hard
-
-Prompt trong `src/playground/test_query_router.py` đang hỏi "có đòi hỏi suy luận nhiều không, có cần nhiều thông tin để trả lời không".
-Đó là **độ khó của việc trả lời**. Cuộc thi chấm F2 trên tập tài liệu truy xuất, không chấm câu trả lời.
-Hai đại lượng này tương quan yếu, và đảo dấu trên chính ví dụ của bạn:
-
-- "Uống quá liều thuốc Cozaar XQ 5/50mg có sao không?" - trả lời khó, **truy xuất rất dễ** (có tên thuốc làm mỏ neo).
-- "Viêm lưỡi kéo dài có sao không?" - trả lời dễ, **truy xuất khó** (4 từ, không có neo nào).
-
-Tên đúng của bài toán "độ khó truy xuất" trong IR là **Query Performance Prediction (QPP)**.
-Điểm then chốt: độ khó không phải thuộc tính của query, mà của bộ ba (query, hệ thống, collection).
-Tín hiệu QPP đáng tin chỉ tồn tại **sau** retrieval lần 1, nên nó không thể là input của một bước pre-retrieval.
-Nó thuộc về một escalation gate đặt sau vòng truy xuất đầu, không phải router.
-
-Và kể cả vậy cũng đừng kỳ vọng nhiều: đo lại QPP state-of-the-art 2025 cho r ≈ 0,34-0,46 với BM25, **r ≈ 0,07-0,15 với dense**, và trên MS MARCO không predictor nào tương quan với NDCG của BM25.
-Adaptive-RAG, paper phổ biến hóa chính ý tưởng phân loại 3 lớp độ khó, có confusion matrix rất xấu: 47% query lớp A bị gán thành B.
-Classifier co về lớp giữa.
-
-### 9.3 Schema giữ lại - 6 trường
-
-| Trường | Giá trị | Cách lấy | Thay đổi quyết định gì |
-|---|---|---|---|
-| `drug_spans[]` | list span | **gazetteer + regex**, không cần model | Bật nhánh exact-match, tăng trọng số BM25, dùng làm pivot vi→en không cần dịch |
-| `query_form` | `short` / `narrative` | rule: word count + đại từ ngôi 1 | Có chạy bước rút câu hỏi lõi trước khi embed không |
-| `core_question` | string | LLM, chỉ khi `narrative` | Text thực sự được embed cho nhánh dense |
-| `sub_question_count` | 1 / 2 / ≥3 | rule: dấu `?`, "và", "còn", "ngoài ra" | Có fan-out multi-query không |
-| `population` | neonate / child / pregnancy / adult, multi-label | keyword list | **Boost** metadata tài liệu, không filter |
-| `intent[]` | 6 lớp, **multi-label** | LLM | Chọn template mở rộng vi→en, boost loại tài liệu |
-
-6 lớp intent: `symptom_cause`, `diagnosis_test`, `treatment_procedure`, `drug_info`, `safety_interaction`, `prevention_prognosis`.
-
-Multi-label chứ không single-label, vì query dài hỏi nhiều thứ cùng lúc.
-Ví dụ Dapoxetine hỏi đồng thời tác dụng, cách dùng và liều.
-
-**4 trong 6 trường không cần model nào.**
-Gazetteer và regex đạt độ chính xác gần như hoàn hảo, và kiểm tra được 100% bằng mắt trên 1.200 query.
-Chỉ `intent[]` và `core_question` cần LLM.
-
-Bỏ: `difficulty` (mục 9.2), `specialty`/chương bệnh (corpus không có metadata để khớp), `query_language` và `needs_cross_lingual` (đều là hằng số).
-
-### 9.4 Monotone safety - bất biến cứng
-
-F2 nặng recall. Router sai đẩy query vào nhánh thiếu thì recall mất vĩnh viễn, không bước sau nào cứu được.
-
-**Router chỉ được THÊM, không bao giờ được LOẠI.**
-Không drop nhánh ngôn ngữ, không giảm `top_k` dưới baseline tĩnh, không hard-filter theo `population`.
-
-Nếu mọi quyết định routing đều tạo ra candidate pool là **superset** của pool baseline `{vi:50, en:30, zh:20}`, thì router về mặt toán học chỉ có thể tăng recall, không thể giảm.
-Lúc đó độ chính xác của router gần như không còn quan trọng: router sai chỉ lãng phí compute, không mất điểm.
-
-Đánh đổi phải nói thẳng: luôn union thì **tiết kiệm compute bằng 0**.
-Toàn bộ động lực hiệu suất của Adaptive-RAG biến mất.
-Với 1.200 query chạy offline, compute không phải ràng buộc, nên đổi hết compute lấy recall là lựa chọn đúng.
-Giá trị của router ở đây không phải tiết kiệm chi phí mà là **tăng recall qua mở rộng truy vấn và fan-out có mục tiêu**.
-
-### 9.5 Đo oracle gap trước khi viết dòng code routing nào
-
-Lấy 100-150 query, chạy **mọi** cấu hình nhánh cho từng query, giữ kết quả tốt nhất mỗi query - đó là routing hoàn hảo.
-So với `always-max`: union tất cả nhánh, `top_k` cao nhất.
-
-- Oracle ≈ always-max → **routing không có trần để vươn tới. Dừng.** Không cần đo accuracy router nào cả.
-- Chỉ khi oracle vượt rõ rệt thì mới có gì đáng theo đuổi.
-
-Với F2 thiên recall và compute offline không giới hạn, always-max rất có thể đã là tối ưu.
-Test này tốn một buổi chiều và có thể tiết kiệm cả tuần.
-
-### 9.6 Hai lỗi nhỏ trong code hiện tại
-
-- `test_query_router.py` gửi nhiều query trong một prompt và nhận JSON array, với `max_tokens: 512`. Với 1.200 query, batch lớn gây lệch nhãn theo vị trí và JSON bị cắt. Một query một lượt, hoặc batch ≤ 10.
-- Tích hợp không cần đổi kiến trúc: `RouteDecision.params` là `Dict[str, Any]`, đủ chỗ mang 6 trường. Đăng ký `MetadataRouter` cạnh `StaticRouter`, giữ nguyên `branch_top_k` mặc định.
+- **Monotone safety:** router chỉ được THÊM nhánh, không bao giờ được LOẠI. Khi mọi pool là superset của baseline `{vi:50, en:30, zh:20}`, router về mặt toán học không thể giảm recall.
+- **Đo oracle gap trước khi viết code:** chạy mọi cấu hình nhánh trên 100-150 query, so routing hoàn hảo với `always-max`. Nếu xấp xỉ nhau thì routing không có trần để vươn tới, dừng luôn.
 
 ---
 
-## 10. Mức độ kiểm chứng của tài liệu này
+## 11. Mức độ kiểm chứng
 
-- Thống kê tập query (1.200 dòng, 100% tiếng Việt, phân phối độ dài, 44,6% ngôi thứ nhất): **đã đo trực tiếp** trên file arrow trong `cache/`.
-- Việc `sft-reranker/main.py` đang dùng `ms-marco-MiniLM-L-6-v2`: **đã kiểm chứng** bằng cách đọc file. Kết luận model đó đơn ngữ tiếng Anh là **từ hiểu biết sẵn có**, nên xác nhận lại trên model card.
-- Toàn bộ số liệu thời gian ở mục 4: **ước tính, chưa đo**. Khối 3 của lộ trình hôm nay tồn tại chính là để thay chúng bằng số thật.
-- Tên và tình trạng truy cập của các nguồn dữ liệu thuốc ở mục 8: **độ tin cậy trung bình**, cần kiểm tra trực tiếp.
+- Thống kê tập query (1.200 dòng, 100% tiếng Việt, phân phối độ dài, 44,6% ngôi thứ nhất): **đã đo trực tiếp**.
+- Độ phủ bộ từ vựng (ICD 39,2% sau lọc, bảng song ngữ 38,9%, RxNorm 4,3%, 16,0% query chứa từ "thuốc", 11,8% có token Latin): **đã đo trực tiếp** trên 1.200 query bằng khớp n-gram.
+- Bảng `icd_bilingual.tsv`: **đã build và kiểm tra tay** 7 mã. Tỷ lệ join 94,8% trước khi lọc chương.
+- Quy mô hai file knowledge (12.919 mã ICD / 229.134 concept RxNorm): **đã đếm trực tiếp**.
+- `ms-marco-MiniLM-L-6-v2` đang được dùng: **đã đọc code**. Kết luận model đó đơn ngữ tiếng Anh là **từ hiểu biết sẵn có**, nên xác nhận lại trên model card.
+- Qwen3-8B phát hành trước 01/08/2026: **từ hiểu biết sẵn có**, cần xác nhận lại trên model card trước khi nộp.
+- Toàn bộ số thời gian ở mục 6 và tỷ lệ phễu ở mục 4: **ước tính chưa đo**. Bước 2 và pilot tồn tại để thay chúng bằng số thật.
 - Thiết kế pipeline: **suy luận** từ dữ liệu thật cộng prior art (Promptagator, InPars-v2, UPR, LAURA), **chưa chạy thực nghiệm**.

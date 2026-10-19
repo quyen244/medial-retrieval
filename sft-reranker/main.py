@@ -1,8 +1,31 @@
+"""Fine-tune reranker đa ngữ cho ViBioMIR.
+
+Backbone: BAAI/bge-reranker-v2-m3 (XLM-RoBERTa, vocab 250.002, đa ngữ).
+
+Vì sao KHÔNG dùng cross-encoder/ms-marco-MiniLM-L-6-v2 như trước:
+    nó là BertForSequenceClassification với vocab 30.522, tức WordPiece tiếng Anh
+    thuần. Query của cuộc thi 100% tiếng Việt còn tài liệu đa số tiếng Anh, nên
+    cặp vi->en không thể hoạt động với backbone đó dù dữ liệu train tốt đến đâu.
+    (Đã xác minh bằng config.json của cả hai model.)
+
+TODO (việc 8 trong TODO.md): đổi BinaryCrossEntropyLoss sang listwise KL khi đã
+có dữ liệu nhóm từ bước sinh nhãn. BCE chấm từng cặp độc lập nên không học được
+thứ tự tương đối, trong khi F2 cần nhiều positive mỗi query và cần điểm số hiệu
+chỉnh được để đặt ngưỡng cutoff. Chưa đổi lúc này vì train.jsonl hiện còn ở dạng
+cặp phẳng, chưa có nhóm.
+"""
 import torch
 from sentence_transformers import CrossEncoder
 from sentence_transformers.cross_encoder import CrossEncoderTrainer, CrossEncoderTrainingArguments
 from sentence_transformers.cross_encoder.losses import BinaryCrossEntropyLoss
 from datasets import load_dataset
+
+MODEL_ID = "BAAI/bge-reranker-v2-m3"
+
+# 1024 chứ không phải 512 mặc định: 12% query thật dài hơn 60 từ (dài nhất 281),
+# và câu hỏi thật sự nằm ở CUỐI đoạn bệnh nhân kể bệnh. Cắt đuôi ở 512 token sẽ
+# cắt mất đúng câu hỏi. Model hỗ trợ tới 8194 nên 1024 vẫn an toàn.
+MAX_LENGTH = 1024
 
 dataset = load_dataset(
     'json',
@@ -13,8 +36,10 @@ dataset = load_dataset(
 
 
 model = CrossEncoder(
-     "cross-encoder/ms-marco-MiniLM-L-6-v2", 
-     cache_folder = 'models'
+     MODEL_ID,
+     num_labels=1,
+     max_length=MAX_LENGTH,
+     cache_folder='models',
 )
 
 def train():
@@ -26,7 +51,10 @@ def train():
         per_device_train_batch_size=2,
         per_device_eval_batch_size=2,
         learning_rate=2e-5,
-        fp16=torch.cuda.is_available(),
+        # bf16 chứ không phải fp16: XLM-R large hay tràn số khi train ở fp16.
+        bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
+        # 568M tham số ở seq 1024 không vừa thoải mái trên 16GB nếu không bật.
+        gradient_checkpointing=True,
         eval_strategy="no",
         save_strategy="best",
         metric_for_best_model="eval_loss",
@@ -45,6 +73,8 @@ def train():
     trainer.save_model("./models/medical-reranker")
 
 def inference():
+    """Smoke test đúng luồng truy xuất chính của cuộc thi: query tiếng Việt,
+    tài liệu tiếng Anh. Backbone cũ không làm được việc này."""
     query = "Metformin có tác dụng phụ nào thường gặp?"
     documents = [
         "Common side effects include nausea and diarrhea.",
@@ -52,31 +82,27 @@ def inference():
         "Hypertension is high blood pressure.",
     ]
 
-    scores = model.predict(
-        [(query, doc) for doc in documents],
-            apply_softmax=False,
-    )
-    
+    scores = model.predict([(query, doc) for doc in documents])
+
     ranked = sorted(
         zip(documents, scores),
         key=lambda x: float(x[1]),
         reverse=True,
     )
-    
+
     for doc, score in ranked:
         print(f"{float(score):.4f} | {doc}")
-        
+
 def main():
     print("Before training")
-    
+
     inference()
-    
+
     print("After training")
-    
+
     train()
 
     inference()
-    
+
 if __name__ == "__main__":
     main()
-
