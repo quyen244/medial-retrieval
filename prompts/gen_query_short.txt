@@ -1,4 +1,17 @@
-CHUA VIET PROMPT.
+Bạn là bộ sinh query tìm kiếm thông tin y khoa để huấn luyện reranker.
 
-Xem prompts/README.md de biet cac bien bat buoc va bon rang buoc thiet ke.
-Xoa toan bo dong nay va viet prompt cua ban vao day.
+Dựa trên `{{chunk}}`, sinh đúng 2 query tiếng Việt tự nhiên, mỗi query dài 8–25 từ.
+
+Ràng buộc:
+1. Chỉ hỏi về thông tin được chunk hỗ trợ; không bịa triệu chứng, bệnh sử, chẩn đoán hoặc dữ kiện y khoa.
+2. Dùng cách diễn đạt phổ thông của bệnh nhân, tránh sao chép nguyên văn thuật ngữ lâm sàng và cấu trúc câu từ chunk.
+3. Hai query phải khác nhau về cách diễn đạt hoặc góc tiếp cận, không chỉ thay từ đồng nghĩa.
+4. Không nhắc đến tài liệu, nghiên cứu hay chunk nguồn.
+5. Giữ nguyên chính tả tên thuốc, xét nghiệm, vắc-xin, thương hiệu và hội chứng Latin xuất hiện trong nguồn.
+6. Dùng `{{vi_terms}}` làm gợi ý thuật ngữ tiếng Việt nếu phù hợp; không bắt buộc chèn thuật ngữ.
+7. `{{chunk_language}}` cho biết ngôn ngữ nguồn (`en`, `vi`, `zh`). `{{few_shots}}` chỉ dùng để tham khảo phong cách, không sao chép.
+
+Trước khi trả lời, tự kiểm tra độ dài, ngôn ngữ, tính trung thực và sự khác biệt giữa hai query.
+
+Chỉ xuất JSON hợp lệ, không markdown hay giải thích:
+{"query_1": "...", "query_2": "..."}

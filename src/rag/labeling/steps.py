@@ -131,6 +131,12 @@ def select_source_chunks(vectorstore, real_queries: List[str], cfg) -> List[Dict
     queries = list(real_queries)
     rng.shuffle(queries)
 
+    # Encode 1.200 query MỘT lần rồi dùng lại cho cả ba ngôn ngữ. Nếu để mỗi
+    # lần search tự encode thì cùng một query bị chạy qua BGE-M3 ba lượt, tức
+    # gấp ba chi phí nặng nhất của bước này.
+    print(f"  encode {len(queries)} query...", flush=True)
+    qvecs = [vectorstore.encoder.encode(q, normalize_embeddings=True).tolist() for q in queries]
+
     def collect(lang: str, target: int) -> Dict[str, Dict[str, Any]]:
         if target <= 0:
             return {}
@@ -138,8 +144,8 @@ def select_source_chunks(vectorstore, real_queries: List[str], cfg) -> List[Dict
         # tầng. Bóc tầng mà search lại từ đầu thì tốn gấp `chunks_per_real_query`
         # lần cho cùng một kết quả.
         hits_by_query = [
-            list(search(vectorstore, q, top_k=cfg.chunks_per_real_query, language=lang))
-            for q in queries
+            list(vectorstore.search(v, top_k=cfg.chunks_per_real_query, language=lang))
+            for v in qvecs
         ]
         pool: Dict[str, Dict[str, Any]] = {}
         for depth in range(cfg.chunks_per_real_query):
