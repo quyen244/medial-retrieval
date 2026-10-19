@@ -88,27 +88,28 @@ def stage_pre(vectorstore, queries, languages, hole_threshold):
 
 
 def stage_post(path, queries):
+    """Kiểm tra CODE bước 1 chạy đúng không, không kiểm tra corpus đủ hay thiếu
+    (đó là việc của stage_pre). Vì select_source_chunks không có ngưỡng
+    similarity - Qdrant luôn trả top-8 gần nhất bất kể điểm thấp hay cao - nên
+    tỷ lệ "query kéo được >=1 chunk" gần như luôn cao và không mang thêm thông
+    tin so với stage_pre. Bỏ hẳn chỉ số đó.
+
+    Hai chỉ số còn lại mới có giá trị: phân bố theo tầng lộ ra ngôn ngữ nào
+    phải đào sâu (tầng 6, 7, 8...) mới đủ hạn ngạch - dấu hiệu corpus thưa ở
+    ngôn ngữ đó, chi tiết hơn con số nhị phân của stage_pre. Phân bố ngôn ngữ
+    xác nhận quota 60/30/10 (cộng phần bù EN) đã áp đúng trong file thật.
+    """
     p = Path(path)
     if not p.exists():
         raise SystemExit(f"Chưa có {p}. Chạy run_generate trước.")
     rows = [json.loads(l) for l in p.open(encoding="utf-8")]
-    per_q = Counter(r.get("seed_query") for r in rows)
-    covered = sum(1 for q in queries if per_q.get(q, 0) > 0)
-    counts = [per_q.get(q, 0) for q in queries]
 
     print("=" * 68)
     print(f"Tổng chunk nguồn      : {len(rows)}")
-    print(f"Query kéo được ≥1 chunk: {covered}/{len(queries)} = {100*covered/len(queries):.1f}%")
-    print(f"Chunk mỗi query       : trung vị {statistics.median(counts):.0f} | "
-          f"min {min(counts)} | max {max(counts)}")
     print(f"Phân bố theo tầng     : {dict(sorted(Counter(r.get('seed_depth') for r in rows).items()))}")
     print(f"Phân bố ngôn ngữ      : {dict(Counter(r.get('language') for r in rows))}")
     print("=" * 68)
-    return {
-        "n_chunk": len(rows),
-        "ty_le_query_co_chunk": round(covered / len(queries), 4),
-        "chunk_moi_query_trung_vi": statistics.median(counts),
-    }
+    return {"n_chunk": len(rows)}
 
 
 def main():

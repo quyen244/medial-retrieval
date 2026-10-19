@@ -20,7 +20,7 @@ Deadline 31/10. Cập nhật 2026-10-19.
 | 1 | Sửa backbone `ms-marco-MiniLM` → `bge-reranker-v2-m3` | không | **xong** - `sft-reranker/main.py`, smoke test vi→en xếp đúng |
 | 2 | Script host vLLM | sau | **xong** - `scripts/serve_vllm.sh`, lên server chỉ việc chạy |
 | A | **Ingest corpus** - nút thắt thật, xem mục CHẶN | có | **chưa làm**, 0,23% |
-| 3 | Viết bước 1-2-3: chọn chunk, sinh query, lọc round-trip | không | **code xong** - `src/rag/labeling/`. Chờ prompt + chờ việc A |
+| 3 | Viết bước 1-2-3: chọn chunk, sinh query, lọc round-trip | không | **code + prompt xong**. Chờ việc A (ingest) để chạy pilot thật |
 | 3b | Audit độ phủ `audit_coverage.py` | có | **xong**, phát hiện việc A |
 | 4 | Pilot 300 chunk → **CỔNG CHẶN: soát tay 30 query sinh ra** | có | |
 | 5 | Viết bước 4-5: lấy ứng viên, chấm utility hai tầng | không | |
@@ -53,11 +53,11 @@ Deadline còn 12 ngày. Đây là nút thắt lớn nhất của dự án, lớn
 
 Xem mục "Việc cần quyết về ingest" bên dưới.
 
-## Đang chờ bạn
+## Đã có
 
-Viết 2 prompt ở `prompts/gen_query_short.txt` và `prompts/gen_query_narrative.txt`.
-Biến bắt buộc và bốn ràng buộc thiết kế: xem `prompts/README.md`.
-Code từ chối chạy nếu prompt chưa viết hoặc thiếu biến, nên không sợ chạy nhầm.
+Prompt đã viết xong ở `prompts/gen_query_short.txt` và `prompts/gen_query_narrative.txt`.
+Qua validator, đã đăng ký MLflow registry (version 1 cả hai).
+Doc giải thích từng bước kèm sơ đồ: [docs/buoc-1-2-3-sinh-query.md](docs/buoc-1-2-3-sinh-query.md)
 
 Viết xong thì chạy pilot:
 
