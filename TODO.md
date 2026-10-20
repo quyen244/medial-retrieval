@@ -79,7 +79,7 @@ python -m src.rag.labeling.run_generate --pilot
 
 - Query router. 1.200 query là tập submission đã biết trước nên không có bài toán latency. Chi tiết ở mục 10 của spec.
 - Từ điển dân gian ↔ lâm sàng. Bảng ICD đã phủ 38,9% rồi.
-- Thuật ngữ tiếng Trung. Corpus zh chỉ phủ 4,1%, không có tài liệu để khớp vào.
+- Thuật ngữ tiếng Trung. Corpus zh đã crawl lên ~30% (trước đó 4,1%) - quyết định "bỏ" có thể cần xem lại, nhưng chưa làm lúc này.
 - Hard negative cùng chương ICD. Bật sau khi pilot chạy ổn.
 
 ## Việc cần quyết về ingest

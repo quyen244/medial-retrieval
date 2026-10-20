@@ -11,7 +11,7 @@ Chấm bằng F2, deadline 31/10.
 | | Quyết định | Hệ quả |
 |---|---|---|
 | QĐ 1 | **Chỉ dùng open-weights ≤15B, phát hành trước 01/08/2026.** Cấm model đóng | Không có đường tắt bằng API. Trần cho phép là 14B, ta chọn **8B** cho nhẹ máy |
-| QĐ 2 | **5.000 chunk nguồn → ~5.100 query cuối cùng** | ~5 giờ GPU, xong trong ngày, không cần chạy qua đêm |
+| QĐ 2 | **5.000 chunk nguồn → ~5.100 query cuối cùng** | ~8,5 giờ GPU (cập nhật sau khi tăng pool ứng viên bước 4-5), vẫn xong trong ngày nếu chạy liên tục |
 | QĐ 3 | **Có gán tay 100 query dev set** | 3-4 giờ, làm xen kẽ lúc máy chạy |
 
 Điều lệ không phân biệt model dùng để nộp và model dùng để sinh dữ liệu, nên áp cùng một giới hạn cho cả hai.
@@ -78,10 +78,10 @@ flowchart TD
     V["Bộ từ vựng<br/>ICD vi-en-zh + thực thể Latin"] -.ràng buộc từ ngữ.-> C
     B --> C["2. Sinh query VI<br/>Qwen3-8B · 66% ngắn, 34% kể bệnh"]
     C --> D["3. Lọc round-trip<br/>chỉ retrieval"]
-    D --> E["4. Lấy 16 ứng viên<br/>+ chunk gốc trộn vào ẩn danh"]
+    D --> E["4. Lấy 50 ứng viên theo ngôn ngữ<br/>EN 25 · VI 15 · ZH 10 · chunk gốc trộn ẩn danh"]
     V -.sibling ICD.-> E
-    E --> F["5a. Tầng 1: bge-reranker-v2-m3<br/>chấm cả 16"]
-    F --> G["5b. Tầng 2: Qwen3-8B<br/>chấm 8 cái mơ hồ nhất · thang 0-3"]
+    E --> F["5a. Tầng 1: bge-reranker-v2-m3<br/>chấm cả 50"]
+    F --> G["5b. Tầng 2: Qwen3-8B<br/>chấm 15 cái mơ hồ nhất (10 cao nhất + 5 quanh median) · thang 0-3"]
     G --> H["6. Tập nhãn mềm<br/>~5.100 nhóm listwise"]
     H --> I["7. Fine-tune LoRA<br/>listwise KL"]
     I --> J["8. Hiệu chỉnh cutoff F2"]
@@ -100,13 +100,17 @@ flowchart TD
  6.000 query giữ lại
     × 0,85 phải có >=1 positive
  5.100 query cuối cùng  =  5.100 nhóm listwise
-    × 16 ứng viên
-81.600 cặp được chấm      trong đó 40.800 cặp qua tầng 2
+    × 50 ứng viên (EN 25 · VI 15 · ZH 10)
+255.000 cặp được chấm     trong đó 76.500 cặp qua tầng 2
     |
-~15.300 positive (điểm 3 và 2)
-~56.100 negative (điểm 0)
-~10.200 bỏ đi    (điểm 1, không dùng làm negative)
+~28.700 positive (điểm 3 và 2)
+~207.200 negative (điểm 0, gồm cả 178.500 cặp tầng 1 tự gán)
+~19.100 bỏ đi    (điểm 1, không dùng làm negative)
 ```
+
+Tăng từ pool 16/tầng-2 8 lên pool 50/tầng-2 15 (chốt sau khi bàn bước 4-5).
+Tỷ lệ positive/negative/bỏ đi trong đoạn trên **suy ra theo cùng tỷ lệ cũ**,
+chưa đo lại trên quy mô mới — pilot sẽ thay bằng số thật.
 
 **Một chunk nguồn cho ra:** 2 query → ~1,2 query sống sót → ~1,0 nhóm listwise → ~12 cặp có nhãn dùng được.
 
@@ -173,8 +177,12 @@ Dưới 40% thì prompt sinh query đang có vấn đề, dừng lại sửa.
 
 ### Bước 4 - Lấy ứng viên
 
-`hybrid_search(query, top_k=16)`, không lọc ngôn ngữ.
-Trộn chunk gốc vào pool **không gắn nhãn gì**, xáo thứ tự.
+3 lần `hybrid_search(query, top_k=...)` riêng theo ngôn ngữ, theo
+`candidate_lang_quota` (EN 50% · VI 30% · ZH 20%, áp lên pool 50 → EN 25 / VI 15 / ZH 10).
+Không lấy top-k thô trên toàn corpus: corpus lệch sẽ để en áp đảo, ứng viên
+vi/zh dễ không lọt vào pool. Zh nâng từ 10% lên 20% vì corpus zh đã crawl lên
+~30% (trước đó 4,1%). Trộn chunk gốc vào pool **không gắn nhãn gì**, xáo thứ
+tự. Chi tiết và lý do đầy đủ ở `docs/buoc-4-5-cham-utility.md`.
 
 Đây là điểm khác quan trọng nhất so với cách làm thông thường.
 Nếu mặc định chunk gốc là positive, bạn dạy reranker đếm từ trùng, vì query được viết ra từ chính chunk đó nên luôn mượn thuật ngữ của nó.
@@ -184,13 +192,13 @@ Cùng chuyên khoa, cùng vốn từ, nhưng câu trả lời sai. Negative lo�
 
 ### Bước 5 - Chấm utility hai tầng
 
-**Tầng 1:** `bge-reranker-v2-m3` chấm cả 16 ứng viên.
+**Tầng 1:** `bge-reranker-v2-m3` chấm cả 50 ứng viên.
 
-**Tầng 2:** Qwen3-8B chỉ chấm 8 ứng viên: 5 cái điểm cao nhất, cộng 3 cái quanh ngưỡng mơ hồ.
+**Tầng 2:** Qwen3-8B chỉ chấm 15 ứng viên: 10 cái điểm cao nhất, cộng 5 cái quanh ngưỡng mơ hồ.
 Cái nào tầng 1 chấm rất thấp thì tin luôn là irrelevant.
 
 Prompt tầng 2 đặt **query trước, tài liệu sau**.
-Thứ tự này quan trọng: prefix caching làm phần `instruction + query` chỉ nạp một lần cho cả 8 tài liệu.
+Thứ tự này quan trọng: prefix caching làm phần `instruction + query` chỉ nạp một lần cho cả 15 tài liệu.
 Đây là lý do ngân sách tính toán ở mục 6 khả thi.
 
 | Điểm | Nghĩa | Thành |
@@ -244,16 +252,18 @@ Giả định prefill ~3.000 tok/s cho Qwen3-8B-AWQ. **Ước tính, chưa đo.*
 | 1. Chọn chunk | encode + cluster | 20 phút |
 | 2. Sinh query | 5.000 lời gọi | ~1 giờ |
 | 3. Lọc round-trip | chỉ retrieval | 15 phút |
-| 4. Lấy ứng viên | chỉ retrieval | 20 phút |
-| 5a. Tầng 1 | 81.600 cặp, model 568M | 25 phút |
-| 5b. Tầng 2 | 40.800 cặp, có prefix caching | **~2 giờ** |
+| 4. Lấy ứng viên | chỉ retrieval, 3 lần/query (theo ngôn ngữ) | ~30 phút |
+| 5a. Tầng 1 | 255.000 cặp, model 568M | ~1 giờ 20 phút |
+| 5b. Tầng 2 | 76.500 cặp, có prefix caching | **~3 giờ 45 phút** |
 | 6. Train | LoRA 568M, 3 epoch | 1-1,5 giờ |
 
-Tổng **~5 giờ**. Xong trong ngày, không cần chạy qua đêm.
+Tổng **~8,5 giờ** (tăng từ ~5 giờ ước tính trước, do pool ứng viên tăng
+16→50 và tầng 2 tăng 8→15/query sau khi chốt bước 4-5). Vẫn xong trong ngày
+nếu chạy liên tục, không cần qua đêm.
 Vẫn phải có checkpoint và resume, vì cổng chặn có thể bắt chạy lại.
 
 Prefix caching là thứ làm bước 5b khả thi.
-Không có nó, cùng khối lượng đó mất khoảng 3,5 giờ thay vì 2.
+Không có nó, cùng khối lượng đó mất khoảng 6,5 giờ thay vì 3,75.
 
 ---
 

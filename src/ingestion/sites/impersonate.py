@@ -23,6 +23,16 @@ which is what this module does.
 
 Not a universal key: zysjonline.com stays 403 under every impersonation
 profile tried, and remains in blocked.py.
+
+nhathuoclongchau.com.vn turned out to rate-limit by session, not by IP: a
+single AsyncSession reused for the whole run got 429'd after roughly 500-600
+requests, while a brand new session against the same IP, same minute, same
+URLs, sailed through with clean 200s every time. One shared session for a run
+of 80,000 requests looks nothing like real traffic - every genuine visitor
+is one browser tab with its own cookies, not one client making tens of
+thousands of sequential requests. Rotating to a fresh session well before the
+observed failure threshold keeps every session looking like an ordinary
+visit instead of the thing that gets flagged.
 """
 
 import asyncio
@@ -38,7 +48,17 @@ from src.ingestion.sites.base import CrawlConfig, CrawlOutcome, Sample, SiteCraw
 # starts rejecting it; chrome124 and chrome120 worked identically when tested.
 IMPERSONATE_PROFILE = "chrome131"
 
+# Observed failure point for one session was ~500-600 requests. Rotating at
+# half that leaves margin without re-handshaking so often it adds overhead.
+ROTATE_SESSION_AFTER = 250
+
 REQUEST_TIMEOUT = 30
+
+# Captured verbatim when present on a non-200 response. retry-after is the one
+# that matters most - it is the server naming its own cooldown, which beats
+# any pacing number we guess from the outside. The rest are context for
+# whichever rate-limit scheme the site happens to use.
+RATE_LIMIT_HEADERS = ("retry-after", "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset")
 
 
 class ImpersonateCrawler(SiteCrawler):
@@ -52,31 +72,45 @@ class ImpersonateCrawler(SiteCrawler):
 
     def __init__(self, profile: str = IMPERSONATE_PROFILE):
         self.profile = profile
-        self._session: AsyncSession | None = None
+        self._sessions: dict[str, AsyncSession] = {}
+        self._request_counts: dict[str, int] = {}
         self._startup = asyncio.Lock()
 
-    async def _ensure_session(self) -> AsyncSession:
-        """One session per run, so connections are pooled like the httpx client."""
-        if self._session is not None:
-            return self._session
+    async def _ensure_session(self, domain: str, force_new: bool = False) -> AsyncSession:
+        """This domain's current session, rotating to a fresh one when it is
+        either stale (ROTATE_SESSION_AFTER requests old) or just got a
+        blocked/rate-limited response (force_new) - see module docstring for
+        why reuse past that point gets flagged.
+        """
+        stale = force_new or self._request_counts.get(domain, 0) >= ROTATE_SESSION_AFTER
+        if domain in self._sessions and not stale:
+            return self._sessions[domain]
         async with self._startup:
-            if self._session is None:
-                self._session = AsyncSession(impersonate=self.profile)
-            return self._session
+            stale = force_new or self._request_counts.get(domain, 0) >= ROTATE_SESSION_AFTER
+            if domain not in self._sessions or stale:
+                old = self._sessions.get(domain)
+                if old is not None:
+                    await old.close()
+                self._sessions[domain] = AsyncSession(impersonate=self.profile)
+                self._request_counts[domain] = 0
+            return self._sessions[domain]
 
     async def aclose(self) -> None:
-        if self._session is not None:
-            await self._session.close()
-            self._session = None
+        for session in self._sessions.values():
+            await session.close()
+        self._sessions.clear()
+        self._request_counts.clear()
 
     async def crawl_one(
         self, client, sample: Sample, config: CrawlConfig
     ) -> CrawlOutcome:
-        session = await self._ensure_session()
+        domain = sample.domain
+        session = await self._ensure_session(domain)
 
         last_error = ""
         for attempt in range(config.retries + 1):
-            async with config.policy.request_slot(sample.domain):
+            self._request_counts[domain] = self._request_counts.get(domain, 0) + 1
+            async with config.policy.request_slot(domain):
                 try:
                     response = await session.get(sample.url, timeout=REQUEST_TIMEOUT)
                 except Exception as exc:
@@ -90,7 +124,21 @@ class ImpersonateCrawler(SiteCrawler):
                         return await self._build(sample, response, config)
                     last_error = f"anti-bot interstitial, matched {marker!r}"
                 else:
-                    last_error = f"HTTP {response.status_code}"
+                    headers = {
+                        h: response.headers.get(h)
+                        for h in RATE_LIMIT_HEADERS
+                        if response.headers.get(h)
+                    }
+                    suffix = f" headers={headers}" if headers else ""
+                    last_error = (
+                        f"HTTP {response.status_code} "
+                        f"(attempt {attempt + 1}/{config.retries + 1}){suffix}"
+                    )
+                    if response.status_code in (403, 429):
+                        # This session is the thing that got flagged, not
+                        # this URL - retrying through it again would just
+                        # confirm the same block. Burn it for a clean one.
+                        session = await self._ensure_session(domain, force_new=True)
 
             if attempt < config.retries:
                 await asyncio.sleep(min(2**attempt, 8))

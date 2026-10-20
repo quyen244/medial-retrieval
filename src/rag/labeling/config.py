@@ -47,6 +47,29 @@ class LabelingConfig:
     # Dưới ngưỡng này thì prompt sinh query đang có vấn đề, dừng lại sửa.
     roundtrip_min_keep_rate: float = 0.40
 
+    # --- bước 4: lấy ứng viên để chấm utility ---
+    # Pool chia theo ngôn ngữ, không lấy top-k thô trên toàn corpus: top-k thô
+    # bị corpus lệch áp đảo, ứng viên ngôn ngữ yếu gần như không bao giờ xuất
+    # hiện. Tách field riêng khỏi lang_quota của bước 1: bước 1 chọn ngôn ngữ
+    # NGUỒN câu hỏi, bước 4 chọn ngôn ngữ ỨNG VIÊN chấm - hai việc khác nhau.
+    # zh nâng 10%->20% (crawl zh đã lên ~30%, không còn thưa như lúc 4,1%).
+    candidates_per_query: int = 50
+    candidate_lang_quota: Dict[str, float] = field(
+        default_factory=lambda: {"en": 0.50, "vi": 0.30, "zh": 0.20}
+    )
+
+    # --- bước 5b: tầng 2 chỉ chấm một phần cố định của pool ---
+    # Chọn theo t1_score của tầng 1: top_n cao nhất (nghi positive) cộng
+    # median_n quanh trung vị (vùng CE lưỡng lự). Phần còn lại
+    # (candidates_per_query - tier2_per_query) không gọi LLM, gán thẳng
+    # t2_score=0.
+    tier2_top_n: int = 10
+    tier2_median_n: int = 5
+
+    @property
+    def tier2_per_query(self) -> int:
+        return self.tier2_top_n + self.tier2_median_n
+
     # --- LLM ---
     llm_url: str = "http://localhost:8000/v1"
     llm_model: str = "Qwen/Qwen3-8B-AWQ"
@@ -54,6 +77,13 @@ class LabelingConfig:
     llm_max_tokens: int = 640
     llm_concurrency: int = 16
     llm_max_retries: int = 3
+
+    # Nhiệt độ chấm điểm PHẢI thấp, khác hẳn llm_temperature ở trên (0.7, dùng
+    # cho sinh query cần đa dạng). Vai trò tầng 2 là chấm nhất quán, không
+    # phải sáng tạo - nhiệt độ cao làm hai lần chạy ra hai nhãn khác nhau cho
+    # cùng một cặp (query, chunk), phá khả năng lặp lại của toàn bộ nhãn.
+    judge_temperature: float = 0.0
+    judge_max_tokens: int = 200  # chỉ cần trả JSON điểm số, không cần dài
 
     # --- hạ tầng ---
     qdrant_url: str = "http://localhost:6333"

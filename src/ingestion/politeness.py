@@ -53,6 +53,33 @@ _ncbi_eutils_limits = (
     else HostLimits(max_concurrent=1, min_interval=0.34)  # 3 req/s anonymous
 )
 
+# Hostnames that are really one site wearing many names. Most of these 20
+# specialty subdomains resolve to 183.60.248.221; a couple (care, nk) sit
+# behind a CDN (wswebpic.com) that rotates between two other IPs - so DNS
+# does not cleanly prove "one server," but the anti-bot behaviour does.
+# Limiting by hostname let the crawl open up to 6 concurrent connections *per
+# subdomain*, so the aggregate hitting 39.net's shared anti-bot layer could
+# run far past any single domain's intended budget. Logs show exactly that:
+# all 20 subdomains started serving the slide-puzzle challenge in the same
+# minute, on two different days, while a single plain request to any one of
+# them succeeds cleanly right now. That is a volume-triggered WAF reacting to
+# aggregate traffic across the family, not a per-domain block - so they share
+# one HostLimits bucket, keyed by the group name below, instead of each
+# getting its own. jbk.39.net is excluded: it is already fully crawled
+# (2,033/2,033) with no anti-bot failures, so there is no evidence it shares
+# this fate and no reason to slow it down.
+_39NET_SHARED_IP = "39net-specialty-shared-ip"
+HOST_GROUPS: dict[str, str] = {
+    host: _39NET_SHARED_IP
+    for host in (
+        "baby.39.net", "care.39.net", "heart.39.net", "fk.39.net",
+        "nk.39.net", "cancer.39.net", "tnb.39.net", "woman.39.net", "food.39.net",
+        "ek.39.net", "man.39.net", "shen.39.net", "gan.39.net", "wei.39.net",
+        "sj.39.net", "fitness.39.net", "gk.39.net", "pf.39.net", "gc.39.net",
+        "byby.39.net",
+    )
+}
+
 HOST_OVERRIDES: dict[str, HostLimits] = {
     # The PubMed crawler's internal RateLimiter is the primary throttle;
     # this backstop matches it so the pipeline never adds extra waiting.
@@ -79,6 +106,24 @@ HOST_OVERRIDES: dict[str, HostLimits] = {
     "baodanang.vn": HostLimits(max_concurrent=1, min_interval=2.0),
     "hanoimoi.vn": HostLimits(max_concurrent=1, min_interval=2.0),
     "mega.vietnamplus.vn": HostLimits(max_concurrent=1, min_interval=2.0),
+
+    # The default 6-concurrent policy drove this host into 99 connect_errors
+    # and 139 timeouts in a single run (2026-10-19), which tripped the circuit
+    # breaker and abandoned the remaining 56,079 attempts. Unlike the other
+    # 39.net subdomains - which fail on an anti-bot interstitial, a content
+    # problem no rate change fixes - ask.39.net fails at the network level,
+    # and probing it a day later at 0.5 req/s got clean 200s every time. So
+    # the server itself is fine; the crawl was simply too fast for it.
+    # max_concurrent raised alongside min_interval: at ~4-9s observed response
+    # time, 1 concurrent slot could not sustain 3 req/s no matter how low
+    # min_interval went - the single in-flight request becomes the real
+    # bottleneck. Needs enough slots in flight to keep a new one starting
+    # every 0.33s even while earlier ones are still waiting on a reply.
+    "ask.39.net": HostLimits(max_concurrent=5, min_interval=0.33),
+
+    # One shared budget for the whole 39.net specialty family (see
+    # HOST_GROUPS above) instead of 6 concurrent per subdomain x 20.
+    _39NET_SHARED_IP: HostLimits(max_concurrent=6, min_interval=0.33),
 }
 
 
@@ -122,11 +167,21 @@ class PolitenessPolicy:
 
         self._states: dict[str, _HostState] = {}
 
+    def _bucket_key(self, host: str) -> str:
+        """The key a host's rate limit is actually tracked under.
+
+        Usually the host itself. A few hosts are known aliases of one real
+        backend (HOST_GROUPS) and share a single bucket instead, so pacing
+        reflects the load the backend actually sees rather than what any one
+        hostname sees.
+        """
+        return HOST_GROUPS.get(host, host)
+
     def limits_for(self, host: str) -> HostLimits:
-        return self.overrides.get(host.lower(), self.default)
+        return self.overrides.get(self._bucket_key(host.lower()), self.default)
 
     def _state_for(self, host: str) -> "_HostState":
-        """Per-host state, created on first sight.
+        """Per-host (or per-group) state, created on first sight.
 
         Deliberately synchronous and lock-free. An earlier version guarded
         this with one asyncio.Lock shared by every host, taken on every single
@@ -136,19 +191,20 @@ class PolitenessPolicy:
         single-threaded event loop the pair cannot be interleaved and no lock
         is needed.
         """
-        state = self._states.get(host)
+        key = self._bucket_key(host)
+        state = self._states.get(key)
         if state is None:
             limits = self.limits_for(host)
             state = _HostState(
                 semaphore=asyncio.Semaphore(limits.max_concurrent),
                 min_interval=limits.min_interval,
             )
-            self._states[host] = state
+            self._states[key] = state
         return state
 
     @asynccontextmanager
     async def request_slot(self, host: str):
-        """Hold a slot for one request to `host`."""
+        """Hold a slot for one request to `host` (or its shared group)."""
         state = self._state_for(host.lower())
 
         async with state.semaphore:
