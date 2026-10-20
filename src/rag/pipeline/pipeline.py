@@ -13,7 +13,7 @@ mlflow logging, and every run produces one Trace (see tracer.py).
 """
 import concurrent.futures as cf
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.rag.pipeline.base import FusionStrategy, QueryRouter, Reranker, Retriever
 from src.rag.pipeline.models import Candidate, QueryItem
@@ -98,10 +98,18 @@ class RetrievalPipeline:
             "reranker": self.reranker.get_params(),
         }
 
-    def run(self, query: QueryItem, parallel_retrieval: bool = True) -> "PipelineResult":
-        trace = Trace(query_id=query.id, query_text=query.text)
+    def retrieve_and_fuse(self, query: QueryItem, trace: Trace,
+                          parallel_retrieval: bool = True,
+                          span_prefix: str = "") -> Tuple[Dict[str, List[Candidate]], List[Candidate]]:
+        """Mọi thứ TRƯỚC khi rerank: route -> các nhánh ngôn ngữ -> fusion.
 
-        with trace.span("route", params=self.router.get_params(), n_in=1) as span:
+        Tách khỏi run() để chạy được nhiều lượt truy xuất cho cùng một câu hỏi
+        (xem multiquery.py: mỗi sub-query một lượt) rồi mới rerank một lần duy
+        nhất. run() vẫn gọi đúng hàm này nên luồng một lượt không đổi hành vi.
+        """
+        p = f"{span_prefix}." if span_prefix else ""
+
+        with trace.span(f"{p}route", params=self.router.get_params(), n_in=1) as span:
             decision = self.router.route(query)
             span.n_out = len(decision.branch_top_k)
 
@@ -113,7 +121,7 @@ class RetrievalPipeline:
         active_branches = {lang: k for lang, k in decision.branch_top_k.items() if lang in self.retrievers}
 
         if parallel_retrieval and len(active_branches) > 1:
-            with trace.span("retrieve.all", params={"branches": active_branches}, n_in=1) as span:
+            with trace.span(f"{p}retrieve.all", params={"branches": active_branches}, n_in=1) as span:
                 with cf.ThreadPoolExecutor(max_workers=len(active_branches)) as ex:
                     futures = [ex.submit(run_branch, lang, k) for lang, k in active_branches.items()]
                     for fut in cf.as_completed(futures):
@@ -122,15 +130,21 @@ class RetrievalPipeline:
                 span.n_out = sum(len(v) for v in branch_results.values())
         else:
             for lang, k in active_branches.items():
-                with trace.span(f"retrieve.{lang}", params={"top_k": k}, n_in=1) as span:
+                with trace.span(f"{p}retrieve.{lang}", params={"top_k": k}, n_in=1) as span:
                     _, results = run_branch(lang, k)
                     branch_results[lang] = results
                     span.n_out = len(results)
 
         n_in_fusion = sum(len(v) for v in branch_results.values())
-        with trace.span("fusion", params=self.fusion.get_params(), n_in=n_in_fusion) as span:
+        with trace.span(f"{p}fusion", params=self.fusion.get_params(), n_in=n_in_fusion) as span:
             fused = self.fusion.fuse(branch_results, top_k=self.config.fusion_top_k)
             span.n_out = len(fused)
+
+        return branch_results, fused
+
+    def run(self, query: QueryItem, parallel_retrieval: bool = True) -> "PipelineResult":
+        trace = Trace(query_id=query.id, query_text=query.text)
+        branch_results, fused = self.retrieve_and_fuse(query, trace, parallel_retrieval)
 
         with trace.span("rerank", params=self.reranker.get_params(), n_in=len(fused)) as span:
             reranked = self.reranker.rerank(query, fused, top_k=self.config.rerank_top_k)

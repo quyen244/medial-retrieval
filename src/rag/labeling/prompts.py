@@ -30,7 +30,25 @@ REQUIRED_VARS: Dict[str, List[str]] = {
     # mảng JSON các {"chunk_id": int, "text": str}), không phải {{documents}}
     # như doc thiết kế dự kiến ban đầu.
     "judge_tier2": ["query", "chunks"],
+    # Pha augment câu truy vấn (src/rag/augment). Lưu ý hai prompt dịch khác
+    # nhau về độ hạt: disease_translation nhận MỘT tên bệnh một lần, còn
+    # symptom_translation nhận cả mảng triệu chứng trong một lần.
+    "medical_entity_extraction": ["input_text"],
+    "disease_translation": ["disease_name"],
+    "symptom_translation": ["symptoms"],
+    "query_decomposition": ["query"],
+    "retrieval_target": ["query"],
 }
+
+# Prompt của riêng pha augment, để gọi sync_all() cho đúng nhóm thay vì đồng
+# bộ cả những prompt không liên quan tới run đang chạy.
+AUGMENT_PROMPTS = [
+    "medical_entity_extraction",
+    "disease_translation",
+    "symptom_translation",
+    "query_decomposition",
+    "retrieval_target",
+]
 
 _STUB = "CHUA VIET PROMPT"
 _VAR_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")

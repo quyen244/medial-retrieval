@@ -28,11 +28,18 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from src.ingestion.utils import get_dataset
 from src.rag.embedding import BgeM3Embedder
 from src.rag.pipeline.models import QueryItem
+from src.rag.pipeline.multiquery import MultiQueryConfig, MultiQueryPipeline, load_augmented
 from src.rag.pipeline.pipeline import PipelineConfig, RetrievalPipeline
 from src.rag.pipeline.submission import empty_submission_entry, result_to_submission_entry
 from src.rag.vectorstore import VectorStore
 
 console = Console()
+
+
+def unwrap(out):
+    """MultiQueryPipeline trả MultiQueryResult bọc ngoài PipelineResult; pipeline
+    gốc trả thẳng PipelineResult. Phần ghi bài nộp chỉ cần cái bên trong."""
+    return getattr(out, "result", out)
 
 
 def load_checkpoint(path: Path):
@@ -63,6 +70,18 @@ def main():
     parser.add_argument("--checkpoint", type=str, default="tmp/smoke_test/full_submission_checkpoint.jsonl")
     parser.add_argument("--out", type=str, default="tmp/smoke_test/full_submission.json")
     parser.add_argument("--limit", type=int, default=None, help="Process only the first N queries (debug use)")
+    # Thí nghiệm augment + decompose. Không có cờ này thì chạy y hệt baseline
+    # như trước, không đổi một dòng hành vi nào.
+    parser.add_argument("--augmented", type=str, default=None,
+                        help="data/augment/augmented.jsonl -> bật nhánh nhiều truy vấn")
+    parser.add_argument("--retriever", type=str, default=None,
+                        help="qdrant-language (dense, mặc định) hoặc qdrant-hybrid (dense+sparse)")
+    parser.add_argument("--max-rerank-candidates", type=int, default=None,
+                        help="cắt bớt tập hợp trước khi rerank; bỏ trống = không cắt")
+    parser.add_argument("--rerank-with-augmented", action="store_true",
+                        help="rerank bằng chuỗi augment thay vì câu gốc (chỉ nhất quán "
+                             "nếu tập train reranker cũng đã augment)")
+    parser.add_argument("--experiment", type=str, default=None)
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -84,15 +103,30 @@ def main():
     console.print(f"[full_submission] checkpoint: {checkpoint_path} ({len(done)} queries already done)")
 
     config = PipelineConfig()
+    if args.retriever:
+        config.retriever = args.retriever
     pipeline = RetrievalPipeline(vectorstore, config)
 
-    mlflow.set_experiment("retrieval_pipeline_baseline")
+    runner = pipeline
+    if args.augmented:
+        augmented = load_augmented(args.augmented)
+        runner = MultiQueryPipeline(
+            pipeline, augmented,
+            MultiQueryConfig(augmented_file=args.augmented,
+                             max_rerank_candidates=args.max_rerank_candidates,
+                             rerank_with_augmented=args.rerank_with_augmented),
+        )
+        console.print(f"[full_submission] multi-query: {len(augmented)} query có bản augment")
+
+    default_experiment = "retrieval_multiquery" if args.augmented else "retrieval_pipeline_baseline"
+    mlflow.set_experiment(args.experiment or default_experiment)
     n_ok, n_empty, n_error = 0, 0, 0
+    union_sizes, n_fallback = [], 0
     t_start = time.perf_counter()
 
     with mlflow.start_run(run_name=f"full_submission_{int(t_start)}"):
         flat_params = {}
-        for stage, params in pipeline.component_params().items():
+        for stage, params in runner.component_params().items():
             if isinstance(params, dict):
                 for k, v in params.items():
                     flat_params[f"{stage}.{k}"] = str(v)
@@ -112,8 +146,12 @@ def main():
                     continue
                 query = QueryItem(id=qid, text=row["query"])
                 try:
-                    result = pipeline.run(query)
-                    entry = result_to_submission_entry(result)
+                    out = runner.run(query)
+                    if getattr(out, "used_fallback", False):
+                        n_fallback += 1
+                    if getattr(out, "n_union", 0):
+                        union_sizes.append(out.n_union)
+                    entry = result_to_submission_entry(unwrap(out))
                     if not entry["relevant_chunks"]:
                         n_empty += 1
                     else:
@@ -126,10 +164,20 @@ def main():
                 done[qid] = entry
 
         elapsed = time.perf_counter() - t_start
-        mlflow.log_metrics({
+        metrics = {
             "n_ok": n_ok, "n_empty": n_empty, "n_error": n_error,
             "elapsed_seconds": elapsed, "queries_per_second": len(rows) / elapsed if elapsed else 0,
-        })
+        }
+        if union_sizes:
+            ordered = sorted(union_sizes)
+            metrics.update({
+                "union_p50": ordered[len(ordered) // 2],
+                "union_max": ordered[-1],
+                # Query không có bản augment -> chạy baseline. Nhiều quá nghĩa
+                # là file augmented.jsonl không khớp với tập query đang chạy.
+                "n_fallback_baseline": n_fallback,
+            })
+        mlflow.log_metrics(metrics)
 
     # Assemble final submission strictly in official query-id order, verifying completeness.
     missing = [qid for qid in all_ids if qid not in done]

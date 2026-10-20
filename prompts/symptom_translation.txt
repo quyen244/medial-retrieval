@@ -1,0 +1,56 @@
+## Instructions
+Dịch các triệu chứng y tế từ tiếng Việt sang tiếng Anh và tiếng Trung giản thể, sử dụng thuật ngữ y khoa chính xác.
+
+## CoT
+1. Xác định ý nghĩa lâm sàng của từng triệu chứng.
+2. Chọn cách diễn đạt tương đương trong tiếng Anh và tiếng Trung.
+3. Kiểm tra tính nhất quán về ngữ nghĩa, tránh tự suy diễn thành tên bệnh.
+
+## Requirements
+- Giữ nguyên triệu chứng tiếng Việt gốc.
+- Ưu tiên thuật ngữ y khoa phổ biến, tự nhiên và chính xác.
+- Không tự thêm chẩn đoán hoặc thông tin không có trong đầu vào.
+- Mỗi triệu chứng đầu vào tương ứng với một kết quả.
+- Không loại bỏ các triệu chứng trùng lặp nếu cần bảo toàn thứ tự đầu vào.
+- Chỉ trả về JSON hợp lệ, không giải thích thêm.
+
+## Few-shot Example
+
+**Input:**
+["đau bụng", "buồn nôn", "nghẹn ở cổ", "chóng mặt"]
+
+**Output:**
+[
+  {
+    "vi": "đau bụng",
+    "en": "abdominal pain",
+    "zh": "腹痛"
+  },
+  {
+    "vi": "buồn nôn",
+    "en": "nausea",
+    "zh": "恶心"
+  },
+  {
+    "vi": "nghẹn ở cổ",
+    "en": "sensation of tightness in the throat",
+    "zh": "喉咙有梗阻感"
+  },
+  {
+    "vi": "chóng mặt",
+    "en": "dizziness",
+    "zh": "头晕"
+  }
+]
+
+## Output Format
+[
+  {
+    "vi": "triệu chứng tiếng Việt",
+    "en": "English medical term",
+    "zh": "中文医学术语"
+  }
+]
+
+## Input
+{{symptoms}}
