@@ -6,6 +6,10 @@ set -euo pipefail
 MODEL="${MODEL:-Qwen/Qwen3-8B-AWQ}"
 PORT="${PORT:-8000}"
 
+# FlashInfer sampler JIT-compile bang nvcc luc khoi dong; may khong co CUDA toolkit
+# thi vLLM chet. Attention van chay FlashAttention 2, chi sampler doi sang PyTorch.
+export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
+
 # --enable-prefix-caching: buoc cham tang 2 gui 8 request cung mot query,
 #   prompt dat query TRUOC tai lieu nen phan instruction+query dung chung.
 # --max-model-len 8192: query ke benh dai nhat 281 tu + tai lieu, 8192 du rong.
@@ -16,4 +20,4 @@ exec vllm serve "$MODEL" \
   --max-model-len 8192 \
   --gpu-memory-utilization 0.88 \
   --enable-prefix-caching \
-  --disable-log-requests
+  --no-enable-log-requests
