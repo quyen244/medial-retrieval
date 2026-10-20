@@ -35,12 +35,14 @@ SKIP_CHAPTERS = set("ZVWXYU")
 # Định tố đuôi của ICD-10-CM, cắt lặp cho tới khi không còn.
 QUALIFIERS = re.compile(
     r",\s*("
-    r"unspecified(\s+\w+)?|"
+    r"unspecified(\s+\w+(\s+\w+)*)?|"
     r"(right|left|bilateral)(\s+\w+)*|"
     r"(initial|subsequent)\s+encounter.*|"
     r"sequela.*|"
     r"(first|second|third|unspecified)\s+trimester|"
-    r"with(out)?\s+bleeding|"
+    r"with(out)?\s+(bleeding|hemorrhage|perforation)"
+    r"(\s+(and|or)\s+(bleeding|hemorrhage|perforation))?|"
+    r"with\s+both\s+(hemorrhage|bleeding)\s+and\s+perforation|"
     r"not\s+elsewhere\s+classified|"
     r"so\s+stated|"
     r"in\s+diseases\s+classified\s+elsewhere"

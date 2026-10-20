@@ -77,8 +77,24 @@ class IcdTerms:
                     if len(form.split()) >= 2:
                         self.en2vi.setdefault(form, vi)
                 for a in filter(None, (r.get("vi_aliases") or "").split("|")):
-                    if len(a.split()) >= 2:
-                        self.vi_terms.add(a.strip().lower())
+                    # Chuẩn hoá giống hệt ngrams(): chỉ giữ ký tự từ, nối 1
+                    # khoảng trắng. Alias nguồn mang dấu phẩy/định tố
+                    # ("Loét tá tràng, cấp tính") sẽ không bao giờ bằng bất kỳ
+                    # n-gram nào của ngrams() (n-gram không có dấu phẩy) nếu
+                    # giữ nguyên - tức khớp bừa im lặng, không báo lỗi.
+                    words = [t.lower() for t in _WORD.findall(a)]
+                    if len(words) < 2:
+                        continue
+                    norm = " ".join(words)
+                    self.vi_terms.add(norm)
+                    # Thêm cả các tiền tố ngắn hơn: alias nguồn gần như luôn
+                    # là "tên bệnh chung" + định tố đuôi (vị trí, mức độ,
+                    # biến chứng) - ví dụ "viêm khớp dạng thấp không xác
+                    # định". Câu hỏi thật thường chỉ nói tên bệnh chung,
+                    # không nói định tố, nên cần khớp được cả tiền tố.
+                    for k in (2, 3, 4, 5):
+                        if len(words) > k:
+                            self.vi_terms.add(" ".join(words[:k]))
 
     def lookup(self, text: str, language: str, limit: int = 6) -> List[str]:
         g = ngrams(text)
