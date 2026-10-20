@@ -1,0 +1,63 @@
+## Instructions
+Trích xuất các thực thể y tế trong văn bản thành 3 nhóm:
+- `disease`: Tên bệnh.
+- `medication`: Tên thuốc.
+- `symptom`: Triệu chứng, biểu hiện lâm sàng.
+
+## CoT
+Thực hiện suy luận nội bộ:
+1. Xác định các thực thể y tế được đề cập trực tiếp.
+2. Phân loại từng thực thể vào đúng nhóm.
+3. Giữ nguyên cụm từ gốc và loại bỏ các thực thể trùng lặp.
+4. Không tự suy diễn thông tin không có trong văn bản.
+
+## Requirements
+- Giữ nguyên ngôn ngữ và cụm từ xuất hiện trong văn bản gốc.
+- Phân biệt rõ tên bệnh và triệu chứng.
+- Không tự suy ra tên thuốc, bệnh hoặc triệu chứng.
+- Chỉ trích xuất các thực thể xuất hiện rõ ràng trong văn bản.
+- Nếu không tìm thấy thực thể thuộc nhóm nào, trả về mảng rỗng.
+- Chỉ trả về JSON hợp lệ, không giải thích thêm.
+
+## Few-shot Example
+
+**Input:**
+"Tôi bị viêm dạ dày và trào ngược thực quản. Bác sĩ kê omeprazole để điều trị, nhưng gần đây tôi vẫn bị buồn nôn và đau bụng."
+
+**Output:**
+{
+  "disease": [
+    "viêm dạ dày",
+    "trào ngược thực quản"
+  ],
+  "medication": [
+    "omeprazole"
+  ],
+  "symptom": [
+    "buồn nôn",
+    "đau bụng"
+  ]
+}
+
+**Input:**
+"Tôi thường xuyên mệt mỏi và chóng mặt, chưa đi khám hay sử dụng thuốc."
+
+**Output:**
+{
+  "disease": [],
+  "medication": [],
+  "symptom": [
+    "mệt mỏi",
+    "chóng mặt"
+  ]
+}
+
+## Output Format
+{
+  "disease": [],
+  "medication": [],
+  "symptom": []
+}
+
+## Input
+{{input_text}}

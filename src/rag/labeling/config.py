@@ -70,6 +70,10 @@ class LabelingConfig:
     def tier2_per_query(self) -> int:
         return self.tier2_top_n + self.tier2_median_n
 
+    # 15 ứng viên của 1 query không gộp vào 1 lời gọi - tách thành từng lô
+    # nhỏ, mỗi lô 1 lời gọi LLM riêng. 15 / 3 = 5 lời gọi mỗi query.
+    tier2_batch_size: int = 3
+
     # --- LLM ---
     llm_url: str = "http://localhost:8000/v1"
     llm_model: str = "Qwen/Qwen3-8B-AWQ"

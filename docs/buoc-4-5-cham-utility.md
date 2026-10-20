@@ -119,17 +119,17 @@ một lần forward.
 pipeline sinh nhãn. Tầng 1 lọc bớt các ứng viên rõ ràng không liên quan (điểm
 CE rất thấp) để tầng 2 chỉ phải xử lý phần mơ hồ - đúng/sai chưa rõ.
 
-### 5b - Tầng 2: LLM, chỉ 15/50
+### 5b - Tầng 2: LLM, 15/50, tách thành 5 lời gọi (3 tài liệu/lời gọi)
 
 ```mermaid
 flowchart TD
     A["50 ứng viên đã xếp hạng theo t1_score"] --> B["chọn 10 điểm CAO nhất<br/>+ 5 quanh NGƯỠNG MƠ HỒ"]
     B --> C["15 ứng viên cần LLM chấm"]
-    C --> D["build 1 prompt:<br/>instruction + query<br/>+ 15 tài liệu đánh số"]
-    D --> E["gọi Qwen3-8B<br/>1 lần cho cả 15"]
-    E --> F{"parse JSON<br/>15 điểm 0-3"}
-    F -- hỏng --> G["retry, tối đa 3 lần"]
-    F -- được --> H["gán t2_score cho 15 cái"]
+    C --> D["chia thành 5 lô, mỗi lô 3 tài liệu"]
+    D --> E["5 lời gọi Qwen3-8B riêng<br/>mỗi lời gọi: query + 3 tài liệu"]
+    E --> F{"parse JSON<br/>3 điểm 0-3 / lời gọi"}
+    F -- hỏng --> G["retry lô đó, tối đa 3 lần"]
+    F -- được --> H["gán t2_score cho 3 cái, gộp 5 lô lại = 15"]
     I["35 ứng viên còn lại<br/>t1_score quá thấp"] --> J["suy ra t2_score = 0<br/>KHÔNG gọi LLM"]
     H --> K["gộp lại đủ 50, ghi file"]
     J --> K
@@ -139,17 +139,23 @@ flowchart TD
 hạng 50 ứng viên theo `t1_score`, chọn vị trí 1-10 (chắc chắn liên quan nhất)
 cộng 5 ứng viên nằm quanh điểm median của toàn bộ 50 — đó là vùng CE "lưỡng
 lự", không rõ liên quan hay không, cần LLM phân xử. 35 ứng viên còn lại (điểm
-thấp nhất) **không gọi LLM**, gán thẳng `t2_score = 0`. Số 10+5 là lựa chọn
-cố định, đơn giản hơn ngưỡng tương đối theo phân phối điểm — cần soát ở cổng
-chặn việc 6 (`TODO.md`) xem có hay bỏ lỡ ứng viên cạnh tranh ngay ngoài biên,
-hoặc có đang lố so với cần thiết.
+thấp nhất) **không gọi LLM**, gán thẳng `t2_score = 0`.
 
-**Vì sao gộp cả 15 tài liệu vào MỘT lời gọi, không gọi 15 lần riêng:** phần
-`instruction + query` giống hệt nhau cho cả 15 tài liệu của cùng 1 query. Gộp
-vào 1 prompt (tài liệu đánh số 1-15, model trả JSON 15 điểm) tận dụng được
-prefix caching của vLLM — phần đầu prompt chỉ nạp 1 lần thay vì 15 lần. Đây là
-cơ chế duy nhất khiến ngân sách bước này khả thi (xem mục 6 của
-`docs/pipeline-sinh-nhan-reranker.md`, đã cập nhật lại số giờ theo quy mô mới).
+**Tách 15 thành 5 lời gọi × 3 tài liệu, không gộp 1 lời gọi cho cả 15** —
+quyết định đã chốt, không gộp vì prompt dài. `tier2_batch_size = 3` trong
+`config.py`. Thứ tự chia (lô 1 = vị trí 1-3, lô 2 = vị trí 4-6, ...) không
+ảnh hưởng chất lượng chấm — mỗi tài liệu được chấm độc lập theo thang 0-3
+tuyệt đối, không so sánh giữa các tài liệu trong cùng lô, nên việc chia lô
+nào vào lô nào chỉ là chi tiết thực thi.
+
+**Hệ quả cần biết:** số lời gọi LLM tăng từ 1 → 5 mỗi query (gấp 5 lần số
+request), nên tận dụng prefix caching của vLLM (phần `instruction + query`
+giống nhau giữa 5 lời gọi) kém chắc chắn hơn so với gộp 1 lần — nếu có nhiều
+query khác chạy đồng thời (`llm_concurrency=16`), cache của phần
+`instruction + query` có thể bị đẩy ra giữa 5 lời gọi của cùng 1 query, khiến
+phần đó phải tính lại nhiều lần. Ngân sách mục 6 của
+`docs/pipeline-sinh-nhan-reranker.md` cần cập nhật lại theo số lời gọi mới
+(xem đó để tính lại thời gian).
 
 **Thang điểm, nhắc lại từ spec:**
 
@@ -191,7 +197,7 @@ Một lần chạy = một run, experiment gợi ý `labeling_judging`.
 |---|---|
 | 4 | `b4_n_query`, `b4_src_missing_from_pool` (tần suất phải chèn thủ công, theo từng nhóm ngôn ngữ) |
 | 5a | `b5a_giay`, phân phối `t1_score` (p10/p50/p90) |
-| 5b | `b5b_n_llm_call`, `b5b_json_fail`, phân phối điểm theo mức 0/1/2/3 |
+| 5b | `b5b_n_llm_call` (= số query × 5, vì mỗi query tách 5 lời gọi), `b5b_json_fail`, phân phối điểm theo mức 0/1/2/3 |
 | cuối | `ty_le_query_bi_loai` (không có ứng viên ≥2), `ty_le_src_thang` (chunk gốc đạt ≥2, dùng để audit rò rỉ xuất xứ), `t2_positive_rate_by_language` (tỷ lệ ứng viên đạt ≥2 trong số ứng viên đã chấm, tách riêng en/vi/zh) |
 
 `ty_le_src_thang` là chỉ số đáng theo dõi nhất: nếu chunk gốc thắng (đạt điểm
@@ -209,15 +215,16 @@ số 2 trong `TODO.md`.
 
 ---
 
-## Việc cần quyết trước khi code
+## Đã chốt
 
-1. **Prompt tầng 2** — còn mở, cùng nguyên tắc như bước 2: bạn viết ở
-   `prompts/judge_tier2.txt`, tôi chỉ load và validate biến. Biến dự kiến:
-   `{{query}}`, `{{documents}}` (15 tài liệu đã đánh số, format JSON hoặc
-   markdown list - cần bạn chọn), yêu cầu output JSON `{"scores": [3,0,2,...]}`
-   theo đúng thứ tự đánh số.
-
-**Đã chốt (trước đây là việc 2 và 3, nay đã có số):**
+1. **Prompt tầng 2** — `prompts/judge_tier2.txt` đã viết. Hợp đồng thực tế của
+   nó (code bám theo prompt, không theo bản dự kiến cũ của doc này):
+   - biến là `{{query}}` và `{{chunks}}` (không phải `{{documents}}`);
+   - output là **mảng** `[{"chunk_id": int, "score": int}]`, không phải
+     `{"scores": [x,x,x]}`;
+   - `chunk_id` đưa vào prompt là **số nguyên cục bộ 1..15** của query đó, không
+     phải chunk_id thật — vừa không lộ xuất xứ, vừa map ngược được sau khi parse.
+   Mỗi lời gọi đúng 3 tài liệu, 5 lời gọi mỗi query (xem mục 5b).
 
 - `candidates_per_query = 50`, chia theo `candidate_lang_quota = {en:0.50, vi:0.30, zh:0.20}` → EN 25 / VI 15 / ZH 10.
 - Chọn LLM chấm theo rank cố định: `tier2_top_n = 10` + `tier2_median_n = 5` = 15/50. Không dùng ngưỡng tương đối theo phân phối điểm (đã cân nhắc, chọn đơn giản hơn) — nếu sau pilot thấy 15 lố hoặc thiếu, xem metric gợi ý ở mục trên trước khi đổi số.

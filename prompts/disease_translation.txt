@@ -1,0 +1,24 @@
+## Instructions
+Dựa trên tên bệnh bằng tiếng Việt, xác định thuật ngữ y khoa tương đương bằng tiếng Anh và tiếng Trung giản thể.
+
+## CoT
+1. Xác định chính xác bệnh được đề cập.
+2. Đối chiếu với thuật ngữ y khoa chuẩn trong hai ngôn ngữ.
+3. Kiểm tra tính tương đương về mặt ý nghĩa, tránh dịch sai hoặc mở rộng chẩn đoán.
+
+## Requirements
+- Giữ nguyên tên bệnh tiếng Việt gốc.
+- Ưu tiên thuật ngữ y khoa chuẩn, không dịch từng từ máy móc.
+- Không tự suy diễn hoặc thay thế bằng bệnh có liên quan.
+- Nếu tên bệnh mơ hồ, sử dụng cách dịch tương đương gần nhất, không tự bổ sung chẩn đoán.
+- Chỉ trả về JSON hợp lệ, không giải thích thêm.
+
+## Output Format
+{
+  "vi": "viêm loét dạ dày",
+  "en": "gastric ulcer",
+  "zh": "胃溃疡"
+}
+
+## Input
+{{disease_name}}

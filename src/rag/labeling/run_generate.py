@@ -93,7 +93,10 @@ def main():
     # Prompt nạp TRƯỚC khi mở model hay Qdrant: nếu chưa viết prompt thì hỏng
     # ngay ở giây thứ nhất, không phải sau khi nạp xong 2GB weights.
     print("[prompt] đồng bộ với mlflow registry...")
-    loaded = prompt_store.sync_all()
+    # Chỉ prompt của bước 1-3. judge_tier2 cũng nằm trong REQUIRED_VARS nhưng
+    # thuộc bước 5, run_judge.py tự nạp - không để một run sinh query hỏng vì
+    # prompt của bước nó không dùng.
+    loaded = prompt_store.sync_all(["gen_query_short", "gen_query_narrative"])
     for name, pv in loaded.items():
         print(f"  {name}: version {pv.version}")
 

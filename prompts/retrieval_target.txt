@@ -1,0 +1,47 @@
+## Instructions
+Từ một query y tế bằng tiếng Việt, xác định các retrieval target cần thiết và tạo truy vấn tương ứng bằng tiếng Việt, tiếng Anh và tiếng Trung giản thể để phục vụ multilingual retrieval.
+
+## CoT
+1. Xác định các khía cạnh thông tin cần truy xuất từ query gốc.
+2. Tạo retrieval query ngắn gọn, tập trung vào từng khía cạnh.
+3. Chuyển mỗi query sang tiếng Anh và tiếng Trung, bảo toàn ý nghĩa y khoa.
+
+## Requirements
+- Bám sát query gốc, không tự thêm chẩn đoán hoặc dữ kiện.
+- Ưu tiên thuật ngữ y khoa chuẩn.
+- Mỗi target tập trung vào một khía cạnh retrieval riêng biệt.
+- Ba ngôn ngữ phải tương đương về ngữ nghĩa, không dịch máy móc.
+- Tránh query quá dài, trùng lặp hoặc không liên quan.
+- Chỉ trả về JSON hợp lệ, không giải thích thêm.
+
+## Few-shot Example
+
+Input:
+"Em bị viêm dạ dày, uống thuốc xong vẫn buồn nôn. Tình trạng này có nguy hiểm không và nguyên nhân do đâu?"
+
+Output:
+{
+  "retrieval_targets": [
+    {
+      "aspect": "Nguyên nhân triệu chứng",
+      "vi": "Nguyên nhân gây buồn nôn sau điều trị viêm dạ dày",
+      "en": "Causes of nausea after gastritis treatment",
+      "zh": "胃炎治疗后出现恶心的原因"
+    },
+    {
+      "aspect": "Tiên lượng và mức độ nghiêm trọng",
+      "vi": "Mức độ nghiêm trọng và dấu hiệu nguy hiểm của viêm dạ dày kèm buồn nôn",
+      "en": "Severity and warning signs of gastritis with nausea",
+      "zh": "胃炎伴恶心的严重程度及危险信号"
+    },
+    {
+      "aspect": "Hiệu quả điều trị",
+      "vi": "Buồn nôn kéo dài sau khi điều trị viêm dạ dày",
+      "en": "Persistent nausea after gastritis treatment",
+      "zh": "胃炎治疗后持续恶心"
+    }
+  ]
+}
+
+## Input
+{{query}}

@@ -1,0 +1,76 @@
+## Instructions
+Đánh giá mức độ liên quan của từng chunk đối với query y tế đầu vào. Chấm điểm độc lập cho từng chunk dựa trên khả năng cung cấp bằng chứng để trả lời query.
+
+## Scoring Criteria
+- **3 — Trả lời trực tiếp và đầy đủ:** Chunk cung cấp bằng chứng trực tiếp, đủ để trả lời query hoặc khía cạnh mà query đề cập.
+- **2 — Có bằng chứng hữu ích nhưng chưa đủ:** Chunk chứa thông tin liên quan và có giá trị trả lời, nhưng thiếu một phần bằng chứng cần thiết.
+- **1 — Cùng chủ đề, không trả lời được:** Chunk cùng lĩnh vực hoặc chủ đề y tế nhưng không cung cấp bằng chứng hữu ích để trả lời query cụ thể.
+- **0 — Không liên quan:** Chunk không có mối liên hệ đáng kể với query.
+
+## CoT
+Thực hiện đánh giá nội bộ cho từng chunk:
+1. Xác định thông tin mà query cần tìm.
+2. Đối chiếu nội dung chunk với yêu cầu của query.
+3. Xác định chunk cung cấp bằng chứng trực tiếp, bằng chứng một phần, chỉ cùng chủ đề hay không liên quan.
+4. Gán điểm theo tiêu chí, không dựa vào việc chunk có nhiều từ khóa trùng lặp với query hay không.
+
+## Requirements
+- Chấm điểm từng chunk độc lập, không so sánh tương đối giữa các chunk.
+- Ưu tiên mức độ hỗ trợ trả lời query về mặt ngữ nghĩa, không chỉ dựa vào trùng khớp từ khóa.
+- Không suy diễn thông tin không có trong chunk.
+- Không mặc định chunk chứa tên bệnh giống query thì phải đạt điểm cao.
+- Nếu query có nhiều yêu cầu, đánh giá chunk dựa trên mức độ đáp ứng các yêu cầu đó.
+- Giữ nguyên `chunk_id` đầu vào và kiểu số nguyên.
+- Mỗi chunk đầu vào phải có đúng một kết quả, không bỏ sót hoặc thêm chunk.
+- Chỉ trả về JSON hợp lệ, không giải thích thêm.
+
+## Few-shot Example
+
+**Input:**
+{
+  "query": "[QUERY Y TẾ]",
+  "chunks": [
+    {
+      "chunk_id": 101,
+      "text": "[CHUNK 1 — BẰNG CHỨNG TRỰC TIẾP VÀ ĐẦY ĐỦ]"
+    },
+    {
+      "chunk_id": 102,
+      "text": "[CHUNK 2 — BẰNG CHỨNG LIÊN QUAN NHƯNG CHƯA ĐỦ]"
+    },
+    {
+      "chunk_id": 103,
+      "text": "[CHUNK 3 — KHÔNG LIÊN QUAN]"
+    }
+  ]
+}
+
+**Output:**
+[
+  {
+    "chunk_id": 101,
+    "score": 3
+  },
+  {
+    "chunk_id": 102,
+    "score": 2
+  },
+  {
+    "chunk_id": 103,
+    "score": 0
+  }
+]
+
+## Output Format
+[
+  {
+    "chunk_id": 101,
+    "score": 0
+  }
+]
+
+## Input
+{
+  "query": "{{query}}",
+  "chunks": {{chunks}}
+}

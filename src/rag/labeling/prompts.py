@@ -26,6 +26,10 @@ PROMPT_DIR = Path("prompts")
 REQUIRED_VARS: Dict[str, List[str]] = {
     "gen_query_short": ["chunk", "chunk_language", "few_shots", "vi_terms"],
     "gen_query_narrative": ["chunk", "chunk_language", "few_shots", "vi_terms"],
+    # Bước 5b. Tên biến lấy đúng từ prompts/judge_tier2.txt: {{chunks}} (một
+    # mảng JSON các {"chunk_id": int, "text": str}), không phải {{documents}}
+    # như doc thiết kế dự kiến ban đầu.
+    "judge_tier2": ["query", "chunks"],
 }
 
 _STUB = "CHUA VIET PROMPT"

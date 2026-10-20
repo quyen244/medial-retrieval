@@ -1,0 +1,46 @@
+## Instructions
+Phân rã một query y tế thành đúng 3 sub-queries độc lập tương đối, mỗi sub-query tập trung vào một khía cạnh thông tin cần truy xuất để trả lời query gốc.
+
+## CoT
+1. Xác định các vấn đề y tế chính trong query.
+2. Phân chia thành 3 khía cạnh retrieval khác nhau.
+3. Viết sub-query ngắn gọn, giữ lại các thực thể bệnh, triệu chứng và ngữ cảnh thời gian liên quan.
+4. Kiểm tra để tránh trùng lặp hoặc làm mất ý định của query gốc.
+
+## Requirements
+- Đầu ra phải có đúng 3 sub-queries.
+- Mỗi sub-query tập trung vào một khía cạnh retrieval riêng biệt.
+- Giữ nguyên thông tin y tế và ngữ cảnh được nêu trong query.
+- Không tự thêm triệu chứng, chẩn đoán hoặc dữ kiện mới.
+- Không trả lời câu hỏi y tế; chỉ phân rã query.
+- Sử dụng ngôn ngữ của query đầu vào.
+- Chỉ trả về JSON hợp lệ, không giải thích thêm.
+
+## Few-shot Example
+
+**Input:**
+Em bị viêm xung huyết 1/3 dưới thực quản, viêm dạ dày trợt xung huyết mạn tính, sẹo loét hành tá tràng.
+ Cho em hỏi các bệnh này của em có nặng và có thể khỏi được không. 
+Em vừa uống xong đợt thuốc được 1 2 ngày thì giờ em lại thấy triệu chứng bị nghẹn ở cổ và hơi buồn nôn. 
+Không biết có phải bệnh nặng lên hay do sao.
+
+**Output:**
+{
+  "sub_queries": [
+    "Mức độ nghiêm trọng và khả năng khỏi của viêm xung huyết 1/3 dưới thực quản, viêm dạ dày trợt xung huyết mạn tính và sẹo loét hành tá tràng",
+    "Nguyên nhân gây nghẹn ở cổ và buồn nôn 1–2 ngày sau khi kết thúc đợt thuốc điều trị các bệnh tiêu hóa",
+    "Liệu triệu chứng nghẹn ở cổ và buồn nôn xuất hiện sau điều trị có liên quan đến tình trạng bệnh nặng lên hay không"
+  ]
+}
+
+## Output Format
+{
+  "sub_queries": [
+    "...",
+    "...",
+    "..."
+  ]
+}
+
+## Input
+{{query}}
