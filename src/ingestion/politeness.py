@@ -114,16 +114,11 @@ HOST_OVERRIDES: dict[str, HostLimits] = {
     # problem no rate change fixes - ask.39.net fails at the network level,
     # and probing it a day later at 0.5 req/s got clean 200s every time. So
     # the server itself is fine; the crawl was simply too fast for it.
-    # max_concurrent raised alongside min_interval: at ~4-9s observed response
-    # time, 1 concurrent slot could not sustain 3 req/s no matter how low
-    # min_interval went - the single in-flight request becomes the real
-    # bottleneck. Needs enough slots in flight to keep a new one starting
-    # every 0.33s even while earlier ones are still waiting on a reply.
-    "ask.39.net": HostLimits(max_concurrent=5, min_interval=0.33),
+    "ask.39.net": HostLimits(max_concurrent=3, min_interval=1.0),
 
     # One shared budget for the whole 39.net specialty family (see
     # HOST_GROUPS above) instead of 6 concurrent per subdomain x 20.
-    _39NET_SHARED_IP: HostLimits(max_concurrent=6, min_interval=0.33),
+    _39NET_SHARED_IP: HostLimits(max_concurrent=3, min_interval=1.0),
 }
 
 
