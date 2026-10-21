@@ -16,12 +16,11 @@ class LabelingConfig:
     n_source_chunks: int = 5000
     queries_per_chunk: int = 2
 
-    # Tỷ lệ ngôn ngữ của chunk nguồn. KHÔNG chia đều ba ngôn ngữ: corpus tiếng
-    # Anh phủ 99,8% còn tiếng Việt 41%, tiếng Trung 4,1%, nên đa số bằng chứng
-    # thật nằm ở tiếng Anh. Đây cũng là cách duy nhất để tập train có cặp vi->en,
-    # vốn là đường truy xuất chính của cuộc thi.
+    # Tỷ lệ ngôn ngữ của chunk nguồn (câu hỏi train được sinh từ tài liệu tiếng
+    # gì). vi 50 / en 40 / zh 10: corpus đã ingest nghiêng hẳn về tiếng Việt
+    # (khoảng 80% chunk), nhưng vẫn giữ en đủ lớn để tập train có cặp vi->en.
     lang_quota: Dict[str, float] = field(
-        default_factory=lambda: {"en": 0.60, "vi": 0.30, "zh": 0.10}
+        default_factory=lambda: {"en": 0.40, "vi": 0.50, "zh": 0.10}
     )
 
     # Tỷ lệ hai chế độ query, bám theo phân phối đo được trên 1.200 query thật:
@@ -44,6 +43,12 @@ class LabelingConfig:
     # Giữ query nếu chunk nguồn nằm trong top-k khi truy xuất lại bằng chính
     # query đó. Khách quan hơn và rẻ hơn hàng trăm lần so với LLM judge.
     roundtrip_top_k: int = 50
+    # Tìm lại chunk nguồn trong ĐÚNG ngôn ngữ của nó, không phải cả corpus.
+    # Corpus ~80% tiếng Việt: tìm trên cả corpus thì câu hỏi sinh từ chunk en/zh
+    # phải chen với rất nhiều chunk vi cùng chủ đề và bị loại oan - tức mất đúng
+    # các cặp vi->en mà lang_quota nhắm tới. Lúc nộp bài mỗi nhánh ngôn ngữ cũng
+    # tìm riêng, nên điều kiện này khớp với cái reranker thật sự gặp.
+    roundtrip_same_language: bool = True
     # Dưới ngưỡng này thì prompt sinh query đang có vấn đề, dừng lại sửa.
     roundtrip_min_keep_rate: float = 0.40
 
@@ -56,6 +61,10 @@ class LabelingConfig:
     # en 16 / zh 8), để reranker được train trên pool có phân bố ngôn ngữ giống
     # pool nó chấm khi nộp bài. Với 50 ứng viên, tỷ lệ này ra đúng 26 / 16 / 8.
     candidates_per_query: int = 50
+    # Cách tìm ứng viên ở bước 4: "hybrid" (dense + sparse) hoặc "dense". Nên
+    # khớp với retriever lúc nộp bài (thí nghiệm dense hay hybrid): train trên
+    # pool hybrid rồi nộp bằng dense là reranker gặp pool khác pool nó học.
+    candidate_search: str = "hybrid"
     candidate_lang_quota: Dict[str, float] = field(
         default_factory=lambda: {"vi": 50 / 95, "en": 30 / 95, "zh": 15 / 95}
     )

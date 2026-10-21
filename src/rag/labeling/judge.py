@@ -56,7 +56,7 @@ class CrossEncoderScorer:
     """
 
     def __init__(self, model_name: str = TIER1_MODEL, device: Optional[str] = None,
-                 max_length: int = 512, batch_size: int = 16):
+                 max_length: int = 1024, batch_size: int = 16):
         from sentence_transformers import CrossEncoder
 
         self.model_name = model_name

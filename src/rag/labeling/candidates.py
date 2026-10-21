@@ -46,7 +46,7 @@ def lang_targets(cfg) -> Dict[str, int]:
 
 # ------------------------------------------------- search theo ngôn ngữ
 
-def _search_lang(vectorstore, query: str, qvec, top_k: int, lang: str):
+def _search_lang(vectorstore, query: str, qvec, top_k: int, lang: str, mode: str = "hybrid"):
     """Một lần search giới hạn trong một ngôn ngữ.
 
     Lọc bằng payload field `language`. Đây ĐÚNG là `source.language_category`
@@ -63,8 +63,10 @@ def _search_lang(vectorstore, query: str, qvec, top_k: int, lang: str):
     cuối cùng, nên hybrid đáng dùng dù pipeline submission đang để dense làm
     mặc định.
     """
-    if hasattr(vectorstore.encoder, "encode_with_sparse"):
+    if mode == "hybrid" and hasattr(vectorstore.encoder, "encode_with_sparse"):
         return vectorstore.hybrid_search(query, top_k=top_k, language=lang)
+    if qvec is None:
+        qvec = vectorstore.encoder.encode(query, normalize_embeddings=True).tolist()
     return vectorstore.search(qvec, top_k=top_k, language=lang)
 
 
@@ -131,7 +133,8 @@ def fetch_candidates(vectorstore, records: List[Dict[str, Any]], cfg,
         # Encode MỘT lần rồi dùng cho cả ba lần search. Đường dense tự encode
         # mỗi lần search thì cùng một query chạy qua BGE-M3 ba lượt.
         qvec = None
-        if not hasattr(vectorstore.encoder, "encode_with_sparse"):
+        mode = getattr(cfg, "candidate_search", "hybrid")
+        if mode == "dense" or not hasattr(vectorstore.encoder, "encode_with_sparse"):
             qvec = vectorstore.encoder.encode(q, normalize_embeddings=True).tolist()
 
         groups: Dict[str, List[Dict[str, Any]]] = {}
@@ -141,7 +144,7 @@ def fetch_candidates(vectorstore, records: List[Dict[str, Any]], cfg,
                 groups[lang] = []
                 continue
             try:
-                hits = _search_lang(vectorstore, q, qvec, k, lang)
+                hits = _search_lang(vectorstore, q, qvec, k, lang, mode)
             except Exception:
                 hits = []
                 local_stats[f"search_fail_{lang}"] += 1

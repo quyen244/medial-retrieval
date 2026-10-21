@@ -228,30 +228,45 @@ class FewShotPool:
     câu ngắn sạch trong khi 33,8% query thật là đoạn kể bệnh dài.
     """
 
-    def __init__(self, real_queries: List[str], cfg):
+    def __init__(self, real_queries: List[str], cfg, encoder=None):
         self.cfg = cfg
+        self.queries = list(real_queries)
         self.bands: Dict[str, List[str]] = {"short": [], "narrative": []}
-        for q in real_queries:
+        for q in self.queries:
             band = "narrative" if word_count(q) >= cfg.narrative_word_threshold else "short"
             self.bands[band].append(q)
         self.rng = random.Random(cfg.seed)
+        # Tìm query thật gần chunk bằng vector giữ trong bộ nhớ (1.200 câu, vài
+        # MB), không qua Qdrant. Bản cũ search trên collection CORPUS rồi lấy
+        # `content` của chunk làm "query mẫu" - tức đưa đoạn tài liệu vào prompt
+        # như thể đó là câu người hỏi.
+        self.encoder = encoder
+        self.qmat = None
+        if encoder is not None and self.queries:
+            import numpy as np
+            m = np.asarray(encoder.encode(self.queries, normalize_embeddings=True, batch_size=32),
+                           dtype="float32")
+            self.qmat = m / np.linalg.norm(m, axis=1, keepdims=True).clip(min=1e-9)
 
     def pick(self, vectorstore, chunk_text: str, mode: str) -> List[str]:
-        """Lấy mẫu gần chunk về chủ đề NHƯNG đúng dải độ dài của chế độ."""
+        """Lấy mẫu gần chunk về chủ đề NHƯNG đúng dải độ dài của chế độ.
+
+        `vectorstore` giữ trong chữ ký cho tương thích, không còn dùng."""
         band = self.bands[mode]
         picked: List[str] = []
-        try:
-            for pt in search(vectorstore, chunk_text[:2000], top_k=self.cfg.few_shot_pool):
-                t = (pt.payload or {}).get("text") or (pt.payload or {}).get("content")
-                if not t:
-                    continue
+        if self.qmat is not None:
+            import numpy as np
+            v = np.asarray(self.encoder.encode(chunk_text[:2000], normalize_embeddings=True),
+                           dtype="float32")
+            v = v / max(float(np.linalg.norm(v)), 1e-9)
+            order = np.argsort(-(self.qmat @ v))[: self.cfg.few_shot_pool]
+            for i in order:
+                t = self.queries[int(i)]
                 got = "narrative" if word_count(t) >= self.cfg.narrative_word_threshold else "short"
                 if got == mode:
                     picked.append(t)
                 if len(picked) >= self.cfg.few_shot_k:
                     break
-        except Exception:
-            pass  # thiếu collection query_documents thì rơi xuống lấy ngẫu nhiên
         while len(picked) < self.cfg.few_shot_k and band:
             picked.append(self.rng.choice(band))
         return picked[:self.cfg.few_shot_k]
@@ -359,9 +374,12 @@ def roundtrip_filter(vectorstore, records: List[Dict[str, Any]], cfg) -> Tuple[L
     `src_rank` được giữ lại dù query bị loại: nó là tín hiệu độ khó truy xuất
     miễn phí, không cần model nào sinh ra.
     """
+    same_lang = getattr(cfg, "roundtrip_same_language", True)
+
     def one(rec):
         try:
-            hits = search(vectorstore, rec["query"], top_k=cfg.roundtrip_top_k)
+            hits = search(vectorstore, rec["query"], top_k=cfg.roundtrip_top_k,
+                          language=rec.get("src_language") if same_lang else None)
         except Exception:
             return rec, None
         for rank, pt in enumerate(hits, 1):
@@ -375,14 +393,21 @@ def roundtrip_filter(vectorstore, records: List[Dict[str, Any]], cfg) -> Tuple[L
         for rec, rank in ex.map(one, records):
             rec["src_rank"] = rank
             rec["kept"] = rank is not None
+            lang = rec.get("src_language") or "?"
             stats["tong"] += 1
+            stats[f"tong_{lang}"] += 1
             if rank is None:
                 stats[f"loai_{rec['mode']}"] += 1
                 continue
             stats[f"giu_{rec['mode']}"] += 1
+            stats[f"giu_{lang}"] += 1
             kept.append(rec)
 
     stats["keep_rate"] = round(len(kept) / max(stats["tong"], 1), 4)
+    # Tỉ lệ giữ theo ngôn ngữ chunk nguồn: lệch mạnh giữa vi và en/zh là dấu
+    # hiệu bộ lọc đang ưu ái một ngôn ngữ, dù keep_rate chung vẫn qua cổng.
+    for lang in {k[5:] for k in list(stats) if k.startswith("tong_")}:
+        stats[f"keep_rate_{lang}"] = round(stats.get(f"giu_{lang}", 0) / max(stats[f"tong_{lang}"], 1), 4)
     return kept, dict(stats)
 
 

@@ -103,11 +103,10 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=False, max_length=1024)
     vectorstore = VectorStore(encoder, url=cfg.qdrant_url, collection_name=cfg.corpus_collection)
-    query_store = VectorStore(encoder, url=cfg.qdrant_url, collection_name=cfg.query_collection)
 
     real_queries = [r["query"] for r in get_dataset("query")["train"]]
     icd = IcdTerms(cfg.icd_table)
-    few_shots = FewShotPool(real_queries, cfg)
+    few_shots = FewShotPool(real_queries, cfg, encoder=encoder)
     print(f"[setup] {len(real_queries)} query thật | ICD {len(icd.en2vi)} cặp en->vi | device={device}")
 
     mlflow.set_experiment(cfg.experiment)
@@ -146,7 +145,8 @@ def main():
         t = time.perf_counter()
         kept, rt_stats = roundtrip_filter(vectorstore, records, cfg)
         d3 = time.perf_counter() - t
-        print(f"[b3] giữ {len(kept)}/{len(records)} = {rt_stats['keep_rate']:.1%} trong {d3:.0f}s")
+        print(f"[b3] giữ {len(kept)}/{len(records)} = {rt_stats['keep_rate']:.1%} trong {d3:.0f}s | theo ngôn ngữ nguồn: "
+              + ", ".join(f"{k[10:]} {v:.1%}" for k, v in sorted(rt_stats.items()) if k.startswith("keep_rate_")))
         mlflow.log_metrics({"b3_n_giu": len(kept), "b3_giay": d3,
                             **{f"b3_{k}": v for k, v in rt_stats.items()}})
         write_jsonl(out / "gen_queries_kept.jsonl", kept)
