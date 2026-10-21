@@ -37,7 +37,9 @@ TIER1_MODEL = "BAAI/bge-reranker-v2-m3"
 # Điểm -> trọng số mẫu lúc train. 1 điểm KHÔNG phải negative (corpus 1,22 triệu
 # tài liệu có hàng chục bản ghi đúng cho một câu hỏi, ép 1 thành negative là tự
 # tạo negative giả) nên weight = None = bỏ khỏi tập train.
-SCORE_WEIGHT: Dict[int, Optional[float]] = {3: 1.0, 2: 0.6, 1: None, 0: 0.0}
+# Điểm 2 chỉ 0.4: pilot cho thấy LLM 8B dồn phần lớn lỗi chấm dễ dãi vào điểm 2
+# (chunk cùng lĩnh vực nhưng không trả lời câu hỏi), nên giảm ảnh hưởng của nó.
+SCORE_WEIGHT: Dict[int, Optional[float]] = {3: 1.0, 2: 0.4, 1: None, 0: 0.0}
 
 # Điểm gán khi LLM trả JSON hỏng hết số lần retry. KHÔNG dùng 0: 0 là nhãn
 # negative thật, lẫn lỗi hạ tầng vào đó thì tập nhãn nhiễm âm thầm. -1 là cờ
