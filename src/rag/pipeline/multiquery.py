@@ -59,6 +59,16 @@ class MultiQueryConfig:
     lines_rrf_k: int = 60
     lines_top_k: int = 60
 
+    # Chỉ dùng với selection="branch-rerank", mode "concat", query có phân rã.
+    # Mỗi sub-query rerank 65 ứng viên của chính nó bằng câu sub-query tự nhiên,
+    # giữ sub_rerank_top_k vào pool chung; top slots_per_sub của nó được giữ chỗ
+    # trong bài nộp nếu hạng theo câu gốc (trong 50 chunk) <= slot_max_rank.
+    # Câu gốc (unit raw) không qua bước này, giữ đủ ứng viên.
+    sub_rerank: bool = True
+    sub_rerank_top_k: int = 20
+    slots_per_sub: int = 3
+    slot_max_rank: int = 30
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "augmented_file": self.augmented_file,
@@ -69,6 +79,10 @@ class MultiQueryConfig:
             "max_lines": self.max_lines,
             "lines_rrf_k": self.lines_rrf_k,
             "lines_top_k": self.lines_top_k,
+            "sub_rerank": self.sub_rerank,
+            "sub_rerank_top_k": self.sub_rerank_top_k,
+            "slots_per_sub": self.slots_per_sub,
+            "slot_max_rank": self.slot_max_rank,
         }
 
 
@@ -100,6 +114,44 @@ def unit_texts(record: Dict[str, Any]) -> List[str]:
         if t:
             texts.append(t)
     return texts
+
+
+def unit_specs(record: Dict[str, Any]) -> List[tuple]:
+    """(kind, chuỗi truy xuất, câu tự nhiên) của từng unit, cùng thứ tự và cùng
+    điều kiện bỏ unit rỗng như unit_texts(). Câu tự nhiên (`text`) là thứ đưa
+    cho reranker khi rerank theo sub-query: reranker được train trên câu tự
+    nhiên, không phải chuỗi ghép thuật ngữ."""
+    specs: List[tuple] = []
+    for u in record.get("units", []):
+        t = (u.get("augmented") or u.get("text") or "").strip()
+        if t:
+            specs.append((u.get("kind", ""), t, (u.get("text") or t).strip()))
+    return specs
+
+
+def select_with_slots(kept: List[Candidate], slot_ids: List[List[str]], top_k: int,
+                      slots_per_sub: int, max_rank: int) -> tuple:
+    """Chọn top_k chunk nộp từ `kept` (đã xếp theo điểm câu gốc).
+
+    Mỗi sub-query giữ tối đa `slots_per_sub` chỗ, xét đúng `slots_per_sub` chunk
+    đầu của nó (theo điểm sub-query): chunk được giữ chỗ nếu nằm trong `kept` và
+    có hạng câu gốc <= max_rank. Phần còn lại lấp theo hạng câu gốc. Kết quả xếp
+    lại theo điểm câu gốc. Trả (danh sách nộp, số chunk được đưa vào nhờ giữ chỗ
+    mà theo điểm thuần thì đã nằm ngoài top_k)."""
+    rank = {str(c.chunk_id): i for i, c in enumerate(kept, 1)}
+    by_id = {str(c.chunk_id): c for c in kept}
+    chosen: Dict[str, Candidate] = {}
+    for ids in slot_ids:
+        for cid in ids[:slots_per_sub]:
+            if cid in rank and rank[cid] <= max_rank and cid not in chosen:
+                chosen[cid] = by_id[cid]
+    n_rescued = sum(1 for cid in chosen if rank[cid] > top_k)
+    for c in kept:
+        if len(chosen) >= top_k:
+            break
+        chosen.setdefault(str(c.chunk_id), c)
+    final = sorted(chosen.values(), key=lambda c: c.rerank_score, reverse=True)
+    return final[:top_k], n_rescued
 
 
 def line_texts(record: Dict[str, Any], max_lines: int) -> List[str]:
@@ -192,6 +244,72 @@ class MultiQueryPipeline:
         params["multiquery"] = self.config.to_dict()
         return params
 
+    def _run_branch_rerank(self, query: QueryItem, record: Dict[str, Any], texts: List[str],
+                           lines_mode: bool, per_unit: List[List[Candidate]],
+                           unit_branches: List[Dict[str, List[Candidate]]],
+                           branch_results: Dict[str, List[Candidate]],
+                           trace: Trace) -> MultiQueryResult:
+        """Luồng branch-rerank cho nhiều unit (xem docs: luồng truy xuất query phân rã).
+
+        1. Mỗi sub-query rerank ứng viên của chính nó bằng câu sub-query, giữ
+           sub_rerank_top_k; top slots_per_sub ghi lại để giữ chỗ.
+        2. Gom theo nhánh: top-k của sub-query + toàn bộ ứng viên các unit khác.
+        3. Rerank một lần bằng câu gốc, giữ branch_keep (vi 26 / en 16 / zh 8).
+        4. Chọn rerank_top_k chunk nộp có giữ chỗ cho từng sub-query.
+        """
+        cfg = self.config
+        specs = unit_specs(record) if not lines_mode else []
+        use_sub = (cfg.sub_rerank and not lines_mode
+                   and any(kind == "sub" for kind, _, _ in specs))
+
+        by_branch: Dict[str, List[Candidate]] = {}
+        slot_ids: List[List[str]] = []
+        for i, branches in enumerate(unit_branches):
+            kind, _, natural = specs[i] if use_sub else ("", "", "")
+            if kind != "sub":
+                for lang, cands in branches.items():
+                    by_branch.setdefault(lang, []).extend(cands)
+                continue
+            seen: Dict[str, Candidate] = {}
+            for cands in branches.values():
+                for c in cands:
+                    seen.setdefault(str(c.chunk_id), c)
+            sub_query = QueryItem(id=query.id, text=natural, metadata=dict(query.metadata))
+            with trace.span(f"unit{i}.rerank.sub", params=self.pipeline.reranker.get_params(),
+                            n_in=len(seen)) as span:
+                # Điểm sub-query chỉ dùng để chọn trong nội bộ sub-query này; bước
+                # rerank câu gốc phía sau sẽ ghi đè rerank_score, nên lấy id ra ngay.
+                scored = self.pipeline.reranker.rerank(sub_query, list(seen.values()),
+                                                       top_k=cfg.sub_rerank_top_k)
+                span.n_out = len(scored)
+            slot_ids.append([str(c.chunk_id) for c in scored[: cfg.slots_per_sub]])
+            for c in scored:
+                by_branch.setdefault(c.branch, []).append(c)
+
+        rerank_query = query
+        if cfg.rerank_with_augmented:
+            rerank_query = QueryItem(id=query.id, text=texts[0], metadata=dict(query.metadata))
+        kept, reranked = self.pipeline.rerank_by_branch(rerank_query, by_branch, trace)
+
+        n_rescued = 0
+        if use_sub and slot_ids:
+            reranked, n_rescued = select_with_slots(
+                kept, slot_ids, self.pipeline.config.rerank_top_k,
+                cfg.slots_per_sub, cfg.slot_max_rank,
+            )
+
+        _, hits = union_candidates(per_unit)
+        trace.finish()
+        return MultiQueryResult(
+            result=PipelineResult(query=query, branch_results=branch_results,
+                                  fused=kept, reranked=reranked, trace=trace),
+            n_unit=len(texts),
+            n_union=sum(len(v) for v in by_branch.values()),
+            n_overlap=sum(1 for v in hits.values() if v > 1),
+            stats={"is_long": bool(record.get("is_long")), "sub_rerank": use_sub,
+                   "n_slot_rescued": n_rescued},
+        )
+
     def run(self, query: QueryItem, parallel_retrieval: bool = True) -> MultiQueryResult:
         record = self.augmented.get(int(query.id))
         lines_mode = self.config.mode == "lines"
@@ -211,6 +329,8 @@ class MultiQueryPipeline:
         trace = Trace(query_id=query.id, query_text=query.text)
         per_unit: List[List[Candidate]] = []
         branch_results: Dict[str, List[Candidate]] = {}
+        # selection="branch-rerank": ứng viên của từng unit, giữ theo nhánh ngôn ngữ.
+        unit_branches: List[Dict[str, List[Candidate]]] = []
 
         # Các lượt chạy tuần tự: mỗi lượt đã tự chạy song song 3 nhánh ngôn
         # ngữ rồi. Cho cả 4 lượt chạy song song nữa là nhân bốn số truy vấn
@@ -222,10 +342,15 @@ class MultiQueryPipeline:
                 unit_query, trace, parallel_retrieval, span_prefix=f"unit{i}"
             )
             per_unit.append(fused)
+            unit_branches.append(branches)
             # Giữ kết quả nhánh của lượt ĐẦU cho PipelineResult: đó là lượt
             # của câu hỏi chính, các lượt sau là mở rộng.
             if i == 0:
                 branch_results = branches
+
+        if self.pipeline.config.selection == "branch-rerank":
+            return self._run_branch_rerank(query, record, texts, lines_mode,
+                                           per_unit, unit_branches, branch_results, trace)
 
         if lines_mode:
             union, hits = rrf_union(per_unit, self.config.lines_rrf_k, self.config.lines_top_k)

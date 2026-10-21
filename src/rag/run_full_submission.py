@@ -81,6 +81,13 @@ def main():
     parser.add_argument("--multiquery-mode", choices=["concat", "lines"], default="concat",
                         help="concat = mỗi unit một chuỗi ghép (B/B'); lines = mỗi target một lượt riêng "
                              "rồi gộp RRF (C). Chỉ có tác dụng khi có --augmented")
+    parser.add_argument("--selection", choices=["rrf", "branch-rerank"], default=None,
+                        help="mặc định branch-rerank: rerank từng nhánh, giữ vi 26 / en 16 / zh 8 rồi xếp "
+                             "chung lấy top 20; rrf = luồng cũ, gộp nhánh bằng RRF lấy 50 rồi rerank")
+    parser.add_argument("--no-sub-rerank", action="store_true",
+                        help="tắt rerank theo sub-query + giữ chỗ (query phân rã, mode concat)")
+    parser.add_argument("--sub-rerank-top-k", type=int, default=20,
+                        help="số ứng viên mỗi sub-query giữ lại sau khi tự rerank")
     parser.add_argument("--retriever", type=str, default=None,
                         help="qdrant-language (dense, mặc định) hoặc qdrant-hybrid (dense+sparse)")
     parser.add_argument("--max-rerank-candidates", type=int, default=None,
@@ -114,6 +121,8 @@ def main():
     config = PipelineConfig()
     if args.retriever:
         config.retriever = args.retriever
+    if args.selection:
+        config.selection = args.selection
     pipeline = RetrievalPipeline(vectorstore, config)
 
     runner = pipeline
@@ -122,6 +131,8 @@ def main():
         runner = MultiQueryPipeline(
             pipeline, augmented,
             MultiQueryConfig(augmented_file=args.augmented, mode=args.multiquery_mode,
+                             sub_rerank=not args.no_sub_rerank,
+                             sub_rerank_top_k=args.sub_rerank_top_k,
                              max_rerank_candidates=args.max_rerank_candidates,
                              rerank_with_augmented=args.rerank_with_augmented),
         )

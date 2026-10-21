@@ -52,10 +52,12 @@ class LabelingConfig:
     # bị corpus lệch áp đảo, ứng viên ngôn ngữ yếu gần như không bao giờ xuất
     # hiện. Tách field riêng khỏi lang_quota của bước 1: bước 1 chọn ngôn ngữ
     # NGUỒN câu hỏi, bước 4 chọn ngôn ngữ ỨNG VIÊN chấm - hai việc khác nhau.
-    # zh nâng 10%->20% (crawl zh đã lên ~30%, không còn thưa như lúc 4,1%).
+    # Khớp pool 50 ứng viên lúc inference (PipelineConfig.branch_keep: vi 26 /
+    # en 16 / zh 8), để reranker được train trên pool có phân bố ngôn ngữ giống
+    # pool nó chấm khi nộp bài. Với 50 ứng viên, tỷ lệ này ra đúng 26 / 16 / 8.
     candidates_per_query: int = 50
     candidate_lang_quota: Dict[str, float] = field(
-        default_factory=lambda: {"en": 0.50, "vi": 0.30, "zh": 0.20}
+        default_factory=lambda: {"vi": 50 / 95, "en": 30 / 95, "zh": 15 / 95}
     )
 
     # --- bước 5b: tầng 2 chỉ chấm một phần cố định của pool ---

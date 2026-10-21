@@ -19,7 +19,7 @@ from src.rag.pipeline.base import QueryRouter
 from src.rag.pipeline.models import QueryItem, RouteDecision
 from src.rag.pipeline.registry import ComponentRegistry
 
-DEFAULT_BRANCH_TOP_K = {"vi": 50, "en": 30, "zh": 20}
+DEFAULT_BRANCH_TOP_K = {"vi": 35, "en": 20, "zh": 10}
 
 
 @ComponentRegistry.register("router", "static")

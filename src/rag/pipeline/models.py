@@ -52,5 +52,5 @@ class RouteDecision:
     The current StaticRouter always returns the same fixed decision; a future
     learned router slots in here without the rest of the pipeline changing.
     """
-    branch_top_k: Dict[str, int]  # e.g. {"vi": 50, "en": 30, "zh": 20}
+    branch_top_k: Dict[str, int]  # e.g. {"vi": 35, "en": 20, "zh": 10}
     params: Dict[str, Any] = field(default_factory=dict)

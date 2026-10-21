@@ -40,6 +40,15 @@ class PipelineConfig:
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     fusion_rrf_k: int = 60
     branch_top_k: Optional[Dict[str, int]] = None  # None -> router's own default
+    # Cách chọn ứng viên sau khi các nhánh ngôn ngữ trả về:
+    # - "rrf": gộp các nhánh bằng RRF, giữ fusion_top_k, rerank, lấy rerank_top_k.
+    # - "branch-rerank" (mặc định): router lấy vi 35 / en 20 / zh 10, rerank từng
+    #   nhánh, giữ branch_keep[lang] tốt nhất của mỗi nhánh (ghép lại thành 50),
+    #   xếp chung theo điểm rerank, lấy rerank_top_k.
+    #   Quota sống tới tận bước rerank, nên chunk en/zh luôn được reranker chấm
+    #   thay vì bị RRF cắt mất trước đó.
+    selection: str = "branch-rerank"
+    branch_keep: Dict[str, int] = field(default_factory=lambda: {"vi": 26, "en": 16, "zh": 8})
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -53,6 +62,8 @@ class PipelineConfig:
             "reranker_model": self.reranker_model,
             "fusion_rrf_k": self.fusion_rrf_k,
             "branch_top_k": self.branch_top_k,
+            "selection": self.selection,
+            "branch_keep": dict(self.branch_keep),
         }
 
 
@@ -142,13 +153,41 @@ class RetrievalPipeline:
 
         return branch_results, fused
 
+    def rerank_by_branch(self, query: QueryItem, branch_results: Dict[str, List[Candidate]],
+                         trace: Trace) -> Tuple[List[Candidate], List[Candidate]]:
+        """selection="branch-rerank": chấm mọi ứng viên của mọi nhánh, giữ
+        branch_keep[lang] tốt nhất mỗi nhánh, rồi xếp chung theo điểm rerank.
+
+        Chấm một lượt trên cả tập thay vì ba lượt riêng: cùng model, cùng câu hỏi
+        nên điểm y hệt nhau, chỉ ít lần gọi GPU hơn. Cũng vì điểm cùng thước đo
+        nên bước "rerank lại 50 ứng viên" chính là sắp xếp theo điểm đã có - chấm
+        lại lần hai bằng cùng model sẽ ra đúng các con số đó.
+
+        Trả (50 ứng viên đã chọn, top rerank_top_k)."""
+        seen: Dict[str, Candidate] = {}
+        for lang, cands in branch_results.items():
+            for c in cands:
+                seen.setdefault(str(c.chunk_id), c)
+        pool = list(seen.values())
+        with trace.span("rerank.branches", params=self.reranker.get_params(), n_in=len(pool)) as span:
+            scored = self.reranker.rerank(query, pool, top_k=len(pool))
+            kept: List[Candidate] = []
+            for lang, keep in self.config.branch_keep.items():
+                kept += [c for c in scored if c.branch == lang][:keep]
+            kept.sort(key=lambda c: c.rerank_score, reverse=True)
+            span.n_out = len(kept)
+        return kept, kept[: self.config.rerank_top_k]
+
     def run(self, query: QueryItem, parallel_retrieval: bool = True) -> "PipelineResult":
         trace = Trace(query_id=query.id, query_text=query.text)
         branch_results, fused = self.retrieve_and_fuse(query, trace, parallel_retrieval)
 
-        with trace.span("rerank", params=self.reranker.get_params(), n_in=len(fused)) as span:
-            reranked = self.reranker.rerank(query, fused, top_k=self.config.rerank_top_k)
-            span.n_out = len(reranked)
+        if self.config.selection == "branch-rerank":
+            fused, reranked = self.rerank_by_branch(query, branch_results, trace)
+        else:
+            with trace.span("rerank", params=self.reranker.get_params(), n_in=len(fused)) as span:
+                reranked = self.reranker.rerank(query, fused, top_k=self.config.rerank_top_k)
+                span.n_out = len(reranked)
 
         trace.finish()
         return PipelineResult(
