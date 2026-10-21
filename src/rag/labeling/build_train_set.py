@@ -32,6 +32,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from src.rag.labeling.judge import SCORE_WEIGHT
+
 _WORD = re.compile(r"[0-9a-zA-ZÀ-ỹ]+")
 
 
@@ -98,7 +100,9 @@ def main(argv=None) -> int:
             if not c.get("t2_judged"):
                 st["bo_qua_chua_cham"] += 1
                 continue
-            w = c.get("weight")
+            # Tính lại từ điểm thay vì đọc `weight` đã lưu: file chấm cũ có thể ghi
+            # theo bảng trọng số cũ (ví dụ điểm 2 = 0.6 trước khi đổi thành 0.4).
+            w = SCORE_WEIGHT.get(c.get("t2_score"))
             if w is None:
                 st["bo_qua_diem_1_hoac_hong"] += 1
                 continue

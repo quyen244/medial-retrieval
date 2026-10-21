@@ -34,6 +34,10 @@ class BgeM3Embedder:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.use_fp16 = use_fp16 and self.device.startswith("cuda")
         self.model = BGEM3FlagModel(model_name, use_fp16=self.use_fp16, devices=[self.device])
+        # Gọi từ nhiều luồng (nhiều query song song) phải lần lượt: tokenizer không
+        # an toàn đa luồng.
+        import threading
+        self._lock = threading.Lock()
         self.max_length = max_length
 
     def encode(
@@ -48,10 +52,11 @@ class BgeM3Embedder:
         (accepts str or List[str], returns one vector or a 2D array)."""
         single = isinstance(texts, str)
         texts_list = [texts] if single else list(texts)
-        out = self.model.encode(
-            texts_list, return_dense=True, return_sparse=False, return_colbert_vecs=False,
-            max_length=self.max_length, batch_size=batch_size,
-        )
+        with self._lock:
+            out = self.model.encode(
+                texts_list, return_dense=True, return_sparse=False, return_colbert_vecs=False,
+                max_length=self.max_length, batch_size=batch_size,
+            )
         dense = out["dense_vecs"]
         return dense[0] if single else dense
 
@@ -59,10 +64,11 @@ class BgeM3Embedder:
         self, texts: List[str], batch_size: int = 4
     ) -> Tuple[np.ndarray, List[Dict[str, float]]]:
         """Dense + sparse (lexical_weights) from one forward pass."""
-        out = self.model.encode(
-            list(texts), return_dense=True, return_sparse=True, return_colbert_vecs=False,
-            max_length=self.max_length, batch_size=batch_size,
-        )
+        with self._lock:
+            out = self.model.encode(
+                list(texts), return_dense=True, return_sparse=True, return_colbert_vecs=False,
+                max_length=self.max_length, batch_size=batch_size,
+            )
         return out["dense_vecs"], out["lexical_weights"]
 
     @staticmethod

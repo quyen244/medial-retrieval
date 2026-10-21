@@ -35,12 +35,24 @@ class CrossEncoderReranker(Reranker):
         self.fp16 = fp16 and torch.cuda.is_available()
         kwargs = {"model_kwargs": {"torch_dtype": torch.float16}} if self.fp16 else {}
         self.model = CrossEncoder(model_name, device=device, max_length=max_length, **kwargs)
+        # Tokenizer "fast" của HF không an toàn khi nhiều luồng cùng gọi
+        # ("Already borrowed"); khoá lại để nhiều query chạy song song được.
+        import threading
+        self._lock = threading.Lock()
+
+    def score_pairs(self, pairs: List[tuple]) -> List[float]:
+        """Chấm một lô cặp (câu hỏi, đoạn văn) bất kỳ trong MỘT lần gọi model, kể
+        cả các cặp thuộc câu hỏi khác nhau - điểm từng cặp độc lập với nhau."""
+        if not pairs:
+            return []
+        with self._lock:
+            return [float(s) for s in self.model.predict(pairs, batch_size=32)]
 
     def rerank(self, query: QueryItem, candidates: List[Candidate], top_k: int) -> List[Candidate]:
         if not candidates:
             return []
         pairs = [(query.text, c.content) for c in candidates]
-        scores = self.model.predict(pairs, batch_size=32)
+        scores = self.score_pairs(pairs)
         for c, score in zip(candidates, scores):
             c.rerank_score = float(score)
         ranked = sorted(candidates, key=lambda c: c.rerank_score, reverse=True)

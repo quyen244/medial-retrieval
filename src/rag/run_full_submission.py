@@ -28,7 +28,8 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from src.ingestion.utils import get_dataset
 from src.rag.embedding import BgeM3Embedder
 from src.rag.pipeline.models import QueryItem
-from src.rag.pipeline.multiquery import MultiQueryConfig, MultiQueryPipeline, load_augmented
+from src.rag.pipeline.multiquery import (MultiQueryConfig, MultiQueryPipeline, line_texts,
+                                         load_augmented, unit_texts)
 from src.rag.pipeline.pipeline import PipelineConfig, RetrievalPipeline
 from src.rag.pipeline.submission import empty_submission_entry, result_to_submission_entry, result_to_top_record
 from src.rag.vectorstore import VectorStore
@@ -95,6 +96,9 @@ def main():
     parser.add_argument("--branch-quota", choices=["fixed", "sqrt"], default="fixed",
                         help="fixed = vi 35 / en 20 / zh 10, giữ 26 / 16 / 8 (mặc định); sqrt = chia 65 ứng "
                              "viên và 50 chunk giữ theo căn bậc hai số chunk mỗi ngôn ngữ trong collection")
+    parser.add_argument("--workers", type=int, default=4,
+                        help="số query xử lý song song. Gọi Qdrant của query này chồng lên lúc GPU "
+                             "rerank query khác; GPU vẫn được gọi lần lượt nên kết quả không đổi")
     parser.add_argument("--reranker-model", type=str, default=None,
                         help="model reranker: tên trên HF hoặc thư mục local, ví dụ ./models/medical-reranker "
                              "(mặc định BAAI/bge-reranker-v2-m3)")
@@ -188,24 +192,48 @@ def main():
         flat_params["num_queries"] = len(rows)
         mlflow.log_params(flat_params)
 
+        # Encode trước MỌI chuỗi truy xuất theo lô 32, thay vì encode từng chuỗi lúc
+        # chạy từng query. Vector y hệt nên kết quả không đổi.
+        todo_rows = [r for r in rows if r["id"] not in done]
+        texts: list = []
+        for r in todo_rows:
+            rec = augmented.get(int(r["id"])) if args.augmented else None
+            if rec:
+                texts += (line_texts(rec, runner.config.max_lines) if runner.config.mode == "lines"
+                          else unit_texts(rec))
+            else:
+                texts.append(r["query"])
+        t_enc = time.perf_counter()
+        if config.retriever == "qdrant-hybrid":
+            n_enc = vectorstore.prime_hybrid(texts, batch_size=32)
+        else:
+            n_enc = vectorstore.prime_dense(texts, batch_size=32)
+        console.print(f"[full_submission] encode trước {n_enc} chuỗi truy xuất trong {time.perf_counter() - t_enc:.0f}s")
+
+        def work(row):
+            query = QueryItem(id=row["id"], text=row["query"])
+            try:
+                return runner.run(query)
+            except Exception as first:
+                # Lỗi tạm (Qdrant quá tải, timeout): thử lại một lần.
+                console.print(f"[full_submission] query {row['id']}: {type(first).__name__}, thử lại sau 10s")
+                time.sleep(10)
+                return runner.run(query)
+
         columns = [SpinnerColumn(), TextColumn("{task.description}"), BarColumn(), MofNCompleteColumn(),
                    TimeElapsedColumn(), TimeRemainingColumn()]
-        with Progress(*columns, console=console) as progress:
+        import concurrent.futures as cf
+        with Progress(*columns, console=console) as progress, \
+                cf.ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
             task = progress.add_task("running queries", total=len(rows))
-            for row in rows:
+            progress.update(task, advance=len(rows) - len(todo_rows))
+            futures = {pool.submit(work, r): r for r in todo_rows}
+            for fut in cf.as_completed(futures):
+                row = futures[fut]
                 qid = row["id"]
                 progress.update(task, advance=1)
-                if qid in done:
-                    continue
-                query = QueryItem(id=qid, text=row["query"])
                 try:
-                    try:
-                        out = runner.run(query)
-                    except Exception as first:
-                        # Lỗi tạm (Qdrant quá tải, timeout): thử lại một lần.
-                        console.print(f"[full_submission] query {qid}: {type(first).__name__}, thử lại sau 10s")
-                        time.sleep(10)
-                        out = runner.run(query)
+                    out = fut.result()
                     if getattr(out, "used_fallback", False):
                         n_fallback += 1
                     if getattr(out, "n_union", 0):

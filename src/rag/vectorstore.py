@@ -358,6 +358,17 @@ class VectorStore:
                     raise
                 time.sleep(0.5 * 2 ** i)
 
+    def prime_dense(self, texts, batch_size: int = 32) -> int:
+        """Encode trước vector dense cho nhiều câu theo lô, để pipeline lấy ra dùng
+        thay vì encode từng câu (lô 1) lúc chạy. Kết quả tìm kiếm không đổi."""
+        cache = self.__dict__.setdefault("_dense_cache", {})
+        todo = list(dict.fromkeys(t for t in texts if t not in cache))
+        if not todo:
+            return 0
+        for t, v in zip(todo, self.encoder.encode(todo, normalize_embeddings=True, batch_size=batch_size)):
+            cache[t] = v.tolist()
+        return len(todo)
+
     def prime_hybrid(self, texts, batch_size: int = 32) -> int:
         """Encode trước dense + sparse cho nhiều câu theo lô, giữ trong bộ nhớ để
         hybrid_search dùng lại thay vì encode từng câu một (lô 1). Kết quả tìm

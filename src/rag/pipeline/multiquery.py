@@ -277,7 +277,7 @@ class MultiQueryPipeline:
         # chunk_id -> {"sub1": điểm, ...}: điểm theo sub-query, giữ riêng vì bước
         # rerank câu gốc phía sau ghi rerank_score lên chính các object này.
         sub_scores: Dict[str, Dict[str, float]] = {}
-        n_sub = 0
+        subs: List[tuple] = []  # (câu sub-query tự nhiên, ứng viên của nó)
         for i, branches in enumerate(unit_branches):
             kind, _, natural = specs[i] if use_sub else ("", "", "")
             if kind != "sub":
@@ -288,21 +288,36 @@ class MultiQueryPipeline:
             for cands in branches.values():
                 for c in cands:
                     seen.setdefault(str(c.chunk_id), c)
-            sub_query = QueryItem(id=query.id, text=natural, metadata=dict(query.metadata))
-            with trace.span(f"unit{i}.rerank.sub", params=self.pipeline.reranker.get_params(),
-                            n_in=len(seen)) as span:
-                # Chấm hết ứng viên của sub-query để lưu đủ điểm, rồi mới cắt top-k.
-                scored = self.pipeline.reranker.rerank(sub_query, list(seen.values()),
-                                                       top_k=len(seen))
-                span.n_out = min(len(scored), cfg.sub_rerank_top_k)
-            n_sub += 1
-            key = f"sub{n_sub}"
-            for c in scored:
-                sub_scores.setdefault(str(c.chunk_id), {})[key] = c.rerank_score
-            scored = scored[: cfg.sub_rerank_top_k]
-            slot_ids.append([str(c.chunk_id) for c in scored[: cfg.slots_per_sub]])
-            for c in scored:
-                by_branch.setdefault(c.branch, []).append(c)
+            subs.append((natural, list(seen.values())))
+
+        if subs:
+            # Chấm ứng viên của MỌI sub-query trong một lần gọi reranker (~195 cặp)
+            # thay vì ba lần ~65 cặp: GPU chạy lô đầy hơn, điểm từng cặp không đổi.
+            scorer = getattr(self.pipeline.reranker, "score_pairs", None)
+            with trace.span("rerank.sub", params=self.pipeline.reranker.get_params(),
+                            n_in=sum(len(cs) for _, cs in subs)) as span:
+                if scorer is not None:
+                    flat = scorer([(nat, c.content) for nat, cs in subs for c in cs])
+                    groups, k = [], 0
+                    for nat, cs in subs:
+                        groups.append(flat[k:k + len(cs)])
+                        k += len(cs)
+                else:
+                    groups = []
+                    for nat, cs in subs:
+                        self.pipeline.reranker.rerank(QueryItem(id=query.id, text=nat), cs, top_k=len(cs))
+                        groups.append([c.rerank_score for c in cs])
+                span.n_out = len(subs)
+            for n, ((nat, cs), sc) in enumerate(zip(subs, groups), 1):
+                key = f"sub{n}"
+                for c, s in zip(cs, sc):
+                    c.rerank_score = float(s)
+                    sub_scores.setdefault(str(c.chunk_id), {})[key] = float(s)
+                # Chấm hết ứng viên để lưu đủ điểm, rồi mới cắt top-k.
+                scored = sorted(cs, key=lambda c: c.rerank_score, reverse=True)[: cfg.sub_rerank_top_k]
+                slot_ids.append([str(c.chunk_id) for c in scored[: cfg.slots_per_sub]])
+                for c in scored:
+                    by_branch.setdefault(c.branch, []).append(c)
 
         rerank_query = query
         if cfg.rerank_with_augmented:
@@ -356,11 +371,18 @@ class MultiQueryPipeline:
         # ngữ rồi. Cho cả 4 lượt chạy song song nữa là nhân bốn số truy vấn
         # đồng thời vào Qdrant và số lần encode trên GPU - đáng làm nhưng phải
         # đo trước, không bật mặc định.
-        for i, text in enumerate(texts):
+        # Các unit chỉ gọi Qdrant (vector đã encode sẵn) nên chạy song song được;
+        # ex.map giữ đúng thứ tự unit.
+        def one_unit(i_text):
+            i, text = i_text
             unit_query = QueryItem(id=query.id, text=text, metadata=dict(query.metadata))
-            branches, fused = self.pipeline.retrieve_and_fuse(
-                unit_query, trace, parallel_retrieval, span_prefix=f"unit{i}"
-            )
+            return self.pipeline.retrieve_and_fuse(unit_query, trace, parallel_retrieval,
+                                                   span_prefix=f"unit{i}")
+
+        import concurrent.futures as cf
+        with cf.ThreadPoolExecutor(max_workers=min(4, len(texts))) as ex:
+            unit_out = list(ex.map(one_unit, enumerate(texts)))
+        for i, (branches, fused) in enumerate(unit_out):
             per_unit.append(fused)
             unit_branches.append(branches)
             # Giữ kết quả nhánh của lượt ĐẦU cho PipelineResult: đó là lượt

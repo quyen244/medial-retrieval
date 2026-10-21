@@ -137,9 +137,11 @@ class RetrievalPipeline:
         if self.config.retriever == "qdrant-hybrid" and hasattr(self.vectorstore, "prime_hybrid"):
             self.vectorstore.prime_hybrid([query.text])  # encode 1 lần cho cả 3 nhánh
         if self.config.retriever == "qdrant-language" and "dense_vec" not in (query.metadata or {}):
-            with trace.span(f"{p}encode", params={}, n_in=1) as span:
-                vec = self.vectorstore.encoder.encode(query.text, normalize_embeddings=True).tolist()
-                span.n_out = 1
+            vec = self.vectorstore.__dict__.get("_dense_cache", {}).get(query.text)
+            if vec is None:
+                with trace.span(f"{p}encode", params={}, n_in=1) as span:
+                    vec = self.vectorstore.encoder.encode(query.text, normalize_embeddings=True).tolist()
+                    span.n_out = 1
             query = QueryItem(id=query.id, text=query.text,
                               metadata={**(query.metadata or {}), "dense_vec": vec})
 
