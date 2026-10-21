@@ -31,7 +31,12 @@ class Candidate:
     retrieval_score: Optional[float] = None
     retrieval_rank: Optional[int] = None  # 1-based rank within its branch
     fusion_score: Optional[float] = None
-    rerank_score: Optional[float] = None
+    rerank_score: Optional[float] = None  # điểm reranker theo CÂU GỐC
+    # Query phân rã: điểm reranker theo từng sub-query đã tìm ra chunk này,
+    # khoá "sub1".."subN" theo thứ tự unit. Lưu riêng, không đè rerank_score.
+    sub_scores: Dict[str, float] = field(default_factory=dict)
+    # True nếu chunk vào bài nộp nhờ giữ chỗ cho sub-query.
+    reserved_slot: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

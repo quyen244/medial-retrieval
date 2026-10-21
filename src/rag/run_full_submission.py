@@ -80,7 +80,7 @@ def main():
                              "biến thể nên so sánh A/B/C vẫn công bằng.")
     parser.add_argument("--multiquery-mode", choices=["concat", "lines"], default="concat",
                         help="concat = mỗi unit một chuỗi ghép (B/B'); lines = mỗi target một lượt riêng "
-                             "rồi gộp RRF (C). Chỉ có tác dụng khi có --augmented")
+                             "rồi gộp RRF (C, tạm đóng băng). Chỉ có tác dụng khi có --augmented")
     parser.add_argument("--selection", choices=["rrf", "branch-rerank"], default=None,
                         help="mặc định branch-rerank: rerank từng nhánh, giữ vi 26 / en 16 / zh 8 rồi xếp "
                              "chung lấy top 20; rrf = luồng cũ, gộp nhánh bằng RRF lấy 50 rồi rerank")

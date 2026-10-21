@@ -52,6 +52,7 @@ class MultiQueryConfig:
     # "lines": mỗi dòng ngắn là một lượt truy xuất riêng (câu gốc, rồi từng
     # target vi; en; zh), gộp các lượt bằng RRF rồi mới rerank - biến thể C.
     # Không nhồi mọi thứ vào một vector nên dense không bị loãng.
+    # C TẠM ĐÓNG BĂNG (tới 14 lượt tìm mỗi query, quá tốn); không nằm trong kế hoạch nộp.
     mode: str = "concat"
     # Chỉ dùng ở mode "lines": số dòng tối đa mỗi query (chặn chi phí truy
     # xuất) và số ứng viên giữ lại sau RRF để đưa cho reranker.
@@ -150,6 +151,15 @@ def select_with_slots(kept: List[Candidate], slot_ids: List[List[str]], top_k: i
         if len(chosen) >= top_k:
             break
         chosen.setdefault(str(c.chunk_id), c)
+    for c in chosen.values():
+        c.reserved_slot = False
+    reserved = set()
+    for ids in slot_ids:
+        for cid in ids[:slots_per_sub]:
+            if cid in rank and rank[cid] <= max_rank:
+                reserved.add(cid)
+    for cid in reserved:
+        chosen[cid].reserved_slot = True
     final = sorted(chosen.values(), key=lambda c: c.rerank_score, reverse=True)
     return final[:top_k], n_rescued
 
@@ -264,6 +274,10 @@ class MultiQueryPipeline:
 
         by_branch: Dict[str, List[Candidate]] = {}
         slot_ids: List[List[str]] = []
+        # chunk_id -> {"sub1": điểm, ...}: điểm theo sub-query, giữ riêng vì bước
+        # rerank câu gốc phía sau ghi rerank_score lên chính các object này.
+        sub_scores: Dict[str, Dict[str, float]] = {}
+        n_sub = 0
         for i, branches in enumerate(unit_branches):
             kind, _, natural = specs[i] if use_sub else ("", "", "")
             if kind != "sub":
@@ -277,11 +291,15 @@ class MultiQueryPipeline:
             sub_query = QueryItem(id=query.id, text=natural, metadata=dict(query.metadata))
             with trace.span(f"unit{i}.rerank.sub", params=self.pipeline.reranker.get_params(),
                             n_in=len(seen)) as span:
-                # Điểm sub-query chỉ dùng để chọn trong nội bộ sub-query này; bước
-                # rerank câu gốc phía sau sẽ ghi đè rerank_score, nên lấy id ra ngay.
+                # Chấm hết ứng viên của sub-query để lưu đủ điểm, rồi mới cắt top-k.
                 scored = self.pipeline.reranker.rerank(sub_query, list(seen.values()),
-                                                       top_k=cfg.sub_rerank_top_k)
-                span.n_out = len(scored)
+                                                       top_k=len(seen))
+                span.n_out = min(len(scored), cfg.sub_rerank_top_k)
+            n_sub += 1
+            key = f"sub{n_sub}"
+            for c in scored:
+                sub_scores.setdefault(str(c.chunk_id), {})[key] = c.rerank_score
+            scored = scored[: cfg.sub_rerank_top_k]
             slot_ids.append([str(c.chunk_id) for c in scored[: cfg.slots_per_sub]])
             for c in scored:
                 by_branch.setdefault(c.branch, []).append(c)
@@ -290,6 +308,8 @@ class MultiQueryPipeline:
         if cfg.rerank_with_augmented:
             rerank_query = QueryItem(id=query.id, text=texts[0], metadata=dict(query.metadata))
         kept, reranked = self.pipeline.rerank_by_branch(rerank_query, by_branch, trace)
+        for c in kept:
+            c.sub_scores = dict(sub_scores.get(str(c.chunk_id), {}))
 
         n_rescued = 0
         if use_sub and slot_ids:
