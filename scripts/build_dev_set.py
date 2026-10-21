@@ -12,6 +12,9 @@
 
     python -m scripts.build_dev_set status     # đã chấm bao nhiêu
 
+    # 4. chấm một bài nộp bằng nhãn người (chỉ trên các query dev có trong bài)
+    python -m scripts.build_dev_set eval --submission tmp/sub/Bp.json
+
 Thang điểm giống bước 5: 3 trả lời trực tiếp và đầy đủ, 2 có bằng chứng hữu ích
 nhưng chưa đủ, 1 cùng chủ đề nhưng không trả lời được, 0 không liên quan.
 
@@ -184,6 +187,46 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_eval(args) -> int:
+    """Precision / recall / F2 mức chunk của một bài nộp trên dev set.
+
+    Chunk liên quan = human_score >= args.min_relevant. Bài nộp chỉ có chunk_text,
+    nên khớp theo (doc_id, chunk_text). Chunk nộp mà chưa có nhãn bị tính là
+    không liên quan (cận dưới) và được đếm riêng để biết dev set phủ đủ chưa.
+    Chỉ tính query đã chấm xong toàn bộ."""
+    dev = load_dev()
+    by_q: Dict[int, List[Dict[str, Any]]] = {}
+    for r in dev.values():
+        by_q.setdefault(int(r["query_id"]), []).append(r)
+    done_q = {q for q, rs in by_q.items() if all(r["human_score"] is not None for r in rs)}
+    sub = {int(e["id"]): e for e in json.load(open(args.submission, encoding="utf-8"))}
+    rows, unknown, submitted_total = [], 0, 0
+    for q in sorted(done_q):
+        e = sub.get(q)
+        if not e or not e["relevant_chunks"]:
+            continue
+        label = {(str(r["doc_id"]), r["content"]): r["human_score"] for r in by_q[q]}
+        rel = {k for k, v in label.items() if v >= args.min_relevant}
+        got = [(str(c["doc_id"]), c["chunk_text"]) for c in e["relevant_chunks"]]
+        unknown += sum(1 for g in got if g not in label)
+        submitted_total += len(got)
+        tp = sum(1 for g in got if g in rel)
+        p_ = tp / len(got) if got else 0.0
+        r_ = tp / len(rel) if rel else 0.0
+        f2 = 5 * p_ * r_ / (4 * p_ + r_) if (p_ + r_) else 0.0
+        rows.append((q, p_, r_, f2))
+    if not rows:
+        print("Không có query dev nào vừa chấm xong vừa có trong bài nộp.")
+        return 1
+    n = len(rows)
+    mean = lambda i: sum(r[i] for r in rows) / n
+    print(f"{n} query dev (đã chấm xong, có trong bài nộp) | chunk liên quan = điểm >= {args.min_relevant}")
+    print(f"P {mean(1):.3f} | R {mean(2):.3f} | F2 {mean(3):.3f}")
+    print(f"{unknown}/{submitted_total} chunk nộp chưa có nhãn (tính là không liên quan; "
+          f"nhiều thì số này thấp hơn thật - dev set chưa phủ các chunk bài này nộp)")
+    return 0
+
+
 def main(argv=None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -202,6 +245,10 @@ def main(argv=None) -> int:
     i.set_defaults(fn=cmd_import)
     s = sub.add_parser("status")
     s.set_defaults(fn=cmd_status)
+    ev = sub.add_parser("eval")
+    ev.add_argument("--submission", required=True)
+    ev.add_argument("--min-relevant", type=int, default=2, help="điểm tối thiểu để tính là liên quan")
+    ev.set_defaults(fn=cmd_eval)
     args = p.parse_args(argv)
     return args.fn(args)
 

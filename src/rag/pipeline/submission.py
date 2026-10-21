@@ -35,6 +35,35 @@ def result_to_submission_entry(result: PipelineResult) -> Dict[str, Any]:
     }
 
 
+def result_to_top_record(result: PipelineResult, stats: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Toàn bộ tập ứng viên cuối (50 chunk ở branch-rerank) kèm điểm, để lắp
+    nhiều kiểu bài nộp offline mà không chạy GPU lại (scripts/assemble_submission.py).
+
+    `submitted` = thứ tự chunk_id của bài nộp thật, nên lắp lại V1 k=20 phải ra
+    đúng bài đã nộp. `content` giữ nguyên văn vì bài nộp cần chunk_text y hệt."""
+    cands = sorted(result.fused, key=lambda c: (c.rerank_score is None, -(c.rerank_score or 0.0)))
+    return {
+        "id": int(result.query.id),
+        "query": result.query.text,
+        "submitted": [str(c.chunk_id) for c in result.reranked],
+        "stats": stats or {},
+        "candidates": [
+            {
+                "chunk_id": str(c.chunk_id),
+                "doc_id": str(c.doc_id),
+                "language": c.language,
+                "branch": c.branch,
+                "retrieval_rank": c.retrieval_rank,
+                "rerank_score": c.rerank_score,
+                "sub_scores": dict(getattr(c, "sub_scores", {}) or {}),
+                "reserved_slot": bool(getattr(c, "reserved_slot", False)),
+                "content": c.content,
+            }
+            for c in cands
+        ],
+    }
+
+
 def write_submission(results: List[PipelineResult], out_path: str) -> List[Dict[str, Any]]:
     entries = [result_to_submission_entry(r) for r in results]
     with open(out_path, "w", encoding="utf-8") as f:

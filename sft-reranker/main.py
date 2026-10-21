@@ -14,6 +14,8 @@ thứ tự tương đối, trong khi F2 cần nhiều positive mỗi query và c
 chỉnh được để đặt ngưỡng cutoff. Chưa đổi lúc này vì train.jsonl hiện còn ở dạng
 cặp phẳng, chưa có nhóm.
 """
+import os
+
 import torch
 from sentence_transformers import CrossEncoder
 from sentence_transformers.cross_encoder import CrossEncoderTrainer, CrossEncoderTrainingArguments
@@ -27,12 +29,20 @@ MODEL_ID = "BAAI/bge-reranker-v2-m3"
 # cắt mất đúng câu hỏi. Model hỗ trợ tới 8194 nên 1024 vẫn an toàn.
 MAX_LENGTH = 1024
 
-dataset = load_dataset(
-    'json',
-    data_files={
-        'train' : 'sft-reranker/train.jsonl'
-    }
-)
+# Dữ liệu thật do `python -m src.rag.labeling.build_train_set` sinh ra. Chưa có
+# thì rơi về 2 dòng mẫu trong thư mục này, chỉ đủ để chạy thử luồng.
+TRAIN_FILE = "data/labeling/train.jsonl"
+VAL_FILE = "data/labeling/val.jsonl"
+if not os.path.exists(TRAIN_FILE):
+    print(f"[!] Không thấy {TRAIN_FILE}, dùng dữ liệu mẫu sft-reranker/train.jsonl")
+    TRAIN_FILE, VAL_FILE = "sft-reranker/train.jsonl", None
+HAS_VAL = bool(VAL_FILE) and os.path.exists(VAL_FILE) and os.path.getsize(VAL_FILE) > 0
+
+data_files = {"train": TRAIN_FILE}
+if HAS_VAL:
+    data_files["validation"] = VAL_FILE
+dataset = load_dataset("json", data_files=data_files)
+print(f"[data] train {len(dataset['train'])} cặp" + (f", val {len(dataset['validation'])} cặp" if HAS_VAL else ", không có val"))
 
 
 model = CrossEncoder(
@@ -55,9 +65,10 @@ def train():
         bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
         # 568M tham số ở seq 1024 không vừa thoải mái trên 16GB nếu không bật.
         gradient_checkpointing=True,
-        eval_strategy="no",
-        save_strategy="best",
-        metric_for_best_model="eval_loss",
+        # save_strategy="best" cần eval; không có val thì lưu theo epoch.
+        eval_strategy="epoch" if HAS_VAL else "no",
+        save_strategy="best" if HAS_VAL else "epoch",
+        metric_for_best_model="eval_loss" if HAS_VAL else None,
         greater_is_better=False,
         report_to="none",
     )
@@ -66,6 +77,7 @@ def train():
         model=model,
         args=args,
         train_dataset=dataset["train"],
+        eval_dataset=dataset["validation"] if HAS_VAL else None,
         loss=loss,
     )
 

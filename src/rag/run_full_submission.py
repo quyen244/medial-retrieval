@@ -30,7 +30,7 @@ from src.rag.embedding import BgeM3Embedder
 from src.rag.pipeline.models import QueryItem
 from src.rag.pipeline.multiquery import MultiQueryConfig, MultiQueryPipeline, load_augmented
 from src.rag.pipeline.pipeline import PipelineConfig, RetrievalPipeline
-from src.rag.pipeline.submission import empty_submission_entry, result_to_submission_entry
+from src.rag.pipeline.submission import empty_submission_entry, result_to_submission_entry, result_to_top_record
 from src.rag.vectorstore import VectorStore
 
 console = Console()
@@ -69,6 +69,10 @@ def main():
     parser.add_argument("--qdrant-path", type=str, default=None)
     parser.add_argument("--checkpoint", type=str, default="tmp/smoke_test/full_submission_checkpoint.jsonl")
     parser.add_argument("--out", type=str, default="tmp/smoke_test/full_submission.json")
+    parser.add_argument("--top50", type=str, default=None,
+                        help="nơi lưu toàn bộ ứng viên cuối kèm điểm cho mỗi query (mặc định: "
+                             "<checkpoint>_top50.jsonl), dùng cho scripts/assemble_submission.py")
+    parser.add_argument("--no-top50", action="store_true", help="không lưu file top 50")
     parser.add_argument("--limit", type=int, default=None, help="Process only the first N queries (debug use)")
     # Thí nghiệm augment + decompose. Không có cờ này thì chạy baseline một lượt
     # với câu gốc.
@@ -119,6 +123,10 @@ def main():
 
     checkpoint_path = Path(args.checkpoint)
     done = load_checkpoint(checkpoint_path)
+    top50_path = None if args.no_top50 else (
+        Path(args.top50) if args.top50 else checkpoint_path.with_name(checkpoint_path.stem + "_top50.jsonl"))
+    if top50_path:
+        console.print(f"[full_submission] lưu ứng viên kèm điểm vào {top50_path}")
     console.print(f"[full_submission] checkpoint: {checkpoint_path} ({len(done)} queries already done)")
 
     config = PipelineConfig()
@@ -189,6 +197,9 @@ def main():
                     if getattr(out, "n_union", 0):
                         union_sizes.append(out.n_union)
                     entry = result_to_submission_entry(unwrap(out))
+                    if top50_path:
+                        append_checkpoint(top50_path, result_to_top_record(
+                            unwrap(out), getattr(out, "stats", None)))
                     if not entry["relevant_chunks"]:
                         n_empty += 1
                     else:
