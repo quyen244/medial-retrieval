@@ -95,6 +95,9 @@ def main():
     parser.add_argument("--branch-quota", choices=["fixed", "sqrt"], default="fixed",
                         help="fixed = vi 35 / en 20 / zh 10, giữ 26 / 16 / 8 (mặc định); sqrt = chia 65 ứng "
                              "viên và 50 chunk giữ theo căn bậc hai số chunk mỗi ngôn ngữ trong collection")
+    parser.add_argument("--reranker-model", type=str, default=None,
+                        help="model reranker: tên trên HF hoặc thư mục local, ví dụ ./models/medical-reranker "
+                             "(mặc định BAAI/bge-reranker-v2-m3)")
     parser.add_argument("--retriever", type=str, default=None,
                         help="qdrant-language (dense, mặc định) hoặc qdrant-hybrid (dense+sparse)")
     parser.add_argument("--max-rerank-candidates", type=int, default=None,
@@ -134,6 +137,11 @@ def main():
         config.retriever = args.retriever
     if args.selection:
         config.selection = args.selection
+    if args.reranker_model:
+        if not args.reranker_model.startswith(("BAAI/", "http")) and not Path(args.reranker_model).exists():
+            raise SystemExit(f"Không thấy model reranker ở {args.reranker_model}")
+        config.reranker_model = args.reranker_model
+        console.print(f"[full_submission] reranker: {config.reranker_model}")
     if args.branch_quota == "sqrt":
         from qdrant_client import models as qm
         from src.rag.pipeline.components.routing import DEFAULT_BRANCH_TOP_K, quota_from_counts
