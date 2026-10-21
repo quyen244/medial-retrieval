@@ -3,8 +3,8 @@ và thử xem fp16 / encode theo lô có đáng làm không.
 
     python -m scripts.profile_inference --n 20 --augmented data/augment_v2/augmented.jsonl
 
-Chạy 3 chế độ trên N query đầu: A (câu gốc), B' (chuỗi ghép, mode concat), C
-(từng dòng, mode lines). Với mỗi chế độ in thời gian cộng dồn theo bước. Sau đó:
+Chạy 2 chế độ trên N query đầu: A (câu gốc), B' (chuỗi ghép, mode concat).
+C (mode lines) tạm đóng băng nên không đo. Với mỗi chế độ in thời gian cộng dồn theo bước. Sau đó:
   - chạy lại B' với encoder + reranker fp16, so thời gian và độ chồng lấn top-k
     với bản fp32;
   - đo riêng encode theo lô (1/16/32) và rerank với batch_size khác nhau.
@@ -138,7 +138,6 @@ def main():
     runners = {
         "A  (câu gốc)": pipeline,
         "B' (concat)": MultiQueryPipeline(pipeline, augmented, MultiQueryConfig(mode="concat")),
-        "C  (lines)": MultiQueryPipeline(pipeline, augmented, MultiQueryConfig(mode="lines")),
     }
 
     stage = Stage()
@@ -165,7 +164,7 @@ def main():
     torch.cuda.empty_cache()
     vs.encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=True, max_length=1024)
     pipeline.reranker.model = CrossEncoder(
-        pipeline.config.reranker_model, device=device, max_length=512,
+        pipeline.config.reranker_model, device=device, max_length=pipeline.config.reranker_max_length,
         model_kwargs={"torch_dtype": torch.float16},
     )
     for r in runners.values():

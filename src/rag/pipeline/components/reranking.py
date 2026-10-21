@@ -24,7 +24,7 @@ DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 @ComponentRegistry.register("reranker", "cross-encoder")
 class CrossEncoderReranker(Reranker):
-    def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, device: str = None, max_length: int = 512):
+    def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, device: str = None, max_length: int = 1024):
         self.model_name = model_name
         self.max_length = max_length
         self.model = CrossEncoder(model_name, device=device, max_length=max_length)

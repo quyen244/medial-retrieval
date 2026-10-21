@@ -22,6 +22,23 @@ from src.rag.pipeline.registry import ComponentRegistry
 DEFAULT_BRANCH_TOP_K = {"vi": 35, "en": 20, "zh": 10}
 
 
+def quota_from_counts(counts: Dict[str, int], total: int, power: float = 0.5) -> Dict[str, int]:
+    """Chia `total` ứng viên theo phân bố corpus, mỗi ngôn ngữ nặng count**power.
+
+    power=1: đúng tỉ lệ corpus (ngôn ngữ ít gần như bị loại). power=0.5 (căn
+    bậc hai): vẫn theo corpus nhưng nâng ngôn ngữ ít. Làm tròn theo phần dư lớn
+    nhất để tổng đúng bằng `total`; mỗi ngôn ngữ có trong corpus được ít nhất 1.
+    """
+    weights = {lang: max(c, 0) ** power for lang, c in counts.items() if c > 0}
+    s = sum(weights.values())
+    raw = {lang: total * w / s for lang, w in weights.items()}
+    out = {lang: max(1, int(v)) for lang, v in raw.items()}
+    rest = total - sum(out.values())
+    for lang in sorted(raw, key=lambda l: (-(raw[l] - int(raw[l])), l))[:max(rest, 0)]:
+        out[lang] += 1
+    return out
+
+
 @ComponentRegistry.register("router", "static")
 class StaticRouter(QueryRouter):
     """Baseline: always routes to every configured language branch with a

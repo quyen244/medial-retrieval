@@ -38,6 +38,9 @@ class PipelineConfig:
     rerank_top_k: int = 20
     languages: List[str] = field(default_factory=lambda: ["vi", "en", "zh"])
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    # Tính cho CẢ cặp (câu hỏi + chunk). 512 cắt mất phần lớn chunk khi câu hỏi dài;
+    # bge-reranker-v2-m3 hỗ trợ tới 8192, đổi lại chậm hơn.
+    reranker_max_length: int = 1024
     fusion_rrf_k: int = 60
     branch_top_k: Optional[Dict[str, int]] = None  # None -> router's own default
     # Cách chọn ứng viên sau khi các nhánh ngôn ngữ trả về:
@@ -60,6 +63,7 @@ class PipelineConfig:
             "rerank_top_k": self.rerank_top_k,
             "languages": list(self.languages),
             "reranker_model": self.reranker_model,
+            "reranker_max_length": self.reranker_max_length,
             "fusion_rrf_k": self.fusion_rrf_k,
             "branch_top_k": self.branch_top_k,
             "selection": self.selection,
@@ -78,7 +82,8 @@ class RetrievalPipeline:
         ) if config.branch_top_k else self._build("router", config.router)
         self.fusion: FusionStrategy = self._build("fusion", config.fusion, k=config.fusion_rrf_k) \
             if config.fusion == "rrf" else self._build("fusion", config.fusion)
-        self.reranker: Reranker = self._build("reranker", config.reranker, model_name=config.reranker_model)
+        self.reranker: Reranker = self._build("reranker", config.reranker, model_name=config.reranker_model,
+                                              max_length=config.reranker_max_length)
 
         self.retrievers: Dict[str, Retriever] = {
             lang: self._build("retriever", config.retriever, vectorstore=vectorstore, language=lang)

@@ -88,6 +88,9 @@ def main():
                         help="tắt rerank theo sub-query + giữ chỗ (query phân rã, mode concat)")
     parser.add_argument("--sub-rerank-top-k", type=int, default=20,
                         help="số ứng viên mỗi sub-query giữ lại sau khi tự rerank")
+    parser.add_argument("--branch-quota", choices=["fixed", "sqrt"], default="fixed",
+                        help="fixed = vi 35 / en 20 / zh 10, giữ 26 / 16 / 8 (mặc định); sqrt = chia 65 ứng "
+                             "viên và 50 chunk giữ theo căn bậc hai số chunk mỗi ngôn ngữ trong collection")
     parser.add_argument("--retriever", type=str, default=None,
                         help="qdrant-language (dense, mặc định) hoặc qdrant-hybrid (dense+sparse)")
     parser.add_argument("--max-rerank-candidates", type=int, default=None,
@@ -123,6 +126,20 @@ def main():
         config.retriever = args.retriever
     if args.selection:
         config.selection = args.selection
+    if args.branch_quota == "sqrt":
+        from qdrant_client import models as qm
+        from src.rag.pipeline.components.routing import DEFAULT_BRANCH_TOP_K, quota_from_counts
+        counts = {
+            lang: vectorstore.client.count(
+                collection_name=args.collection, exact=True,
+                count_filter=qm.Filter(must=[qm.FieldCondition(key="language", match=qm.MatchValue(value=lang))]),
+            ).count
+            for lang in config.languages
+        }
+        config.branch_top_k = quota_from_counts(counts, sum(DEFAULT_BRANCH_TOP_K.values()))
+        config.branch_keep = quota_from_counts(counts, sum(config.branch_keep.values()))
+        console.print(f"[full_submission] chunk theo ngôn ngữ: {counts}")
+        console.print(f"[full_submission] quota căn bậc hai: lấy {config.branch_top_k}, giữ {config.branch_keep}")
     pipeline = RetrievalPipeline(vectorstore, config)
 
     runner = pipeline
