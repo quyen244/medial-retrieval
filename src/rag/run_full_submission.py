@@ -13,7 +13,7 @@ outright. This script therefore:
     in the official set, in order, before calling the run complete.
 
 Usage:
-    python -m src.rag.run_full_submission --collection vibiomir_smoke_test --qdrant-url http://localhost:6333
+    python -m src.rag.run_full_submission --collection medical_documents --qdrant-url http://localhost:6333
 """
 import argparse
 import json
@@ -70,8 +70,8 @@ def main():
     parser.add_argument("--checkpoint", type=str, default="tmp/smoke_test/full_submission_checkpoint.jsonl")
     parser.add_argument("--out", type=str, default="tmp/smoke_test/full_submission.json")
     parser.add_argument("--limit", type=int, default=None, help="Process only the first N queries (debug use)")
-    # Thí nghiệm augment + decompose. Không có cờ này thì chạy y hệt baseline
-    # như trước, không đổi một dòng hành vi nào.
+    # Thí nghiệm augment + decompose. Không có cờ này thì chạy baseline một lượt
+    # với câu gốc.
     parser.add_argument("--augmented", type=str, default=None,
                         help="data/augment/augmented.jsonl -> bật nhánh nhiều truy vấn")
     parser.add_argument("--pad-empty", action="store_true",
@@ -94,7 +94,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     console.print(f"[full_submission] device={device}")
 
-    # fp32, not fp16: measured slower on this GTX 1660 Ti (no Tensor Cores) - see report.
+    # fp32: chỉ encode vài trăm câu hỏi ngắn nên chi phí không đáng kể.
     encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=False, max_length=1024)
     vectorstore = VectorStore(encoder, url=args.qdrant_url, path=args.qdrant_path, collection_name=args.collection)
 

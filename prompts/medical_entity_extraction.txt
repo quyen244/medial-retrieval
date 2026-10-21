@@ -15,6 +15,7 @@ Thực hiện suy luận nội bộ:
 - Giữ nguyên ngôn ngữ và cụm từ xuất hiện trong văn bản gốc.
 - Phân biệt rõ tên bệnh và triệu chứng.
 - Triệu chứng phải GIỮ NGUYÊN vị trí cơ thể và bộ phận đi kèm trong câu ("chảy máu chân răng", không rút gọn thành "chảy máu"; "đau thượng vị", không rút gọn thành "đau"). Bỏ vị trí đi mất nghĩa y khoa của triệu chứng.
+- Khi chủ thể hoặc bộ phận được nêu ở đầu câu rồi lược đi ở các vế sau ("Răng có lỗ chấm đen, chảy máu khi thức dậy" - ai chảy máu? răng), hãy bổ sung lại vào từng triệu chứng để mỗi triệu chứng tự đứng được. Không thêm gì ngoài chủ thể đã có trong câu.
 - Cụm chỉ thời điểm hay hoàn cảnh ("khi thức dậy", "sau ăn") chỉ giữ khi nó là một phần của triệu chứng; không dùng nó để thay cho vị trí.
 - Không tự suy ra tên thuốc, bệnh hoặc triệu chứng.
 - Chỉ trích xuất các thực thể xuất hiện rõ ràng trong văn bản.
@@ -55,15 +56,15 @@ Thực hiện suy luận nội bộ:
 }
 
 **Input:**
-"Sáng nào ngủ dậy em cũng bị chảy máu chân răng, mấy chiếc răng hàm còn có lỗ đen nhỏ. Em nên đi khám ở đâu?"
+"Răng có lỗ chấm đen, chảy máu khi thức dậy là sao?"
 
 **Output:**
 {
   "disease": [],
   "medication": [],
   "symptom": [
-    "chảy máu chân răng khi ngủ dậy",
-    "răng hàm có lỗ đen nhỏ"
+    "răng có lỗ chấm đen",
+    "răng chảy máu khi thức dậy"
   ]
 }
 
