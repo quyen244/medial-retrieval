@@ -4,9 +4,27 @@
   "relevant_chunks": [{"doc_id": "<doc id>", "chunk_text": "<verbatim text>"}]}]
 """
 import json
+import re
 from typing import Any, Dict, List
 
 from src.rag.pipeline.pipeline import PipelineResult
+
+
+# Ký tự thoát của markdown (`\-`, `\*`, `\.`...) do bước crawl sinh ra; trang gốc
+# không có dấu `\` này. BTC yêu cầu chunk_text là nội dung trích từ tài liệu gốc.
+_MD_ESCAPE = re.compile(r"\\([\\`*_{}\[\]()#+\-.!|>~<])")
+
+
+def submission_doc_id(doc_id: Any) -> Any:
+    """doc_id theo đặc tả BTC: trường `id` KIỂU SỐ NGUYÊN của links_corpus.parquet."""
+    try:
+        return int(doc_id)
+    except (TypeError, ValueError):
+        return doc_id
+
+
+def submission_chunk_text(text: str) -> str:
+    return _MD_ESCAPE.sub(r"\1", text or "")
 
 
 def empty_submission_entry(query_id: int) -> Dict[str, Any]:
@@ -22,11 +40,11 @@ def result_to_submission_entry(result: PipelineResult) -> Dict[str, Any]:
     seen = set()
     chunks = []
     for c in result.reranked:
-        doc_id_str = str(c.doc_id)
-        if doc_id_str not in seen:
-            seen.add(doc_id_str)
-            doc_ids_seen.append(doc_id_str)
-        chunks.append({"doc_id": doc_id_str, "chunk_text": c.content})
+        doc_id = submission_doc_id(c.doc_id)
+        if doc_id not in seen:
+            seen.add(doc_id)
+            doc_ids_seen.append(doc_id)
+        chunks.append({"doc_id": doc_id, "chunk_text": submission_chunk_text(c.content)})
 
     return {
         "id": int(result.query.id),

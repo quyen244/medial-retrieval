@@ -27,6 +27,8 @@ import sys
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
+from src.rag.pipeline.submission import submission_chunk_text, submission_doc_id
+
 
 def load_top50(path: str) -> Dict[int, Dict[str, Any]]:
     out = {}
@@ -44,9 +46,11 @@ def score(c: Dict[str, Any]) -> float:
 
 
 def to_entry(qid: int, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
-    docs = list(OrderedDict.fromkeys(str(c["doc_id"]) for c in chunks))
+    """Cùng định dạng với bài nộp gốc (submission.result_to_submission_entry)."""
+    docs = list(OrderedDict.fromkeys(submission_doc_id(c["doc_id"]) for c in chunks))
     return {"id": qid, "relevant_docs": docs,
-            "relevant_chunks": [{"doc_id": str(c["doc_id"]), "chunk_text": c["content"]} for c in chunks]}
+            "relevant_chunks": [{"doc_id": submission_doc_id(c["doc_id"]),
+                                 "chunk_text": submission_chunk_text(c["content"])} for c in chunks]}
 
 
 def submitted_chunks(rec: Dict[str, Any]) -> List[Dict[str, Any]]:
