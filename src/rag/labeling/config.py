@@ -92,6 +92,9 @@ class LabelingConfig:
     llm_max_tokens: int = 640
     # Số request đồng thời tới vLLM (cũng là số luồng search Qdrant song song).
     llm_concurrency: int = 24
+    # Số luồng search Qdrant song song, tách riêng khỏi llm_concurrency: 24 luồng
+    # dùng chung một client HTTP từng làm Qdrant client báo "Bad file descriptor".
+    search_concurrency: int = 8
     llm_max_retries: int = 3
 
     # Nhiệt độ chấm điểm PHẢI thấp, khác hẳn llm_temperature ở trên (0.7, dùng

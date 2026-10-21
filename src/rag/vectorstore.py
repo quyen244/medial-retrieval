@@ -334,14 +334,29 @@ class VectorStore:
                 must = list(effective_filter.must or []) + [lang_condition]
                 effective_filter = models.Filter(must=must)
 
-        return self.client.query_points(
+        return self._retry(lambda: self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector,
             using=DENSE_VECTOR_NAME,
             query_filter=effective_filter,
             limit=top_k,
             with_payload=True,
-        ).points
+        ).points)
+
+    @staticmethod
+    def _retry(call, attempts: int = 4):
+        """Thử lại lỗi mạng tạm thời của client Qdrant (timeout, socket bị đóng
+        giữa chừng khi nhiều luồng cùng gọi). Một search hỏng không được làm sập
+        cả run nhiều giờ."""
+        import time
+        from qdrant_client.http.exceptions import ResponseHandlingException
+        for i in range(attempts):
+            try:
+                return call()
+            except ResponseHandlingException:
+                if i == attempts - 1:
+                    raise
+                time.sleep(0.5 * 2 ** i)
 
     def prime_hybrid(self, texts, batch_size: int = 32) -> int:
         """Encode trước dense + sparse cho nhiều câu theo lô, giữ trong bộ nhớ để
@@ -390,7 +405,7 @@ class VectorStore:
                 must=[models.FieldCondition(key="language", match=models.MatchValue(value=language))]
             )
 
-        result = self.client.query_points(
+        result = self._retry(lambda: self.client.query_points(
             collection_name=self.collection_name,
             prefetch=[
                 models.Prefetch(
@@ -409,7 +424,7 @@ class VectorStore:
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             limit=top_k,
             with_payload=True,
-        )
+        ))
         return result.points
 
     def retrieve(self, query: str, top_k: int = 5, language: Optional[str] = None, verbose: bool = False):

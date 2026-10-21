@@ -161,7 +161,7 @@ def select_source_chunks(vectorstore, real_queries: List[str], cfg) -> List[Dict
         # lần cho cùng một kết quả.
         # Song song: 1.200 lượt search tuần tự là phần chậm nhất của bước này.
         # ex.map giữ thứ tự nên kết quả y hệt bản tuần tự.
-        with ThreadPoolExecutor(max_workers=cfg.llm_concurrency) as ex:
+        with ThreadPoolExecutor(max_workers=getattr(cfg, "search_concurrency", 8)) as ex:
             hits_by_query = list(ex.map(
                 lambda v: list(vectorstore.search(v, top_k=cfg.chunks_per_real_query, language=lang)),
                 qvecs))
@@ -394,7 +394,7 @@ def roundtrip_filter(vectorstore, records: List[Dict[str, Any]], cfg) -> Tuple[L
 
     kept: List[Dict[str, Any]] = []
     stats = defaultdict(int)
-    with ThreadPoolExecutor(max_workers=cfg.llm_concurrency) as ex:
+    with ThreadPoolExecutor(max_workers=getattr(cfg, "search_concurrency", 8)) as ex:
         for rec, rank in ex.map(one, records):
             rec["src_rank"] = rank
             rec["kept"] = rank is not None

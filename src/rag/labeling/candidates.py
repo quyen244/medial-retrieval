@@ -214,7 +214,7 @@ def fetch_candidates(vectorstore, records: List[Dict[str, Any]], cfg,
         }, local_stats
 
     rows: List[Dict[str, Any]] = []
-    with ThreadPoolExecutor(max_workers=cfg.llm_concurrency) as ex:
+    with ThreadPoolExecutor(max_workers=getattr(cfg, "search_concurrency", 8)) as ex:
         # ex.map giữ nguyên thứ tự input -> output xác định được.
         for row, local_stats in ex.map(one, records):
             rows.append(row)
