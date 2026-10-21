@@ -86,7 +86,14 @@ def cut(ordered: List[Dict[str, Any]], tau: Optional[float], delta: Optional[flo
 
 
 def v1(rec, a) -> List[Dict[str, Any]]:
-    return submitted_chunks(rec)[: a.k]
+    """k chunk đầu. k > 20 thì nối thêm các ứng viên còn lại trong top 50 theo
+    điểm rerank, sau 20 chunk đã nộp."""
+    sub = submitted_chunks(rec)
+    if a.k <= len(sub):
+        return sub[: a.k]
+    have = {c["chunk_id"] for c in sub}
+    rest = sorted((c for c in rec["candidates"] if c["chunk_id"] not in have), key=score, reverse=True)
+    return (sub + rest)[: a.k]
 
 
 def v2(rec, a) -> List[Dict[str, Any]]:
@@ -205,7 +212,7 @@ def main(argv=None) -> int:
     b.add_argument("--top50", required=True)
     b.add_argument("--base", required=True, help="bài nộp của cùng lần chạy (thứ tự id, entry rỗng)")
     b.add_argument("--out", required=True)
-    b.add_argument("--k", type=int, default=20, help="V1: số chunk nộp")
+    b.add_argument("--k", type=int, default=20, help="V1: số chunk nộp (tối đa 50, lấy thêm từ top 50)")
     b.add_argument("--tau", type=float, default=None, help="V2/V3: ngưỡng điểm tuyệt đối")
     b.add_argument("--tau-pct", type=float, default=None, help="V2/V3: ngưỡng = phân vị này của điểm 20 chunk nộp")
     b.add_argument("--delta", type=float, default=None, help="V2/V3: giữ chunk có điểm >= điểm top 1 - delta")

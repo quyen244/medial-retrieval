@@ -16,7 +16,8 @@ không làm được cặp câu hỏi tiếng Việt - tài liệu tiếng Anh.
 Loss: BinaryCrossEntropyLoss với nhãn mềm (1.0 / 0.4 / 0.0). TODO (việc 8 trong
 TODO.md): listwise KL theo nhóm câu hỏi khi đã chốt được dữ liệu.
 
-GPU: cần gần trọn 16 GB (bf16 + gradient checkpointing). Tắt vLLM trước khi train.
+GPU: batch 4 (bf16). Tắt vLLM trước khi train. Vẫn tràn bộ nhớ thì thêm
+--grad-checkpointing hoặc --batch-size 2 --grad-accum 8.
 """
 import argparse
 import json
@@ -48,20 +49,31 @@ def describe(name, rows):
 
 
 def pairwise_accuracy(model, rows, batch_size):
-    """Trong cùng một câu hỏi, tỉ lệ cặp (positive, negative) mà model chấm
-    positive cao hơn. 0.5 = đoán mò. Đo nhanh trên val, không cần nhãn người."""
+    """Trong cùng một câu hỏi, tỉ lệ cặp có nhãn khác nhau mà model xếp đúng thứ
+    tự. 0.5 = đoán mò. Trả (mọi cặp, chỉ cặp 1.0 so với 0.4).
+
+    Số thứ hai mới phân biệt được: negative lấy từ câu hỏi khác quá dễ nên số
+    thứ nhất của bản gốc đã ~0.99. Cặp 1.0 so với 0.4 (trả lời đủ so với trả lời
+    một phần) mới là chỗ fine-tune phải học."""
     scores = model.predict([(r["query"], r["passage"]) for r in rows], batch_size=batch_size,
                            show_progress_bar=False)
-    by_q = defaultdict(lambda: ([], []))
+    by_q = defaultdict(list)
     for r, s in zip(rows, scores):
-        (by_q[r["query"]][0] if r["label"] > 0 else by_q[r["query"]][1]).append(float(s))
-    win = total = 0
-    for pos, neg in by_q.values():
-        for p in pos:
-            for n in neg:
+        by_q[r["query"]].append((r["label"], float(s)))
+    win = total = win_g = total_g = 0
+    for items in by_q.values():
+        for i, (la, sa) in enumerate(items):
+            for lb, sb in items[i + 1:]:
+                if la == lb:
+                    continue
+                hi, lo = (sa, sb) if la > lb else (sb, sa)
                 total += 1
-                win += p > n
-    return win / total if total else float("nan")
+                win += hi > lo
+                if {la, lb} == {1.0, 0.4}:
+                    total_g += 1
+                    win_g += hi > lo
+    nan = float("nan")
+    return (win / total if total else nan, win_g / total_g if total_g else nan)
 
 
 def smoke(model):
@@ -83,8 +95,13 @@ def main(argv=None) -> int:
     p.add_argument("--data-dir", default="data/labeling_full")
     p.add_argument("--out", default="./models/medical-reranker")
     p.add_argument("--epochs", type=float, default=2)
+    # Batch 4: batch 8 tràn bộ nhớ khi train thật trên RTX 5060 Ti 16 GB (phép đo
+    # thử trước đó chỉ ~11 GB nhưng không tính hết bộ nhớ của Trainer lúc chạy).
     p.add_argument("--batch-size", type=int, default=4, help="cặp mỗi bước trên GPU")
     p.add_argument("--grad-accum", type=int, default=4, help="batch hiệu dụng = batch-size × grad-accum")
+    p.add_argument("--grad-checkpointing", action="store_true",
+                   help="tiết kiệm VRAM nhưng chậm hơn ~30%%; chỉ bật khi tràn bộ nhớ")
+    p.add_argument("--workers", type=int, default=2, help="tiến trình chuẩn bị/tokenize dữ liệu")
     p.add_argument("--lr", type=float, default=2e-5)
     p.add_argument("--warmup-ratio", type=float, default=0.1)
     p.add_argument("--max-length", type=int, default=MAX_LENGTH)
@@ -107,6 +124,8 @@ def main(argv=None) -> int:
     if a.dry_run:
         return 0
 
+    # Giảm phân mảnh bộ nhớ GPU khi độ dài batch thay đổi liên tục.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     import torch
     from datasets import Dataset
     from sentence_transformers import CrossEncoder
@@ -115,13 +134,15 @@ def main(argv=None) -> int:
 
     random.seed(a.seed)
     torch.manual_seed(a.seed)
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
     model = CrossEncoder(MODEL_ID, num_labels=1, max_length=a.max_length, cache_folder="models")
 
     print("\n[trước khi train]")
     smoke(model)
     base_acc = pairwise_accuracy(model, val_rows, 32) if val_rows else None
     if base_acc is not None:
-        print(f"  val pairwise accuracy (bản gốc): {base_acc:.4f}")
+        print(f"  val pairwise accuracy (bản gốc): mọi cặp {base_acc[0]:.4f} | 1.0 so với 0.4: {base_acc[1]:.4f}")
 
     cols = lambda rows: Dataset.from_dict({"query": [r["query"] for r in rows],
                                            "passage": [r["passage"] for r in rows],
@@ -134,11 +155,12 @@ def main(argv=None) -> int:
         per_device_eval_batch_size=a.batch_size * 2,
         gradient_accumulation_steps=a.grad_accum,
         learning_rate=a.lr,
-        warmup_ratio=a.warmup_ratio,
+        warmup_steps=a.warmup_ratio,  # transformers v5: số thực < 1 là tỉ lệ warmup
         # bf16 chứ không phải fp16: XLM-R large hay tràn số khi train ở fp16.
         bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
-        # 568M tham số ở seq 1024 không vừa 16 GB nếu không bật.
-        gradient_checkpointing=True,
+        # Mặc định tắt: chậm hơn ~30% vì phải tính lại activation. Bật khi tràn bộ nhớ.
+        gradient_checkpointing=a.grad_checkpointing,
+        dataloader_num_workers=a.workers,
         eval_strategy="epoch" if has_val else "no",
         save_strategy="epoch",
         save_total_limit=2,
@@ -164,7 +186,8 @@ def main(argv=None) -> int:
     smoke(model)
     if val_rows:
         acc = pairwise_accuracy(model, val_rows, 32)
-        print(f"  val pairwise accuracy: {base_acc:.4f} (gốc) -> {acc:.4f} (fine-tune)")
+        print(f"  val pairwise accuracy, mọi cặp:        {base_acc[0]:.4f} (gốc) -> {acc[0]:.4f} (fine-tune)")
+        print(f"  val pairwise accuracy, 1.0 so với 0.4: {base_acc[1]:.4f} (gốc) -> {acc[1]:.4f} (fine-tune)")
     return 0
 
 

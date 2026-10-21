@@ -66,6 +66,9 @@ class MultiQueryConfig:
     # trong bài nộp nếu hạng theo câu gốc (trong 50 chunk) <= slot_max_rank.
     # Câu gốc (unit raw) không qua bước này, giữ đủ ứng viên.
     sub_rerank: bool = True
+    # Phân rã nhưng KHÔNG augment: mỗi unit tìm bằng câu trơn (sub-query tự nhiên,
+    # câu gốc) thay vì chuỗi ghép thuật ngữ. Câu ngắn khi đó tìm y như bài A.
+    plain_units: bool = False
     sub_rerank_top_k: int = 20
     slots_per_sub: int = 3
     slot_max_rank: int = 30
@@ -81,6 +84,7 @@ class MultiQueryConfig:
             "lines_rrf_k": self.lines_rrf_k,
             "lines_top_k": self.lines_top_k,
             "sub_rerank": self.sub_rerank,
+            "plain_units": self.plain_units,
             "sub_rerank_top_k": self.sub_rerank_top_k,
             "slots_per_sub": self.slots_per_sub,
             "slot_max_rank": self.slot_max_rank,
@@ -104,27 +108,35 @@ def load_augmented(path: str) -> Dict[int, Dict[str, Any]]:
     return out
 
 
-def unit_texts(record: Dict[str, Any]) -> List[str]:
+def _retrieval_text(u: Dict[str, Any], plain: bool) -> str:
+    """plain=True: câu trơn (`text`: sub-query tự nhiên, hoặc câu gốc) - phân rã
+    nhưng KHÔNG ghép thuật ngữ / mục tiêu augment."""
+    if plain:
+        return (u.get("text") or "").strip()
+    return (u.get("augmented") or u.get("text") or "").strip()
+
+
+def unit_texts(record: Dict[str, Any], plain: bool = False) -> List[str]:
     """Chuỗi đem đi truy xuất của từng unit, theo đúng thứ tự đã ghi.
 
     `augmented` rỗng (unit raw, hoặc augment hỏng) thì tụt về `text`.
     """
     texts: List[str] = []
     for u in record.get("units", []):
-        t = (u.get("augmented") or u.get("text") or "").strip()
+        t = _retrieval_text(u, plain)
         if t:
             texts.append(t)
     return texts
 
 
-def unit_specs(record: Dict[str, Any]) -> List[tuple]:
+def unit_specs(record: Dict[str, Any], plain: bool = False) -> List[tuple]:
     """(kind, chuỗi truy xuất, câu tự nhiên) của từng unit, cùng thứ tự và cùng
     điều kiện bỏ unit rỗng như unit_texts(). Câu tự nhiên (`text`) là thứ đưa
     cho reranker khi rerank theo sub-query: reranker được train trên câu tự
     nhiên, không phải chuỗi ghép thuật ngữ."""
     specs: List[tuple] = []
     for u in record.get("units", []):
-        t = (u.get("augmented") or u.get("text") or "").strip()
+        t = _retrieval_text(u, plain)
         if t:
             specs.append((u.get("kind", ""), t, (u.get("text") or t).strip()))
     return specs
@@ -268,7 +280,7 @@ class MultiQueryPipeline:
         4. Chọn rerank_top_k chunk nộp có giữ chỗ cho từng sub-query.
         """
         cfg = self.config
-        specs = unit_specs(record) if not lines_mode else []
+        specs = unit_specs(record, cfg.plain_units) if not lines_mode else []
         use_sub = (cfg.sub_rerank and not lines_mode
                    and any(kind == "sub" for kind, _, _ in specs))
 
@@ -351,7 +363,7 @@ class MultiQueryPipeline:
         if lines_mode:
             texts = line_texts(record, self.config.max_lines) if record else []
         else:
-            texts = unit_texts(record) if record else []
+            texts = unit_texts(record, self.config.plain_units) if record else []
 
         if not texts:
             if not self.config.fallback_to_baseline:

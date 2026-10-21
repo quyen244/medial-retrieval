@@ -90,6 +90,10 @@ def main():
     parser.add_argument("--selection", choices=["rrf", "branch-rerank"], default=None,
                         help="mặc định branch-rerank: rerank từng nhánh, giữ vi 26 / en 16 / zh 8 rồi xếp "
                              "chung lấy top 20; rrf = luồng cũ, gộp nhánh bằng RRF lấy 50 rồi rerank")
+    parser.add_argument("--final-k", type=int, default=None,
+                        help="số chunk nộp mỗi câu (mặc định 20, tối đa 50 = số chunk giữ sau rerank)")
+    parser.add_argument("--plain-units", action="store_true",
+                        help="phân rã nhưng không augment: tìm bằng sub-query trơn + câu gốc")
     parser.add_argument("--no-sub-rerank", action="store_true",
                         help="tắt rerank theo sub-query + giữ chỗ (query phân rã, mode concat)")
     parser.add_argument("--sub-rerank-top-k", type=int, default=20,
@@ -142,6 +146,8 @@ def main():
         config.retriever = args.retriever
     if args.selection:
         config.selection = args.selection
+    if args.final_k:
+        config.rerank_top_k = args.final_k
     if args.reranker_model:
         if not args.reranker_model.startswith(("BAAI/", "http")) and not Path(args.reranker_model).exists():
             raise SystemExit(f"Không thấy model reranker ở {args.reranker_model}")
@@ -170,6 +176,7 @@ def main():
             pipeline, augmented,
             MultiQueryConfig(augmented_file=args.augmented, mode=args.multiquery_mode,
                              sub_rerank=not args.no_sub_rerank,
+                             plain_units=args.plain_units,
                              sub_rerank_top_k=args.sub_rerank_top_k,
                              max_rerank_candidates=args.max_rerank_candidates,
                              rerank_with_augmented=args.rerank_with_augmented),
@@ -201,7 +208,7 @@ def main():
             rec = augmented.get(int(r["id"])) if args.augmented else None
             if rec:
                 texts += (line_texts(rec, runner.config.max_lines) if runner.config.mode == "lines"
-                          else unit_texts(rec))
+                          else unit_texts(rec, runner.config.plain_units))
             else:
                 texts.append(r["query"])
         t_enc = time.perf_counter()

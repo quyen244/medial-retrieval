@@ -48,6 +48,34 @@ def cmd_merge(args) -> int:
     return 0
 
 
+def cmd_mix(args) -> int:
+    """Ghép bài theo loại câu: câu ngắn lấy từ một bài, câu dài (có phân rã) lấy
+    từ bài khác. Dùng để tách xem augment giúp hay hại ở câu ngắn hay câu dài."""
+    from src.rag.pipeline.submission import zip_submission
+    is_long = {}
+    with open(args.augmented, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                r = json.loads(line)
+                is_long[int(r["qid"])] = bool(r.get("is_long"))
+    short_sub = {e["id"]: e for e in load(args.short)}
+    long_sub = {e["id"]: e for e in load(args.long)}
+    base = load(args.short)
+    out, n_long = [], 0
+    for e in base:
+        if is_long.get(int(e["id"])):
+            out.append(long_sub[e["id"]])
+            n_long += 1
+        else:
+            out.append(short_sub[e["id"]])
+    assert [e["id"] for e in out] == [e["id"] for e in base]
+    with open(args.out, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, indent=2)
+    print(f"{args.out}: {len(out)} entry, câu dài lấy từ {args.long} ({n_long} câu), "
+          f"câu ngắn từ {args.short} | file nộp: {zip_submission(args.out)}")
+    return 0
+
+
 def key(c: dict) -> str:
     return f"{c['doc_id']}|{hash(c['chunk_text'])}"
 
@@ -87,6 +115,13 @@ def main(argv=None) -> int:
     c.add_argument("--a", required=True, help="bài chuẩn so sánh (thường là A)")
     c.add_argument("--b", action="append", required=True, help="các bài cần so, lặp cờ được")
     c.set_defaults(fn=cmd_compare)
+    x = sub.add_parser("mix", help="câu ngắn từ một bài, câu dài từ bài khác")
+    x.add_argument("--short", required=True, help="bài lấy cho câu ngắn")
+    x.add_argument("--long", required=True, help="bài lấy cho câu dài (có phân rã)")
+    x.add_argument("--augmented", default="data/augment_v2_full/augmented.jsonl",
+                   help="file augment để biết câu nào là câu dài")
+    x.add_argument("--out", required=True)
+    x.set_defaults(fn=cmd_mix)
     args = p.parse_args(argv)
     return args.fn(args)
 
