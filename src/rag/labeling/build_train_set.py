@@ -13,7 +13,7 @@ nhãn: pilot cho thấy ngay cả ứng viên điểm tầng 1 < 0.01 vẫn đư
 tới ~23%, và vùng điểm tầng 1 >= 0.9 chưa chấm có ~93% là positive. Coi chúng là
 negative thì dạy reranker rằng chunk đúng là sai.
 
-Nhãn = trọng số bước 5 (judge.SCORE_WEIGHT): điểm 3 -> 1.0, 2 -> 0.6, 0 -> 0.0.
+Nhãn = trọng số bước 5 (judge.SCORE_WEIGHT): điểm 3 -> 1.0, 2 -> 0.4, 0 -> 0.0.
 Điểm 1 và chấm hỏng (-1) có trọng số None nên bị bỏ.
 
 Negative có hai nguồn:
