@@ -14,6 +14,8 @@ Thực hiện suy luận nội bộ:
 ## Requirements
 - Giữ nguyên ngôn ngữ và cụm từ xuất hiện trong văn bản gốc.
 - Phân biệt rõ tên bệnh và triệu chứng.
+- Triệu chứng phải GIỮ NGUYÊN vị trí cơ thể và bộ phận đi kèm trong câu ("chảy máu chân răng", không rút gọn thành "chảy máu"; "đau thượng vị", không rút gọn thành "đau"). Bỏ vị trí đi mất nghĩa y khoa của triệu chứng.
+- Cụm chỉ thời điểm hay hoàn cảnh ("khi thức dậy", "sau ăn") chỉ giữ khi nó là một phần của triệu chứng; không dùng nó để thay cho vị trí.
 - Không tự suy ra tên thuốc, bệnh hoặc triệu chứng.
 - Chỉ trích xuất các thực thể xuất hiện rõ ràng trong văn bản.
 - Nếu không tìm thấy thực thể thuộc nhóm nào, trả về mảng rỗng.
@@ -49,6 +51,35 @@ Thực hiện suy luận nội bộ:
   "symptom": [
     "mệt mỏi",
     "chóng mặt"
+  ]
+}
+
+**Input:**
+"Sáng nào ngủ dậy em cũng bị chảy máu chân răng, mấy chiếc răng hàm còn có lỗ đen nhỏ. Em nên đi khám ở đâu?"
+
+**Output:**
+{
+  "disease": [],
+  "medication": [],
+  "symptom": [
+    "chảy máu chân răng khi ngủ dậy",
+    "răng hàm có lỗ đen nhỏ"
+  ]
+}
+
+**Input:**
+"Con tôi 3 tuổi, sốt cao 2 hôm nay, ho có đờm và bú kém. Cháu đang uống paracetamol."
+
+**Output:**
+{
+  "disease": [],
+  "medication": [
+    "paracetamol"
+  ],
+  "symptom": [
+    "sốt cao",
+    "ho có đờm",
+    "bú kém"
   ]
 }
 

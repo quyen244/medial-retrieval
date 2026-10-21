@@ -114,7 +114,7 @@ def extract_entities(chat: ChatFn, prompts, cfg, query: str
 # ------------------------------------------- bước 2: tra bảng và dịch
 
 def resolve_diseases(chat: ChatFn, prompts, cfg, names: List[str],
-                     icd: IcdLookup) -> Tuple[List[Term], int]:
+                     icd: IcdLookup, query: str = "") -> Tuple[List[Term], int]:
     """Mỗi bệnh một lời gọi dịch (prompt nhận `{{disease_name}}`, không nhận
     danh sách). Bệnh nào tra được trong ICD thì trường `en` lấy của ICD và bỏ
     bản dịch của model - bảng chuẩn thắng. Nhưng bảng ICD KHÔNG có cột tiếng
@@ -124,7 +124,7 @@ def resolve_diseases(chat: ChatFn, prompts, cfg, names: List[str],
     n_fail = 0
     for name in names:
         icd_en = icd.find_en(name)
-        raw = chat(prompts["disease_translation"].format(disease_name=name),
+        raw = chat(prompts["disease_translation"].format(disease_name=name, query=query),
                    cfg.max_tokens_translate)
         obj = json_object(raw) or {}
         if not obj:
@@ -156,8 +156,8 @@ def resolve_medications(names: List[str], rx: RxNormLookup) -> List[Term]:
     return terms
 
 
-def resolve_symptoms(chat: ChatFn, prompts, cfg, names: List[str]
-                     ) -> Tuple[List[Term], bool]:
+def resolve_symptoms(chat: ChatFn, prompts, cfg, names: List[str],
+                     query: str = "") -> Tuple[List[Term], bool]:
     """Cả danh sách triệu chứng đi trong MỘT lời gọi (prompt nhận
     `{{symptoms}}` là một mảng), khác với bệnh.
 
@@ -167,7 +167,7 @@ def resolve_symptoms(chat: ChatFn, prompts, cfg, names: List[str]
     """
     if not names:
         return [], False
-    raw = chat(prompts["symptom_translation"].format(symptoms=json.dumps(names, ensure_ascii=False)),
+    raw = chat(prompts["symptom_translation"].format(symptoms=json.dumps(names, ensure_ascii=False), query=query),
                cfg.max_tokens_translate)
     arr = json_array(raw)
     if not isinstance(arr, list) or len(arr) != len(names):
@@ -194,8 +194,20 @@ def decompose(chat: ChatFn, prompts, cfg, query: str) -> Tuple[List[str], bool]:
     return subs, not subs
 
 
-def retrieval_targets(chat: ChatFn, prompts, cfg, text: str) -> Tuple[List[Target], bool]:
-    raw = chat(prompts["retrieval_target"].format(query=text), cfg.max_tokens_target)
+def glossary_for(text: str, terms: List[Term]) -> str:
+    """Bảng thuật ngữ đã dịch, chỉ gồm thực thể mà `text` nhắc tới (nếu không có
+    cái nào thì đưa cả bảng). Để bước sinh target dùng lại đúng bản dịch thay
+    vì dịch lần hai và ra bản khác."""
+    here = normalize(text)
+    chosen = [t for t in terms if normalize(t.vi) in here] or terms
+    lines = [f"- {t.vi} = {t.en or '?'} = {t.zh or '?'}" for t in chosen if t.en or t.zh]
+    return "\n".join(lines) if lines else "(không có)"
+
+
+def retrieval_targets(chat: ChatFn, prompts, cfg, text: str,
+                      terms: Optional[List[Term]] = None) -> Tuple[List[Target], bool]:
+    raw = chat(prompts["retrieval_target"].format(query=text, glossary=glossary_for(text, terms or [])),
+               cfg.max_tokens_target)
     obj = json_object(raw)
     items = (obj or {}).get("retrieval_targets")
     if not isinstance(items, list) or not items:
@@ -246,11 +258,12 @@ def build(chat: ChatFn, prompts, cfg, qid: int, query: str,
     if failed:
         aq.failures.append("extract")
 
-    aq.diseases, n_dis_fail = resolve_diseases(chat, prompts, cfg, diseases, icd)
+    aq.diseases, n_dis_fail = resolve_diseases(chat, prompts, cfg, diseases, icd, query)
     if n_dis_fail:
         aq.failures.append("disease_translation")
     aq.medications = resolve_medications(medications, rx)
-    aq.symptoms, sym_failed = resolve_symptoms(chat, prompts, cfg, symptoms)
+    aq.symptoms, sym_failed = resolve_symptoms(chat, prompts, cfg, symptoms, query)
+    all_terms = aq.diseases + aq.medications + aq.symptoms
     if sym_failed:
         aq.failures.append("symptom_translation")
 
@@ -263,14 +276,14 @@ def build(chat: ChatFn, prompts, cfg, qid: int, query: str,
             subs = [query]
         aq.stats.update(coverage(diseases + medications + symptoms, subs))
         for sub in subs:
-            targets, t_failed = retrieval_targets(chat, prompts, cfg, sub)
+            targets, t_failed = retrieval_targets(chat, prompts, cfg, sub, all_terms)
             if t_failed:
                 aq.failures.append("retrieval_target")
             aq.units.append(Unit(kind="sub", text=sub, targets=targets))
         if cfg.include_raw_unit:
             aq.units.append(Unit(kind="raw", text=query))
     else:
-        targets, t_failed = retrieval_targets(chat, prompts, cfg, query)
+        targets, t_failed = retrieval_targets(chat, prompts, cfg, query, all_terms)
         if t_failed:
             aq.failures.append("retrieval_target")
         aq.units.append(Unit(kind="main", text=query, targets=targets))
@@ -280,4 +293,4 @@ def build(chat: ChatFn, prompts, cfg, qid: int, query: str,
     aq.stats["n_symptom"] = len(aq.symptoms)
     aq.stats["n_disease_from_icd"] = sum(1 for t in aq.diseases if t.source_en == "icd")
     aq.stats["n_medication_from_rxnorm"] = sum(1 for t in aq.medications if t.source_en == "rxnorm")
-    return compose(aq)
+    return compose(aq, scoped=cfg.scope_terms_to_unit)

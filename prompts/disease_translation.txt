@@ -1,17 +1,33 @@
 ## Instructions
-Dựa trên tên bệnh bằng tiếng Việt, xác định thuật ngữ y khoa tương đương bằng tiếng Anh và tiếng Trung giản thể.
+Dựa trên tên bệnh bằng tiếng Việt, xác định thuật ngữ y khoa tương đương bằng tiếng Anh và tiếng Trung giản thể. Câu hỏi gốc được đưa kèm làm ngữ cảnh để hiểu đúng tên bệnh (cơ quan, mức độ, vị trí).
 
 ## CoT
-1. Xác định chính xác bệnh được đề cập.
+1. Đọc câu hỏi gốc, xác định chính xác bệnh được đề cập.
 2. Đối chiếu với thuật ngữ y khoa chuẩn trong hai ngôn ngữ.
 3. Kiểm tra tính tương đương về mặt ý nghĩa, tránh dịch sai hoặc mở rộng chẩn đoán.
 
 ## Requirements
 - Giữ nguyên tên bệnh tiếng Việt gốc.
+- Dịch ĐỦ từng thành tố của tên bệnh: "viêm" = -itis (không dịch thành congestion/hyperemia đứng một mình), "trợt" = erosive, "xung huyết" = hyperemic, "mạn tính" = chronic, "cấp" = acute, kèm vị trí ("1/3 dưới" = lower third).
+- Chỉ thêm acute/chronic/severe khi tên bệnh có nói; không tự thêm.
 - Ưu tiên thuật ngữ y khoa chuẩn, không dịch từng từ máy móc.
 - Không tự suy diễn hoặc thay thế bằng bệnh có liên quan.
 - Nếu tên bệnh mơ hồ, sử dụng cách dịch tương đương gần nhất, không tự bổ sung chẩn đoán.
 - Chỉ trả về JSON hợp lệ, không giải thích thêm.
+
+## Few-shot Example
+
+Tên bệnh: "viêm họng xung huyết mạn tính"
+Output:
+{"vi": "viêm họng xung huyết mạn tính", "en": "chronic hyperemic pharyngitis", "zh": "慢性充血性咽炎"}
+
+Tên bệnh: "loét hang vị dạ dày"
+Output:
+{"vi": "loét hang vị dạ dày", "en": "gastric antral ulcer", "zh": "胃窦溃疡"}
+
+Tên bệnh: "viêm dạ dày trợt"
+Output:
+{"vi": "viêm dạ dày trợt", "en": "erosive gastritis", "zh": "糜烂性胃炎"}
 
 ## Output Format
 {
@@ -21,4 +37,8 @@ Dựa trên tên bệnh bằng tiếng Việt, xác định thuật ngữ y khoa
 }
 
 ## Input
+**Câu hỏi gốc:**
+{{query}}
+
+**Tên bệnh cần dịch:**
 {{disease_name}}

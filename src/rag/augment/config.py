@@ -20,6 +20,11 @@ class AugmentConfig:
     # đi chệch ý người hỏi, nên phải giữ đúng thứ người ta viết.
     include_raw_unit: bool = True
 
+    # Mỗi sub-unit chỉ ghép các thực thể mà chính sub-query đó nhắc tới, thay vì
+    # ghép cả khối thuật ngữ của câu gốc vào cả ba. Thực thể không sub-query nào
+    # nhắc (bị phân rã làm rụng) vẫn được ghép vào mọi sub-unit để khỏi mất.
+    scope_terms_to_unit: bool = True
+
     # --- tra bảng ---
     icd_table: str = "data/vocab/icd_bilingual.tsv"
     rxnorm_table: str = "data/knowledge/rxnorm_concepts_final.csv"

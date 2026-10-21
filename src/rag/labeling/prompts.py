@@ -34,10 +34,10 @@ REQUIRED_VARS: Dict[str, List[str]] = {
     # nhau về độ hạt: disease_translation nhận MỘT tên bệnh một lần, còn
     # symptom_translation nhận cả mảng triệu chứng trong một lần.
     "medical_entity_extraction": ["input_text"],
-    "disease_translation": ["disease_name"],
-    "symptom_translation": ["symptoms"],
+    "disease_translation": ["disease_name", "query"],
+    "symptom_translation": ["symptoms", "query"],
     "query_decomposition": ["query"],
-    "retrieval_target": ["query"],
+    "retrieval_target": ["query", "glossary"],
 }
 
 # Prompt của riêng pha augment, để gọi sync_all() cho đúng nhóm thay vì đồng

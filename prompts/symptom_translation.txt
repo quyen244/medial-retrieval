@@ -1,13 +1,16 @@
 ## Instructions
-Dịch các triệu chứng y tế từ tiếng Việt sang tiếng Anh và tiếng Trung giản thể, sử dụng thuật ngữ y khoa chính xác.
+Dịch các triệu chứng y tế từ tiếng Việt sang tiếng Anh và tiếng Trung giản thể, sử dụng thuật ngữ y khoa chính xác. Câu hỏi gốc của người bệnh được đưa kèm để làm NGỮ CẢNH: dùng nó để hiểu triệu chứng xảy ra ở bộ phận nào, vào lúc nào, chứ không dịch triệu chứng rời khỏi câu.
 
 ## CoT
-1. Xác định ý nghĩa lâm sàng của từng triệu chứng.
+1. Đọc câu hỏi gốc, xác định ý nghĩa lâm sàng của từng triệu chứng trong đúng ngữ cảnh (bộ phận cơ thể, thời điểm).
 2. Chọn cách diễn đạt tương đương trong tiếng Anh và tiếng Trung.
 3. Kiểm tra tính nhất quán về ngữ nghĩa, tránh tự suy diễn thành tên bệnh.
 
 ## Requirements
 - Giữ nguyên triệu chứng tiếng Việt gốc.
+- Dịch theo ngữ cảnh câu hỏi: bộ phận cơ thể trong triệu chứng phải còn trong bản dịch ("chảy máu chân răng" là bleeding gums, KHÔNG phải hemorrhage hay bleeding chung chung).
+- Không dùng từ nặng hơn ý người hỏi ("chảy máu" không thành "xuất huyết"/hemorrhage nếu họ chỉ nói chảy máu nhẹ).
+- Không biến triệu chứng thành tên bệnh (không thêm "sâu răng", "viêm nướu" nếu người hỏi không nói).
 - Ưu tiên thuật ngữ y khoa phổ biến, tự nhiên và chính xác.
 - Không tự thêm chẩn đoán hoặc thông tin không có trong đầu vào.
 - Mỗi triệu chứng đầu vào tương ứng với một kết quả.
@@ -15,6 +18,9 @@ Dịch các triệu chứng y tế từ tiếng Việt sang tiếng Anh và ti�
 - Chỉ trả về JSON hợp lệ, không giải thích thêm.
 
 ## Few-shot Example
+
+**Câu hỏi gốc:**
+"Mấy hôm nay em hay đau bụng, buồn nôn, cổ họng thấy nghẹn và chóng mặt khi đứng dậy."
 
 **Input:**
 ["đau bụng", "buồn nôn", "nghẹn ở cổ", "chóng mặt"]
@@ -43,6 +49,36 @@ Dịch các triệu chứng y tế từ tiếng Việt sang tiếng Anh và ti�
   }
 ]
 
+**Câu hỏi gốc:**
+"Sáng nào ngủ dậy em cũng bị chảy máu chân răng, mấy chiếc răng hàm còn có lỗ đen nhỏ. Ban đêm em ho khan và tê tay chân."
+
+**Input:**
+["chảy máu chân răng khi ngủ dậy", "răng hàm có lỗ đen nhỏ", "ho khan ban đêm", "tê tay chân"]
+
+**Output:**
+[
+  {
+    "vi": "chảy máu chân răng khi ngủ dậy",
+    "en": "bleeding gums upon waking",
+    "zh": "早晨起床时牙龈出血"
+  },
+  {
+    "vi": "răng hàm có lỗ đen nhỏ",
+    "en": "small dark holes in the molars",
+    "zh": "磨牙上有黑色小洞"
+  },
+  {
+    "vi": "ho khan ban đêm",
+    "en": "dry cough at night",
+    "zh": "夜间干咳"
+  },
+  {
+    "vi": "tê tay chân",
+    "en": "numbness in the hands and feet",
+    "zh": "手脚麻木"
+  }
+]
+
 ## Output Format
 [
   {
@@ -53,4 +89,8 @@ Dịch các triệu chứng y tế từ tiếng Việt sang tiếng Anh và ti�
 ]
 
 ## Input
+**Câu hỏi gốc:**
+{{query}}
+
+**Input:**
 {{symptoms}}

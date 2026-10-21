@@ -8,6 +8,8 @@ Từ một query y tế bằng tiếng Việt, xác định các retrieval targe
 
 ## Requirements
 - Bám sát query gốc, không tự thêm chẩn đoán hoặc dữ kiện.
+- Không thêm tính từ mức độ hay thời gian (acute, chronic, severe, cấp, mạn...) nếu query không có.
+- Khi nhắc tới thực thể có trong BẢNG THUẬT NGỮ bên dưới, dùng ĐÚNG bản en/zh trong bảng, không dịch lại.
 - Ưu tiên thuật ngữ y khoa chuẩn.
 - Mỗi target tập trung vào một khía cạnh retrieval riêng biệt.
 - Ba ngôn ngữ phải tương đương về ngữ nghĩa, không dịch máy móc.
@@ -42,6 +44,9 @@ Output:
     }
   ]
 }
+
+## Bảng thuật ngữ (dùng đúng các bản dịch này)
+{{glossary}}
 
 ## Input
 {{query}}

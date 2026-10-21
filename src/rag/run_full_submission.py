@@ -74,6 +74,13 @@ def main():
     # như trước, không đổi một dòng hành vi nào.
     parser.add_argument("--augmented", type=str, default=None,
                         help="data/augment/augmented.jsonl -> bật nhánh nhiều truy vấn")
+    parser.add_argument("--pad-empty", action="store_true",
+                        help="Dùng với --limit: query ngoài N query đầu vẫn có entry rỗng (đúng schema) "
+                             "để bài nộp đủ id và nộp được. Entry rỗng tính 0 điểm, đều như nhau ở mọi "
+                             "biến thể nên so sánh A/B/C vẫn công bằng.")
+    parser.add_argument("--multiquery-mode", choices=["concat", "lines"], default="concat",
+                        help="concat = mỗi unit một chuỗi ghép (B/B'); lines = mỗi target một lượt riêng "
+                             "rồi gộp RRF (C). Chỉ có tác dụng khi có --augmented")
     parser.add_argument("--retriever", type=str, default=None,
                         help="qdrant-language (dense, mặc định) hoặc qdrant-hybrid (dense+sparse)")
     parser.add_argument("--max-rerank-candidates", type=int, default=None,
@@ -93,9 +100,11 @@ def main():
 
     dataset = get_dataset("query")
     rows = list(dataset["train"])
+    padded_ids = [r["id"] for r in rows] if args.pad_empty else None
     if args.limit:
         rows = rows[: args.limit]
-    all_ids = [r["id"] for r in rows]
+    all_ids = padded_ids or [r["id"] for r in rows]
+    n_padded = len(all_ids) - len(rows)
     console.print(f"[full_submission] {len(rows)} queries to cover")
 
     checkpoint_path = Path(args.checkpoint)
@@ -112,7 +121,7 @@ def main():
         augmented = load_augmented(args.augmented)
         runner = MultiQueryPipeline(
             pipeline, augmented,
-            MultiQueryConfig(augmented_file=args.augmented,
+            MultiQueryConfig(augmented_file=args.augmented, mode=args.multiquery_mode,
                              max_rerank_candidates=args.max_rerank_candidates,
                              rerank_with_augmented=args.rerank_with_augmented),
         )
@@ -181,8 +190,11 @@ def main():
 
     # Assemble final submission strictly in official query-id order, verifying completeness.
     missing = [qid for qid in all_ids if qid not in done]
-    if missing:
+    if missing and n_padded and len(missing) == n_padded:
+        console.print(f"[full_submission] --pad-empty: {n_padded} query ngoài --limit được ghi entry rỗng")
+    elif missing:
         console.print(f"[full_submission] ERROR: {len(missing)} query ids missing after run: {missing[:10]}...")
+    if missing:
         for qid in missing:
             done[qid] = empty_submission_entry(qid)
 

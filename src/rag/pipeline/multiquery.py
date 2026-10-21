@@ -47,12 +47,28 @@ class MultiQueryConfig:
     # dùng checkpoint train trên câu tự nhiên thì đang đo một hệ lệch.
     rerank_with_augmented: bool = False
 
+    # "concat": mỗi unit là MỘT chuỗi ghép (câu + thuật ngữ + targets), hợp tập
+    # rồi rerank - cách của B/B'.
+    # "lines": mỗi dòng ngắn là một lượt truy xuất riêng (câu gốc, rồi từng
+    # target vi; en; zh), gộp các lượt bằng RRF rồi mới rerank - biến thể C.
+    # Không nhồi mọi thứ vào một vector nên dense không bị loãng.
+    mode: str = "concat"
+    # Chỉ dùng ở mode "lines": số dòng tối đa mỗi query (chặn chi phí truy
+    # xuất) và số ứng viên giữ lại sau RRF để đưa cho reranker.
+    max_lines: int = 14
+    lines_rrf_k: int = 60
+    lines_top_k: int = 60
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "augmented_file": self.augmented_file,
             "max_rerank_candidates": self.max_rerank_candidates,
             "fallback_to_baseline": self.fallback_to_baseline,
             "rerank_with_augmented": self.rerank_with_augmented,
+            "mode": self.mode,
+            "max_lines": self.max_lines,
+            "lines_rrf_k": self.lines_rrf_k,
+            "lines_top_k": self.lines_top_k,
         }
 
 
@@ -84,6 +100,50 @@ def unit_texts(record: Dict[str, Any]) -> List[str]:
         if t:
             texts.append(t)
     return texts
+
+
+def line_texts(record: Dict[str, Any], max_lines: int) -> List[str]:
+    """Các dòng ngắn của biến thể C: câu gốc trước, rồi từng retrieval target
+    (vi; en; zh) theo thứ tự xuất hiện, bỏ trùng. Câu gốc đứng đầu để luôn có
+    mặt dù bị cắt bởi `max_lines`."""
+    lines: List[str] = []
+    seen = set()
+
+    def add(t: str) -> None:
+        t = t.strip()
+        if t and t not in seen:
+            seen.add(t)
+            lines.append(t)
+
+    add(record.get("original", ""))
+    for u in record.get("units", []):
+        for tg in u.get("targets", []):
+            forms: List[str] = []
+            for k in ("vi", "en", "zh"):
+                v = (tg.get(k) or "").strip()
+                if v and v not in forms:
+                    forms.append(v)
+            add("; ".join(forms))
+    return lines[:max_lines]
+
+
+def rrf_union(per_line: List[List[Candidate]], k: int, top_k: int) -> tuple:
+    """Gộp các lượt bằng RRF theo vị trí trong từng danh sách. Trả (ứng viên
+    đã xếp, số lượt tìm ra mỗi chunk). Dùng thứ hạng chứ không dùng điểm vì
+    điểm của hai lượt khác nhau không so được với nhau."""
+    merged: Dict[str, Candidate] = {}
+    score: Dict[str, float] = {}
+    hits: Dict[str, int] = {}
+    for candidates in per_line:
+        for rank, c in enumerate(candidates, 1):
+            key = str(c.chunk_id)
+            score[key] = score.get(key, 0.0) + 1.0 / (k + rank)
+            hits[key] = hits.get(key, 0) + 1
+            merged.setdefault(key, c)
+    for key, c in merged.items():
+        c.fusion_score = score[key]
+    ranked = sorted(merged.values(), key=lambda c: c.fusion_score, reverse=True)
+    return ranked[:top_k], hits
 
 
 def union_candidates(per_unit: List[List[Candidate]]) -> tuple:
@@ -134,7 +194,11 @@ class MultiQueryPipeline:
 
     def run(self, query: QueryItem, parallel_retrieval: bool = True) -> MultiQueryResult:
         record = self.augmented.get(int(query.id))
-        texts = unit_texts(record) if record else []
+        lines_mode = self.config.mode == "lines"
+        if lines_mode:
+            texts = line_texts(record, self.config.max_lines) if record else []
+        else:
+            texts = unit_texts(record) if record else []
 
         if not texts:
             if not self.config.fallback_to_baseline:
@@ -163,7 +227,10 @@ class MultiQueryPipeline:
             if i == 0:
                 branch_results = branches
 
-        union, hits = union_candidates(per_unit)
+        if lines_mode:
+            union, hits = rrf_union(per_unit, self.config.lines_rrf_k, self.config.lines_top_k)
+        else:
+            union, hits = union_candidates(per_unit)
         cap = self.config.max_rerank_candidates
         if cap and len(union) > cap:
             union = union[:cap]
