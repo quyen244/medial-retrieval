@@ -39,3 +39,5 @@ mlflow.db
 /models
 
 /tmp
+
+/zip_folder 

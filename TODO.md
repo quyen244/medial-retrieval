@@ -1,25 +1,23 @@
 # TODO - sinh nhãn train reranker
 
-Spec đầy đủ: [docs/pipeline-sinh-nhan-reranker.md](docs/pipeline-sinh-nhan-reranker.md)
-Deadline 31/10. Cập nhật 2026-10-19.
+Spec đầy đủ: [docs/kien-truc-tong-quan.md](docs/kien-truc-tong-quan.md)
+Deadline 31/10.
 
 ## Đã chốt
 
 | | Quyết định |
 |---|---|
 | Teacher | Qwen3-8B-AWQ (điều lệ cho tới 15B, chọn 8B cho nhẹ máy) |
-| Quy mô | 5.000 chunk nguồn → ~5.100 nhóm listwise → 81.600 cặp chấm |
-| Ngân sách | ~5 giờ GPU, xong trong ngày |
 | Dev set | 100 query gán tay, bắt buộc |
 
 ## Bảng việc
 
 | # | Việc | GPU | Trạng thái |
 |---|---|---|---|
-| 0 | Dựng bảng ICD song ngữ vi-en | không | **xong** - `data/vocab/icd_bilingual.tsv`, 10.752 dòng |
+| 0 | Dựng bảng ICD song ngữ vi-en | không | **xong** - `data/vocab/icd_bilingual.tsv` |
 | 1 | Sửa backbone `ms-marco-MiniLM` → `bge-reranker-v2-m3` | không | **xong** - `sft-reranker/main.py`, smoke test vi→en xếp đúng |
 | 2 | Script host vLLM | sau | **xong** - `scripts/serve_vllm.sh`, lên server chỉ việc chạy |
-| A | **Ingest corpus** - nút thắt thật, xem mục CHẶN | có | **chưa làm**, 0,23% |
+| A | **Ingest corpus** - nút thắt thật, xem mục CHẶN | có | **chưa làm** |
 | 3 | Viết bước 1-2-3: chọn chunk, sinh query, lọc round-trip | không | **code + prompt xong**. Chờ việc A (ingest) để chạy pilot thật |
 | 3b | Audit độ phủ `audit_coverage.py` | có | **xong**, phát hiện việc A |
 | 4 | Pilot 300 chunk → **CỔNG CHẶN: soát tay 30 query sinh ra** | có | |
@@ -32,24 +30,13 @@ Deadline 31/10. Cập nhật 2026-10-19.
 
 ## CHẶN: corpus chưa được index
 
-Đo lúc 2026-10-19, trên Qdrant đang chạy:
-
-| | |
-|---|---|
-| Tài liệu trong corpus | 1.220.598 |
-| Đã ingest | **2.854 (0,23%)** |
-| Ngôn ngữ đã ingest | **chỉ tiếng Trung**, 19 domain, 4.105 chunk |
-| Chunk tiếng Anh | **0** |
-| Chunk tiếng Việt | **0** |
-
-Audit độ phủ xác nhận: với 200 query thật, nhánh `en` và `vi` trả về điểm 0,0 cho **mọi** query.
-Không có gì để truy xuất.
+Chuyển sang GPU server thuê, Qdrant dựng mới - mọi số đo cũ trên máy local
+(tốc độ ingest, tỷ lệ đã index) không còn áp dụng, phải đo lại từ đầu trên
+máy mới trước khi tin bất kỳ ước lượng thời gian nào.
 
 Bước 1 của pipeline sinh nhãn cần chọn 5.000 chunk với tỷ lệ EN 60% / VI 30%.
-Hiện không có chunk EN hay VI nào, nên **không chạy được, kể cả pilot**.
-
-Tốc độ ingest đo từ ledger: **1,6 doc/s** → ngoại suy 1,22 M tài liệu = **218 giờ**.
-Deadline còn 12 ngày. Đây là nút thắt lớn nhất của dự án, lớn hơn mọi thứ khác cộng lại.
+Chunk EN/VI phải có trong Qdrant trước khi bước 1 chạy được, kể cả pilot.
+Dùng `audit_coverage.py` để xác nhận độ phủ ngôn ngữ trước khi chạy bước 1.
 
 Xem mục "Việc cần quyết về ingest" bên dưới.
 
@@ -78,7 +65,7 @@ python -m src.rag.labeling.run_generate --pilot
 ## Để dành, không làm lúc này
 
 - Query router. 1.200 query là tập submission đã biết trước nên không có bài toán latency. Chi tiết ở mục 10 của spec.
-- Từ điển dân gian ↔ lâm sàng. Bảng ICD đã phủ 38,9% rồi.
+- Từ điển dân gian ↔ lâm sàng. Bảng ICD đã có sẵn, dùng được ngay khi cần.
 - Thuật ngữ tiếng Trung. Corpus zh đã crawl lên ~30% (trước đó 4,1%) - quyết định "bỏ" có thể cần xem lại, nhưng chưa làm lúc này.
 - Hard negative cùng chương ICD. Bật sau khi pilot chạy ổn.
 

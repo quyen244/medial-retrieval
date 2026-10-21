@@ -5,6 +5,7 @@ langchain-huggingface
 sentence-transformers
 langchain-qdrant
 qdrant-client
+FlagEmbedding
 
 # Ingestion
 datasets
@@ -13,3 +14,13 @@ trafilatura
 rich
 curl_cffi
 python-dotenv
+requests
+
+# Train / score
+torch
+transformers
+scikit-learn
+numpy
+
+# Tracking
+mlflow
