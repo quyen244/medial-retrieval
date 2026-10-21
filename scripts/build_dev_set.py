@@ -94,7 +94,7 @@ def cmd_export(args) -> int:
           ", ".join(f"{b} {sum(1 for q in queries if q['band'] == b)}" for b, *_ in BANDS))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=False, max_length=1024)
+    encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=True, max_length=1024)
     vs = VectorStore(encoder, url=args.qdrant_url, collection_name=args.collection)
 
     pipeline = None

@@ -90,7 +90,9 @@ class LabelingConfig:
     llm_model: str = "Qwen/Qwen3-8B-AWQ"
     llm_temperature: float = 0.7  # sinh query cần đa dạng, không cần xác định
     llm_max_tokens: int = 640
-    llm_concurrency: int = 16
+    # 64 thay vì 16: pilot cho thấy KV cache của vLLM (0.6 GPU) mới dùng ~26% ở 16
+    # request đồng thời, nên còn chỗ gộp thêm; bước 5b chiếm phần lớn thời gian.
+    llm_concurrency: int = 64
     llm_max_retries: int = 3
 
     # Nhiệt độ chấm điểm PHẢI thấp, khác hẳn llm_temperature ở trên (0.7, dùng
@@ -98,7 +100,9 @@ class LabelingConfig:
     # phải sáng tạo - nhiệt độ cao làm hai lần chạy ra hai nhãn khác nhau cho
     # cùng một cặp (query, chunk), phá khả năng lặp lại của toàn bộ nhãn.
     judge_temperature: float = 0.0
-    judge_max_tokens: int = 200  # chỉ cần trả JSON điểm số, không cần dài
+    # Mỗi chunk trả thêm same_subject + answers trước score (ép model đi qua hai
+    # cổng trước khi chấm) nên cần nhiều token hơn chỉ trả điểm.
+    judge_max_tokens: int = 320
 
     # --- hạ tầng ---
     qdrant_url: str = "http://localhost:6333"

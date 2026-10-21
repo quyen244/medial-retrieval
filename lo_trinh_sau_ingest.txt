@@ -16,7 +16,7 @@ python -m scripts.qdrant_backup backup --collection medical_documents
 1. TẮT vLLM: CHẠY CÁC BÀI THÍ NGHIỆM (200 câu đầu)
 -------------------------------------------------
 R="python -m src.rag.run_full_submission --collection medical_documents --limit 200 --pad-empty"
-AUG=data/augment_v2/augmented.jsonl
+AUG=data/augment_v2_full/augmented.jsonl   # B' đủ 1200 câu, dùng chung cho thí nghiệm và bài cuối
 
 # chạy thử 5 câu trước
 python -m src.rag.run_full_submission --collection medical_documents --limit 5 --pad-empty \

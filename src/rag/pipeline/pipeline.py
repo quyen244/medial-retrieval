@@ -41,6 +41,7 @@ class PipelineConfig:
     # Tính cho CẢ cặp (câu hỏi + chunk). 512 cắt mất phần lớn chunk khi câu hỏi dài;
     # bge-reranker-v2-m3 hỗ trợ tới 8192, đổi lại chậm hơn.
     reranker_max_length: int = 1024
+    reranker_fp16: bool = True
     fusion_rrf_k: int = 60
     branch_top_k: Optional[Dict[str, int]] = None  # None -> router's own default
     # Cách chọn ứng viên sau khi các nhánh ngôn ngữ trả về:
@@ -64,6 +65,7 @@ class PipelineConfig:
             "languages": list(self.languages),
             "reranker_model": self.reranker_model,
             "reranker_max_length": self.reranker_max_length,
+            "reranker_fp16": self.reranker_fp16,
             "fusion_rrf_k": self.fusion_rrf_k,
             "branch_top_k": self.branch_top_k,
             "selection": self.selection,
@@ -83,7 +85,8 @@ class RetrievalPipeline:
         self.fusion: FusionStrategy = self._build("fusion", config.fusion, k=config.fusion_rrf_k) \
             if config.fusion == "rrf" else self._build("fusion", config.fusion)
         self.reranker: Reranker = self._build("reranker", config.reranker, model_name=config.reranker_model,
-                                              max_length=config.reranker_max_length)
+                                              max_length=config.reranker_max_length,
+                                              fp16=config.reranker_fp16)
 
         self.retrievers: Dict[str, Retriever] = {
             lang: self._build("retriever", config.retriever, vectorstore=vectorstore, language=lang)
@@ -130,6 +133,15 @@ class RetrievalPipeline:
             span.n_out = len(decision.branch_top_k)
 
         branch_results: Dict[str, List[Candidate]] = {}
+
+        if self.config.retriever == "qdrant-hybrid" and hasattr(self.vectorstore, "prime_hybrid"):
+            self.vectorstore.prime_hybrid([query.text])  # encode 1 lần cho cả 3 nhánh
+        if self.config.retriever == "qdrant-language" and "dense_vec" not in (query.metadata or {}):
+            with trace.span(f"{p}encode", params={}, n_in=1) as span:
+                vec = self.vectorstore.encoder.encode(query.text, normalize_embeddings=True).tolist()
+                span.n_out = 1
+            query = QueryItem(id=query.id, text=query.text,
+                              metadata={**(query.metadata or {}), "dense_vec": vec})
 
         def run_branch(lang: str, top_k: int):
             return lang, self.retrievers[lang].retrieve(query, top_k)

@@ -101,7 +101,7 @@ def main():
         print(f"  {name}: version {pv.version}")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=False, max_length=1024)
+    encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=True, max_length=1024)
     vectorstore = VectorStore(encoder, url=cfg.qdrant_url, collection_name=cfg.corpus_collection)
 
     real_queries = [r["query"] for r in get_dataset("query")["train"]]

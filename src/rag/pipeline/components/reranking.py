@@ -24,20 +24,28 @@ DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 @ComponentRegistry.register("reranker", "cross-encoder")
 class CrossEncoderReranker(Reranker):
-    def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, device: str = None, max_length: int = 1024):
+    def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, device: str = None, max_length: int = 1024,
+                 fp16: bool = True):
+        import torch
+
         self.model_name = model_name
         self.max_length = max_length
-        self.model = CrossEncoder(model_name, device=device, max_length=max_length)
+        # fp16 trên GPU có Tensor Core (RTX 5060 Ti): nhanh hơn fp32 nhiều, điểm
+        # chỉ lệch ở chữ số nhỏ. CPU thì giữ fp32.
+        self.fp16 = fp16 and torch.cuda.is_available()
+        kwargs = {"model_kwargs": {"torch_dtype": torch.float16}} if self.fp16 else {}
+        self.model = CrossEncoder(model_name, device=device, max_length=max_length, **kwargs)
 
     def rerank(self, query: QueryItem, candidates: List[Candidate], top_k: int) -> List[Candidate]:
         if not candidates:
             return []
         pairs = [(query.text, c.content) for c in candidates]
-        scores = self.model.predict(pairs)
+        scores = self.model.predict(pairs, batch_size=32)
         for c, score in zip(candidates, scores):
             c.rerank_score = float(score)
         ranked = sorted(candidates, key=lambda c: c.rerank_score, reverse=True)
         return ranked[:top_k]
 
     def get_params(self) -> Dict[str, Any]:
-        return {"type": "cross-encoder", "model_name": self.model_name, "max_length": self.max_length}
+        return {"type": "cross-encoder", "model_name": self.model_name, "max_length": self.max_length,
+                "fp16": self.fp16}

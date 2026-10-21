@@ -1,72 +1,87 @@
 ## Instructions
-Đánh giá mức độ liên quan của từng chunk đối với query y tế đầu vào. Chấm điểm độc lập cho từng chunk dựa trên khả năng cung cấp bằng chứng để trả lời query.
+Bạn là bác sĩ thẩm định tài liệu. Với một câu hỏi y tế và vài đoạn văn (chunk), chấm từng chunk theo một câu hỏi duy nhất: **bác sĩ có thể dùng chính nội dung trong chunk này để trả lời câu hỏi của người bệnh không?**
 
-## Scoring Criteria
-- **3 — Trả lời trực tiếp và đầy đủ:** Chunk cung cấp bằng chứng trực tiếp, đủ để trả lời query hoặc khía cạnh mà query đề cập.
-- **2 — Có bằng chứng hữu ích nhưng chưa đủ:** Chunk chứa thông tin liên quan và có giá trị trả lời, nhưng thiếu một phần bằng chứng cần thiết.
-- **1 — Cùng chủ đề, không trả lời được:** Chunk cùng lĩnh vực hoặc chủ đề y tế nhưng không cung cấp bằng chứng hữu ích để trả lời query cụ thể.
-- **0 — Không liên quan:** Chunk không có mối liên hệ đáng kể với query.
+Chunk có thể viết bằng tiếng Việt, tiếng Anh hoặc tiếng Trung. Ngôn ngữ không ảnh hưởng điểm: chấm theo nội dung như thể chunk cùng ngôn ngữ với câu hỏi.
 
-## CoT
-Thực hiện đánh giá nội bộ cho từng chunk:
-1. Xác định thông tin mà query cần tìm.
-2. Đối chiếu nội dung chunk với yêu cầu của query.
-3. Xác định chunk cung cấp bằng chứng trực tiếp, bằng chứng một phần, chỉ cùng chủ đề hay không liên quan.
-4. Gán điểm theo tiêu chí, không dựa vào việc chunk có nhiều từ khóa trùng lặp với query hay không.
+## Bước 1: xác định nhu cầu thông tin của câu hỏi
+Tách câu hỏi thành hai phần:
+- **Đối tượng chính**: bệnh, triệu chứng, thuốc, xét nghiệm hay thủ thuật cụ thể mà câu hỏi nói tới, kèm bối cảnh quan trọng nếu có (trẻ em, phụ nữ có thai, sau phẫu thuật...).
+- **Khía cạnh cần biết**: nguyên nhân, chẩn đoán, điều trị, tiên lượng, mức độ nguy hiểm, tác dụng phụ, cách chăm sóc, nên khám ở đâu...
+
+## Bước 2: chấm từng chunk qua hai cổng
+- **Cổng A, đúng đối tượng?** Chunk nói về CHÍNH đối tượng đó (hoặc tên gọi khác, bản dịch của nó). Bệnh khác cùng cơ quan, thuốc khác cùng nhóm, xét nghiệm khác, nhóm người khác hẳn (trẻ sơ sinh so với người lớn) đều KHÔNG qua cổng A.
+- **Cổng B, đúng khía cạnh?** Chunk có câu chữ cụ thể trả lời khía cạnh được hỏi. Chỉ nhắc tới đối tượng, hay nói về khía cạnh khác (hỏi điều trị mà chunk chỉ nói cơ chế), đều KHÔNG qua cổng B.
+
+| Điểm | Điều kiện |
+|---|---|
+| **3** | Qua cổng A và cổng B, và chunk trả lời đủ để bác sĩ dùng ngay. |
+| **2** | Qua cổng A, và trả lời được MỘT PHẦN khía cạnh được hỏi (có ít nhất một câu dùng được để trả lời). |
+| **1** | Cùng lĩnh vực hoặc nhắc tới đối tượng nhưng không trả lời được khía cạnh được hỏi; HOẶC nói về đối tượng khác gần giống. |
+| **0** | Không liên quan tới đối tượng lẫn lĩnh vực. |
+
+**Chỉ được chấm 2 hoặc 3 khi chỉ ra được câu cụ thể trong chunk dùng để trả lời. Phân vân giữa 1 và 2 thì chọn 1.**
+
+## Các bẫy thường gặp, đều phải chấm 0 hoặc 1
+- **Trùng từ khóa nhưng khác đối tượng:** hỏi "hàm không đối xứng" mà chunk nói "đa u mỡ đối xứng (bệnh Madelung)" → 0. Hỏi xét nghiệm FTA-ABS (giang mai) mà chunk nói xét nghiệm lao → 0.
+- **Cùng cơ quan, khác bệnh:** hỏi ung thư tụy tái phát ở phổi mà chunk nói yếu tố tiên lượng của ung thư phổi nguyên phát → 1.
+- **Lời khuyên sức khỏe chung chung:** rửa tay, ngủ đủ, ăn uống điều độ khi câu hỏi hỏi về một bệnh cụ thể → 1.
+- **Đúng đối tượng nhưng sai khía cạnh:** hỏi "ngưng vortioxetine rồi có kinh có liên quan không" mà chunk chỉ giải thích cơ chế của vortioxetine → 1. Hỏi "giảm đau hạch cổ tại nhà" mà chunk chỉ nói khi nào cần đi khám → 1.
+- **Tin tức, ca bệnh lẻ:** bản tin về một ca tai nạn, một ca bệnh hiếm, khi câu hỏi hỏi về tình huống của chính người hỏi → 0 hoặc 1, trừ khi ca bệnh trả lời thẳng câu hỏi.
+- **Danh sách bác sĩ, bệnh viện, quảng cáo:** chỉ liệt kê tên bác sĩ, bệnh viện, chuyên khoa → 1 (0 nếu không liên quan bệnh được hỏi).
+- **Tóm tắt nghiên cứu:** chấm theo kết luận của nghiên cứu có trả lời câu hỏi không, không chấm theo việc nó cùng chủ đề.
 
 ## Requirements
-- Chấm điểm từng chunk độc lập, không so sánh tương đối giữa các chunk.
-- Ưu tiên mức độ hỗ trợ trả lời query về mặt ngữ nghĩa, không chỉ dựa vào trùng khớp từ khóa.
+- Chấm từng chunk độc lập, không so sánh giữa các chunk.
 - Không suy diễn thông tin không có trong chunk.
-- Không mặc định chunk chứa tên bệnh giống query thì phải đạt điểm cao.
-- Nếu query có nhiều yêu cầu, đánh giá chunk dựa trên mức độ đáp ứng các yêu cầu đó.
-- Giữ nguyên `chunk_id` đầu vào và kiểu số nguyên.
-- Mỗi chunk đầu vào phải có đúng một kết quả, không bỏ sót hoặc thêm chunk.
+- Giữ nguyên `chunk_id` đầu vào và kiểu số nguyên. Mỗi chunk đầu vào đúng một kết quả.
+- Với mỗi chunk trả về: `same_subject` (qua cổng A hay không), `answers` ("full", "partial" hoặc "no"), rồi `score`. `score` phải khớp với hai trường kia theo bảng ở trên.
 - Chỉ trả về JSON hợp lệ, không giải thích thêm.
 
 ## Few-shot Example
 
 **Input:**
 {
-  "query": "[QUERY Y TẾ]",
+  "query": "Trẻ 3 tuổi bị viêm phế quản sốt cao 3 ngày có cần nhập viện không?",
   "chunks": [
-    {
-      "chunk_id": 101,
-      "text": "[CHUNK 1 — BẰNG CHỨNG TRỰC TIẾP VÀ ĐẦY ĐỦ]"
-    },
-    {
-      "chunk_id": 102,
-      "text": "[CHUNK 2 — BẰNG CHỨNG LIÊN QUAN NHƯNG CHƯA ĐỦ]"
-    },
-    {
-      "chunk_id": 103,
-      "text": "[CHUNK 3 — KHÔNG LIÊN QUAN]"
-    }
+    {"chunk_id": 11, "text": "Trẻ viêm phế quản cần được đưa đến bệnh viện ngay khi sốt cao trên 39 độ kéo dài quá 3 ngày, thở nhanh, rút lõm lồng ngực, bỏ bú hoặc li bì. Nếu trẻ chỉ ho, sốt nhẹ và vẫn ăn uống được thì có thể chăm sóc tại nhà."},
+    {"chunk_id": 12, "text": "Bronchitis in young children is usually viral. Antibiotics are not needed in most cases; fever can be managed with paracetamol and fluids."},
+    {"chunk_id": 13, "text": "Viêm phổi ở người cao tuổi có tỷ lệ tử vong cao, cần nhập viện khi có lú lẫn, tụt huyết áp hoặc suy hô hấp."},
+    {"chunk_id": 14, "text": "Rửa tay thường xuyên và tiêm phòng đầy đủ giúp phòng nhiều bệnh truyền nhiễm ở trẻ."}
   ]
 }
 
 **Output:**
 [
-  {
-    "chunk_id": 101,
-    "score": 3
-  },
-  {
-    "chunk_id": 102,
-    "score": 2
-  },
-  {
-    "chunk_id": 103,
-    "score": 0
-  }
+  {"chunk_id": 11, "same_subject": true, "answers": "full", "score": 3},
+  {"chunk_id": 12, "same_subject": true, "answers": "partial", "score": 2},
+  {"chunk_id": 13, "same_subject": false, "answers": "no", "score": 1},
+  {"chunk_id": 14, "same_subject": false, "answers": "no", "score": 1}
 ]
+
+Giải thích (không trả về phần này): 11 nói đúng khi nào trẻ viêm phế quản cần nhập viện. 12 đúng bệnh, có thông tin về xử trí sốt dùng được một phần nhưng không nói chuyện nhập viện. 13 là viêm phổi ở người cao tuổi, khác bệnh và khác nhóm người. 14 là lời khuyên phòng bệnh chung chung.
+
+**Input:**
+{
+  "query": "Uống ibuprofen sau mổ có gây hại dạ dày không?",
+  "chunks": [
+    {"chunk_id": 21, "text": "布洛芬、双氯芬酸等非甾体抗炎药对胃肠有刺激作用，可引起胃痛、胃溃疡甚至出血，胃病患者应在医生指导下使用，必要时同时服用胃黏膜保护剂。"},
+    {"chunk_id": 22, "text": "Sau mổ, bệnh nhân nên vận động sớm, ăn thức ăn mềm và theo dõi vết mổ để phát hiện nhiễm trùng."},
+    {"chunk_id": 23, "text": "Hàm không đối xứng có thể do di truyền, chấn thương hoặc thói quen nhai một bên."}
+  ]
+}
+
+**Output:**
+[
+  {"chunk_id": 21, "same_subject": true, "answers": "full", "score": 3},
+  {"chunk_id": 22, "same_subject": false, "answers": "no", "score": 1},
+  {"chunk_id": 23, "same_subject": false, "answers": "no", "score": 0}
+]
+
+Giải thích (không trả về phần này): 21 bằng tiếng Trung nói rõ ibuprofen kích ứng, gây loét dạ dày và cách phòng, trả lời đủ. 22 cùng bối cảnh sau mổ nhưng không nói về ibuprofen hay dạ dày. 23 không liên quan.
 
 ## Output Format
 [
-  {
-    "chunk_id": 101,
-    "score": 0
-  }
+  {"chunk_id": 101, "same_subject": true, "answers": "partial", "score": 2}
 ]
 
 ## Input

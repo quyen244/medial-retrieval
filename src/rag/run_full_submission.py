@@ -111,8 +111,8 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     console.print(f"[full_submission] device={device}")
 
-    # fp32: chỉ encode vài trăm câu hỏi ngắn nên chi phí không đáng kể.
-    encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=False, max_length=1024)
+    # fp16: khớp với lúc ingest (vector tài liệu cũng sinh bằng fp16) và nhanh hơn.
+    encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=True, max_length=1024)
     vectorstore = VectorStore(encoder, url=args.qdrant_url, path=args.qdrant_path, collection_name=args.collection)
 
     dataset = get_dataset("query")

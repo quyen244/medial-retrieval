@@ -126,16 +126,22 @@ def fetch_candidates(vectorstore, records: List[Dict[str, Any]], cfg,
     """
     src_lookup = src_lookup or {}
     targets = lang_targets(cfg)
+    # Encode trước theo lô 32 thay vì từng câu trong mỗi luồng.
+    mode = getattr(cfg, "candidate_search", "hybrid")
+    texts = [r["query"] for r in records]
+    dense_map = {}
+    if mode == "hybrid" and hasattr(vectorstore, "prime_hybrid"):
+        vectorstore.prime_hybrid(texts, batch_size=32)
+    else:
+        dense_map = {t: v.tolist() for t, v in zip(
+            texts, vectorstore.encoder.encode(texts, normalize_embeddings=True, batch_size=32))}
     stats: Dict[str, Any] = defaultdict(int)
 
     def one(rec: Dict[str, Any]):
         q = rec["query"]
         # Encode MỘT lần rồi dùng cho cả ba lần search. Đường dense tự encode
         # mỗi lần search thì cùng một query chạy qua BGE-M3 ba lượt.
-        qvec = None
-        mode = getattr(cfg, "candidate_search", "hybrid")
-        if mode == "dense" or not hasattr(vectorstore.encoder, "encode_with_sparse"):
-            qvec = vectorstore.encoder.encode(q, normalize_embeddings=True).tolist()
+        qvec = dense_map.get(q)
 
         groups: Dict[str, List[Dict[str, Any]]] = {}
         local_stats: Dict[str, int] = defaultdict(int)

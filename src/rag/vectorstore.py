@@ -343,6 +343,19 @@ class VectorStore:
             with_payload=True,
         ).points
 
+    def prime_hybrid(self, texts, batch_size: int = 32) -> int:
+        """Encode trước dense + sparse cho nhiều câu theo lô, giữ trong bộ nhớ để
+        hybrid_search dùng lại thay vì encode từng câu một (lô 1). Kết quả tìm
+        kiếm không đổi. Trả về số câu mới được encode."""
+        cache = self.__dict__.setdefault("_hybrid_cache", {})
+        todo = list(dict.fromkeys(t for t in texts if t not in cache))
+        if not todo or not hasattr(self.encoder, "encode_with_sparse"):
+            return 0
+        dense, lex = self.encoder.encode_with_sparse(todo, batch_size=batch_size)
+        for t, d, w in zip(todo, dense, lex):
+            cache[t] = (d, w)
+        return len(todo)
+
     def hybrid_search(
         self,
         query_text: str,
@@ -363,9 +376,13 @@ class VectorStore:
         if not hasattr(self.encoder, "encode_with_sparse"):
             raise RuntimeError("hybrid_search requires an encoder with encode_with_sparse() (BgeM3Embedder)")
 
-        dense_vecs, lexical_weights = self.encoder.encode_with_sparse([query_text], batch_size=1)
-        dense_vec = dense_vecs[0]
-        sparse_vec = self.encoder.lexical_weights_to_sparse_vector(lexical_weights[0])
+        cached = self.__dict__.get("_hybrid_cache", {}).get(query_text)
+        if cached is not None:
+            dense_vec, lex = cached
+        else:
+            dense_vecs, lexical_weights = self.encoder.encode_with_sparse([query_text], batch_size=1)
+            dense_vec, lex = dense_vecs[0], lexical_weights[0]
+        sparse_vec = self.encoder.lexical_weights_to_sparse_vector(lex)
 
         query_filter = None
         if language is not None:

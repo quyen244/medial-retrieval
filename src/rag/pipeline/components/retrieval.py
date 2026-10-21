@@ -49,7 +49,11 @@ class QdrantLanguageRetriever(Retriever):
         self.language = language
 
     def retrieve(self, query: QueryItem, top_k: int) -> List[Candidate]:
-        query_vector = self.vectorstore.encoder.encode(query.text, normalize_embeddings=True).tolist()
+        # Pipeline encode sẵn một lần cho cả 3 nhánh (metadata["dense_vec"]); gọi
+        # lẻ thì tự encode. Cùng vector nên kết quả y hệt, chỉ bớt 2/3 số lần encode.
+        query_vector = (query.metadata or {}).get("dense_vec")
+        if query_vector is None:
+            query_vector = self.vectorstore.encoder.encode(query.text, normalize_embeddings=True).tolist()
         points = self.vectorstore.search(query_vector, top_k=top_k, language=self.language)
         return _points_to_candidates(points, self.language)
 

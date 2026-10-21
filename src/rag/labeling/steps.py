@@ -151,7 +151,7 @@ def select_source_chunks(vectorstore, real_queries: List[str], cfg) -> List[Dict
     # lần search tự encode thì cùng một query bị chạy qua BGE-M3 ba lượt, tức
     # gấp ba chi phí nặng nhất của bước này.
     print(f"  encode {len(queries)} query...", flush=True)
-    qvecs = [vectorstore.encoder.encode(q, normalize_embeddings=True).tolist() for q in queries]
+    qvecs = [v.tolist() for v in vectorstore.encoder.encode(queries, normalize_embeddings=True, batch_size=32)]
 
     def collect(lang: str, target: int) -> Dict[str, Dict[str, Any]]:
         if target <= 0:
@@ -159,10 +159,12 @@ def select_source_chunks(vectorstore, real_queries: List[str], cfg) -> List[Dict
         # Search một lần cho mỗi query, lấy sẵn cả chiều sâu, rồi mới bóc từng
         # tầng. Bóc tầng mà search lại từ đầu thì tốn gấp `chunks_per_real_query`
         # lần cho cùng một kết quả.
-        hits_by_query = [
-            list(vectorstore.search(v, top_k=cfg.chunks_per_real_query, language=lang))
-            for v in qvecs
-        ]
+        # Song song: 1.200 lượt search tuần tự là phần chậm nhất của bước này.
+        # ex.map giữ thứ tự nên kết quả y hệt bản tuần tự.
+        with ThreadPoolExecutor(max_workers=cfg.llm_concurrency) as ex:
+            hits_by_query = list(ex.map(
+                lambda v: list(vectorstore.search(v, top_k=cfg.chunks_per_real_query, language=lang)),
+                qvecs))
         pool: Dict[str, Dict[str, Any]] = {}
         for depth in range(cfg.chunks_per_real_query):
             if len(pool) >= target:
@@ -375,6 +377,9 @@ def roundtrip_filter(vectorstore, records: List[Dict[str, Any]], cfg) -> Tuple[L
     miễn phí, không cần model nào sinh ra.
     """
     same_lang = getattr(cfg, "roundtrip_same_language", True)
+    # Encode trước toàn bộ câu theo lô 32 (dense + sparse), search sau dùng lại.
+    if hasattr(vectorstore, "prime_hybrid"):
+        vectorstore.prime_hybrid([r["query"] for r in records], batch_size=32)
 
     def one(rec):
         try:

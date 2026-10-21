@@ -134,7 +134,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     encoder = BgeM3Embedder("BAAI/bge-m3", device=device, use_fp16=False, max_length=1024)
     vs = VectorStore(encoder, url=args.qdrant_url, collection_name=args.collection)
-    pipeline = RetrievalPipeline(vs, PipelineConfig())
+    pipeline = RetrievalPipeline(vs, PipelineConfig(reranker_fp16=False))
     runners = {
         "A  (câu gốc)": pipeline,
         "B' (concat)": MultiQueryPipeline(pipeline, augmented, MultiQueryConfig(mode="concat")),

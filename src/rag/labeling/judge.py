@@ -56,12 +56,14 @@ class CrossEncoderScorer:
     """
 
     def __init__(self, model_name: str = TIER1_MODEL, device: Optional[str] = None,
-                 max_length: int = 1024, batch_size: int = 16):
+                 max_length: int = 1024, batch_size: int = 32, fp16: bool = True):
+        import torch
         from sentence_transformers import CrossEncoder
 
         self.model_name = model_name
         self.batch_size = batch_size
-        self.model = CrossEncoder(model_name, device=device, max_length=max_length)
+        kwargs = {"model_kwargs": {"torch_dtype": torch.float16}} if fp16 and torch.cuda.is_available() else {}
+        self.model = CrossEncoder(model_name, device=device, max_length=max_length, **kwargs)
 
     def score(self, query: str, docs: List[str]) -> List[float]:
         if not docs:
