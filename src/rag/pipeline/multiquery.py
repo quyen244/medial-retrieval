@@ -70,6 +70,15 @@ class MultiQueryConfig:
     # câu gốc) thay vì chuỗi ghép thuật ngữ. Câu ngắn khi đó tìm y như bài A.
     plain_units: bool = False
     sub_rerank_top_k: int = 20
+    # None: sub-query giữ sub_rerank_top_k chunk điểm cao nhất, không xét ngôn
+    # ngữ. Có giá trị (vd {"vi": 12, "en": 5, "zh": 3}): giữ đúng số đó mỗi ngôn
+    # ngữ, tổng thay cho sub_rerank_top_k. Chỗ giữ vẫn là top slots_per_sub chung.
+    sub_branch_keep: Optional[Dict[str, int]] = None
+    # Ghi lại MỌI ứng viên của mọi unit kèm điểm câu gốc và điểm sub-query
+    # (MultiQueryResult.dump), để scripts/simulate_subquota.py lắp offline các
+    # kiểu chia top-k / giữ chỗ / số chunk nộp mà không chạy GPU lại. Tốn thêm
+    # một lượt chấm cho ứng viên sub-query bị cắt (~150 cặp mỗi câu dài).
+    dump_all: bool = False
     slots_per_sub: int = 3
     slot_max_rank: int = 30
 
@@ -86,6 +95,7 @@ class MultiQueryConfig:
             "sub_rerank": self.sub_rerank,
             "plain_units": self.plain_units,
             "sub_rerank_top_k": self.sub_rerank_top_k,
+            "sub_branch_keep": self.sub_branch_keep,
             "slots_per_sub": self.slots_per_sub,
             "slot_max_rank": self.slot_max_rank,
         }
@@ -247,6 +257,7 @@ class MultiQueryResult:
     n_overlap: int = 0  # số chunk được từ 2 lượt trở lên tìm ra
     used_fallback: bool = False
     stats: Dict[str, Any] = field(default_factory=dict)
+    dump: Optional[Dict[str, Any]] = None
 
 
 class MultiQueryPipeline:
@@ -326,8 +337,17 @@ class MultiQueryPipeline:
                     c.rerank_score = float(s)
                     sub_scores.setdefault(str(c.chunk_id), {})[key] = float(s)
                 # Chấm hết ứng viên để lưu đủ điểm, rồi mới cắt top-k.
-                scored = sorted(cs, key=lambda c: c.rerank_score, reverse=True)[: cfg.sub_rerank_top_k]
-                slot_ids.append([str(c.chunk_id) for c in scored[: cfg.slots_per_sub]])
+                ranked = sorted(cs, key=lambda c: c.rerank_score, reverse=True)
+                slot_ids.append([str(c.chunk_id) for c in ranked[: cfg.slots_per_sub]])
+                if cfg.sub_branch_keep:
+                    left = dict(cfg.sub_branch_keep)
+                    scored = []
+                    for c in ranked:
+                        if left.get(c.branch, 0) > 0:
+                            left[c.branch] -= 1
+                            scored.append(c)
+                else:
+                    scored = ranked[: cfg.sub_rerank_top_k]
                 for c in scored:
                     by_branch.setdefault(c.branch, []).append(c)
 
@@ -345,9 +365,13 @@ class MultiQueryPipeline:
                 cfg.slots_per_sub, cfg.slot_max_rank,
             )
 
+        dump = self._dump(query, rerank_query, specs if use_sub else [], unit_branches,
+                          by_branch, sub_scores) if cfg.dump_all else None
+
         _, hits = union_candidates(per_unit)
         trace.finish()
         return MultiQueryResult(
+            dump=dump,
             result=PipelineResult(query=query, branch_results=branch_results,
                                   fused=kept, reranked=reranked, trace=trace),
             n_unit=len(texts),
@@ -356,6 +380,37 @@ class MultiQueryPipeline:
             stats={"is_long": bool(record.get("is_long")), "sub_rerank": use_sub,
                    "n_slot_rescued": n_rescued},
         )
+
+    def _dump(self, query: QueryItem, rerank_query: QueryItem, specs: List[tuple],
+              unit_branches: List[Dict[str, List[Candidate]]],
+              by_branch: Dict[str, List[Candidate]],
+              sub_scores: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+        """Mọi ứng viên của mọi unit (theo đúng thứ tự truy xuất từng nhánh) kèm
+        điểm câu gốc và điểm sub-query. Xem MultiQueryConfig.dump_all."""
+        # Điểm câu gốc của pool: object ĐẦU TIÊN mỗi chunk_id trong by_branch là
+        # object rerank_by_branch đã chấm (nó gom pool bằng đúng vòng lặp này).
+        raw: Dict[str, float] = {}
+        for cands in by_branch.values():
+            for c in cands:
+                raw.setdefault(str(c.chunk_id), c.rerank_score)
+        chunks: Dict[str, Dict[str, Any]] = {}
+        units = []
+        for i, branches in enumerate(unit_branches):
+            units.append({"kind": specs[i][0] if specs else "",
+                          "branches": {lang: [str(c.chunk_id) for c in cs] for lang, cs in branches.items()}})
+            for cs in branches.values():
+                for c in cs:
+                    chunks.setdefault(str(c.chunk_id), {"doc_id": str(c.doc_id), "branch": c.branch,
+                                                        "language": c.language, "content": c.content})
+        missing = [cid for cid in chunks if cid not in raw]
+        if missing:
+            scores = self.pipeline.reranker.score_pairs(
+                [(rerank_query.text, chunks[cid]["content"]) for cid in missing])
+            raw.update({cid: float(s) for cid, s in zip(missing, scores)})
+        for cid, ch in chunks.items():
+            ch["raw"] = raw[cid]
+            ch["sub"] = dict(sub_scores.get(cid, {}))
+        return {"id": int(query.id), "units": units, "chunks": chunks}
 
     def run(self, query: QueryItem, parallel_retrieval: bool = True) -> MultiQueryResult:
         record = self.augmented.get(int(query.id))

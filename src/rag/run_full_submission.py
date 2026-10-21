@@ -98,6 +98,13 @@ def main():
                         help="tắt rerank theo sub-query + giữ chỗ (query phân rã, mode concat)")
     parser.add_argument("--sub-rerank-top-k", type=int, default=20,
                         help="số ứng viên mỗi sub-query giữ lại sau khi tự rerank")
+    parser.add_argument("--sub-quota", choices=["global", "fixed", "sqrt", "corpus"], default="global",
+                        help="chia --sub-rerank-top-k theo ngôn ngữ: global = top-k chung, không xét ngôn "
+                             "ngữ (mặc định); fixed = theo tỉ lệ 26/16/8; sqrt = căn bậc hai số chunk mỗi "
+                             "ngôn ngữ trong collection; corpus = đúng tỉ lệ collection")
+    parser.add_argument("--dump-all", action="store_true",
+                        help="ghi mọi ứng viên của mọi unit kèm điểm vào <checkpoint>_all.jsonl, để "
+                             "scripts/simulate_subquota.py lắp offline các kiểu chia top-k / K nộp")
     parser.add_argument("--branch-quota", choices=["fixed", "sqrt"], default="fixed",
                         help="fixed = vi 35 / en 20 / zh 10, giữ 26 / 16 / 8 (mặc định); sqrt = chia 65 ứng "
                              "viên và 50 chunk giữ theo căn bậc hai số chunk mỗi ngôn ngữ trong collection")
@@ -140,6 +147,11 @@ def main():
     if top50_path:
         console.print(f"[full_submission] lưu ứng viên kèm điểm vào {top50_path}")
     console.print(f"[full_submission] checkpoint: {checkpoint_path} ({len(done)} queries already done)")
+    dump_path = checkpoint_path.with_name(checkpoint_path.stem + "_all.jsonl") if args.dump_all else None
+    if dump_path:
+        if not args.augmented:
+            raise SystemExit("--dump-all chỉ dùng với --augmented (luồng nhiều truy vấn)")
+        console.print(f"[full_submission] ghi mọi ứng viên vào {dump_path}")
 
     config = PipelineConfig()
     if args.retriever:
@@ -153,9 +165,10 @@ def main():
             raise SystemExit(f"Không thấy model reranker ở {args.reranker_model}")
         config.reranker_model = args.reranker_model
         console.print(f"[full_submission] reranker: {config.reranker_model}")
-    if args.branch_quota == "sqrt":
+    from src.rag.pipeline.components.routing import DEFAULT_BRANCH_TOP_K, quota_from_counts
+    counts = None
+    if args.branch_quota == "sqrt" or args.sub_quota in ("sqrt", "corpus"):
         from qdrant_client import models as qm
-        from src.rag.pipeline.components.routing import DEFAULT_BRANCH_TOP_K, quota_from_counts
         counts = {
             lang: vectorstore.client.count(
                 collection_name=args.collection, exact=True,
@@ -163,6 +176,13 @@ def main():
             ).count
             for lang in config.languages
         }
+    sub_branch_keep = None
+    if args.sub_quota != "global":
+        base = counts if args.sub_quota != "fixed" else config.branch_keep
+        sub_branch_keep = quota_from_counts(base, args.sub_rerank_top_k,
+                                            power=1.0 if args.sub_quota in ("corpus", "fixed") else 0.5)
+        console.print(f"[full_submission] sub-query giữ theo ngôn ngữ ({args.sub_quota}): {sub_branch_keep}")
+    if args.branch_quota == "sqrt":
         config.branch_top_k = quota_from_counts(counts, sum(DEFAULT_BRANCH_TOP_K.values()))
         config.branch_keep = quota_from_counts(counts, sum(config.branch_keep.values()))
         console.print(f"[full_submission] chunk theo ngôn ngữ: {counts}")
@@ -178,6 +198,8 @@ def main():
                              sub_rerank=not args.no_sub_rerank,
                              plain_units=args.plain_units,
                              sub_rerank_top_k=args.sub_rerank_top_k,
+                             sub_branch_keep=sub_branch_keep,
+                             dump_all=args.dump_all,
                              max_rerank_candidates=args.max_rerank_candidates,
                              rerank_with_augmented=args.rerank_with_augmented),
         )
@@ -250,6 +272,8 @@ def main():
                     if top50_path:
                         append_checkpoint(top50_path, result_to_top_record(
                             unwrap(out), getattr(out, "stats", None)))
+                    if dump_path and getattr(out, "dump", None):
+                        append_checkpoint(dump_path, out.dump)
                     if not entry["relevant_chunks"]:
                         n_empty += 1
                     else:
