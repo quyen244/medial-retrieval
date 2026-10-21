@@ -3,9 +3,9 @@ langchain-text-splitters
 
 langchain-huggingface
 sentence-transformers
+FlagEmbedding
 langchain-qdrant
 qdrant-client
-FlagEmbedding
 
 # Ingestion
 datasets

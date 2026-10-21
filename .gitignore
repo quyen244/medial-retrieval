@@ -40,4 +40,5 @@ mlflow.db
 
 /tmp
 
-/zip_folder 
+/zip_folder
+/zip_folder_2
