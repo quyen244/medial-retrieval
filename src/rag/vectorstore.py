@@ -50,7 +50,9 @@ class VectorStore:
 
         # Auto-select embedded local mode or remote URL mode.
         if url:
-            self.client = QdrantClient(url=url)
+            # Mặc định của client REST là 5 giây: đủ khi Qdrant rảnh, nhưng lúc nó
+            # đang tối ưu index hoặc tạo snapshot thì search lọc ngôn ngữ vượt quá.
+            self.client = QdrantClient(url=url, timeout=120)
         elif path:
             os.makedirs(path, exist_ok=True)
             self.client = QdrantClient(path=path)

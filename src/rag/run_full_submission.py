@@ -199,7 +199,13 @@ def main():
                     continue
                 query = QueryItem(id=qid, text=row["query"])
                 try:
-                    out = runner.run(query)
+                    try:
+                        out = runner.run(query)
+                    except Exception as first:
+                        # Lỗi tạm (Qdrant quá tải, timeout): thử lại một lần.
+                        console.print(f"[full_submission] query {qid}: {type(first).__name__}, thử lại sau 10s")
+                        time.sleep(10)
+                        out = runner.run(query)
                     if getattr(out, "used_fallback", False):
                         n_fallback += 1
                     if getattr(out, "n_union", 0):
@@ -213,9 +219,12 @@ def main():
                     else:
                         n_ok += 1
                 except Exception as e:
+                    # KHÔNG ghi vào checkpoint: chạy lại cùng lệnh sẽ thử lại query
+                    # này thay vì giữ vĩnh viễn một entry rỗng. Bài nộp cuối vẫn đủ
+                    # id vì bước ghép cuối điền entry rỗng cho id còn thiếu.
                     console.print(f"[full_submission] WARN: query {qid} failed: {type(e).__name__}: {e}")
-                    entry = empty_submission_entry(qid)
                     n_error += 1
+                    continue
                 append_checkpoint(checkpoint_path, entry)
                 done[qid] = entry
 
@@ -237,10 +246,14 @@ def main():
 
     # Assemble final submission strictly in official query-id order, verifying completeness.
     missing = [qid for qid in all_ids if qid not in done]
-    if missing and n_padded and len(missing) == n_padded:
+    run_ids = {r["id"] for r in rows}
+    failed_ids = [qid for qid in missing if qid in run_ids]
+    if n_padded:
         console.print(f"[full_submission] --pad-empty: {n_padded} query ngoài --limit được ghi entry rỗng")
-    elif missing:
-        console.print(f"[full_submission] ERROR: {len(missing)} query ids missing after run: {missing[:10]}...")
+    if failed_ids:
+        console.print(f"[full_submission] ERROR: {len(failed_ids)} query lỗi, tạm ghi rỗng: {failed_ids[:10]}"
+                      f"{'...' if len(failed_ids) > 10 else ''}. Chạy lại đúng lệnh này để thử lại chúng "
+                      f"(checkpoint giữ các query đã xong).")
     if missing:
         for qid in missing:
             done[qid] = empty_submission_entry(qid)
