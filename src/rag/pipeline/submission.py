@@ -82,6 +82,19 @@ def result_to_top_record(result: PipelineResult, stats: Dict[str, Any] = None) -
     }
 
 
+def zip_submission(json_path) -> str:
+    """Nén bài nộp theo yêu cầu BTC: ZIP chứa ĐÚNG MỘT file .json, không nằm trong
+    thư mục con. Trả về đường dẫn file zip (cùng tên, đuôi .zip, cạnh file json)."""
+    import zipfile
+    from pathlib import Path
+
+    p = Path(json_path)
+    zp = p.with_suffix(".zip")
+    with zipfile.ZipFile(zp, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.write(p, arcname=p.name)
+    return str(zp)
+
+
 def write_submission(results: List[PipelineResult], out_path: str) -> List[Dict[str, Any]]:
     entries = [result_to_submission_entry(r) for r in results]
     with open(out_path, "w", encoding="utf-8") as f:

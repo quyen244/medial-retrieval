@@ -31,7 +31,8 @@ from src.rag.pipeline.models import QueryItem
 from src.rag.pipeline.multiquery import (MultiQueryConfig, MultiQueryPipeline, line_texts,
                                          load_augmented, unit_texts)
 from src.rag.pipeline.pipeline import PipelineConfig, RetrievalPipeline
-from src.rag.pipeline.submission import empty_submission_entry, result_to_submission_entry, result_to_top_record
+from src.rag.pipeline.submission import (empty_submission_entry, result_to_submission_entry,
+                                         result_to_top_record, zip_submission)
 from src.rag.vectorstore import VectorStore
 
 console = Console()
@@ -294,8 +295,10 @@ def main():
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(final_entries, f, ensure_ascii=False, indent=2)
+    zip_path = zip_submission(out_path)
 
     console.print(f"\n[full_submission] done: {len(final_entries)} entries written to {out_path}")
+    console.print(f"  file nộp: {zip_path}")
     console.print(f"  ok (non-empty): {n_ok}, empty: {n_empty}, errored->empty: {n_error}")
     console.print(f"  wall time this run: {elapsed:.1f}s")
     console.print(f"  VERIFIED: all {len(all_ids)} official query ids present, in order")

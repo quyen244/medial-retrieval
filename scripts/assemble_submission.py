@@ -27,7 +27,7 @@ import sys
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
-from src.rag.pipeline.submission import submission_chunk_text, submission_doc_id
+from src.rag.pipeline.submission import submission_chunk_text, submission_doc_id, zip_submission
 
 
 def load_top50(path: str) -> Dict[int, Dict[str, Any]]:
@@ -141,6 +141,7 @@ def cmd_build(a) -> int:
     assert [x["id"] for x in out] == [x["id"] for x in base], "thứ tự id bị đổi"
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
+    print(f"file nộp: {zip_submission(a.out)}")
     if sizes:
         s = sorted(sizes)
         print(f"{a.out}: {len(out)} entry, {len(sizes)} query có top 50 | số chunk nộp: "
