@@ -29,11 +29,11 @@ MẪU CHUNG VÒNG 1 (200 câu đầu, 1000 câu còn lại để rỗng bằng -
 ├────┼───────────────────────┼───────────────────────────────────────┼─────────────────────────┼───────────┼────────────────────────────────┤
 │ 8  │ mix_Bpshort_Along.zip │ Câu ngắn từ 3, câu dài từ A           │ augment chỉ ở câu ngắn  │ 0.0106    │ Câu ngắn: augment hại nhiều    │
 ├────┼───────────────────────┼───────────────────────────────────────┼─────────────────────────┼───────────┼────────────────────────────────┤
-│ 9  │ A_v1k10.zip           │ A, nộp 10 chunk/câu                   │ K = 10                  │ thấp nhất │ Nộp ít hơn thì điểm giảm       │
+│ 9  │ A_v1k10.zip           │ A, nộp 10 chunk/câu                   │ K = 10                  │ 0.007  │ Nộp ít hơn thì điểm giảm       │
 ├────┼───────────────────────┼───────────────────────────────────────┼─────────────────────────┼───────────┼────────────────────────────────┤
 │ 10 │ A_v1k30.zip           │ A, nộp 30 chunk/câu                   │ K = 30                  │ (chưa có) │                                │
 ├────┼───────────────────────┼───────────────────────────────────────┼─────────────────────────┼───────────┼────────────────────────────────┤
-│ 11 │ A_v1k50.zip           │ A, nộp 50 chunk/câu                   │ K = 50                  │ (chưa có) │                                │
+│ 11 │ A_v1k50.zip           │ A, nộp 50 chunk/câu                   │ K = 50                  │ 0.0133 │                                │
 └────┴───────────────────────┴───────────────────────────────────────┴─────────────────────────┴───────────┴────────────────────────────────┘
 
 
@@ -67,3 +67,75 @@ MẪU CHUNG VÒNG 2 (đủ 1200 câu, thư mục tmp/sub1200/, script scripts/su
 ├────┼───────────────────────┼──────────────────────────────────────────────────┼─────────────────────────┼────────────────────────────────────────────┼──────────┼──────┤
 │ 10 │ D_ft_adaptive.zip     │ 01 lắp lại, số chunk theo điểm (20-40)           │ cách cắt                │ Câu chắc nộp ít, câu mơ hồ nộp nhiều       │ không    │      │
 └────┴───────────────────────┴──────────────────────────────────────────────────┴─────────────────────────┴────────────────────────────────────────────┴──────────┴──────┘
+
+Vòng 2 chỉ có bài 01 (D_ft.zip) được chấm: 0.0805, nhưng chấm theo LUẬT CHUNK MỚI
+(23/10, mẫu số là chunk nộp). Các bài 02-10 chưa chạy. Chi tiết D_ft nằm ở bảng vòng 3.
+
+MẪU CHUNG VÒNG 3 - PHASE 0 (lắp lại offline, KHÔNG chạy GPU)
+  - Nguồn: data/tmp/sub1200/D_ft_top50.jsonl - 1.200 câu x 50 ứng viên của chính bài D_ft
+  - Mọi bài dùng CHUNG pool 50 ứng viên đó; chỉ đổi cách CHỌN và cách TRÌNH BÀY
+  - Văn bản chunk lấy từ data/raw_documents/<domain>/<doc_id>.json (markdown gốc, verbatim)
+  - Script: scripts/phase0_assemble.py (lắp), scripts/phase0_readout.py (đọc ngược res/)
+  - Đủ 1.200 câu nên các bài so trực tiếp được với nhau
+  - BTC ĐỔI CÁCH CHẤM ngày 23/10: mẫu số LCS là chunk NỘP, không phải chunk tham chiếu.
+    Điểm vòng 1 và vòng 2 chấm theo luật cũ, KHÔNG so được với vòng 3.
+
+┌───┬───────────────────┬───────┬─────────┬─────────────────────────────────────┬────────┬─────────────────────────────────────┐
+│ # │ File nộp          │ m_doc │ m_chunk │ chunk_text                          │   Điểm │ Kết luận                            │
+├───┼───────────────────┼───────┼─────────┼─────────────────────────────────────┼────────┼─────────────────────────────────────┤
+│ 1 │ D_ft.zip          │  35.1 │    40.0 │ chunk 877 ký tự, doc suy từ chunk   │ 0.0805 │ mốc so sánh, cấu hình vòng 2        │
+│ 2 │ E1_docs44.zip     │  42.7 │    40.0 │ như D_ft, nới doc list lên hết pool │ 0.0785 │ nới doc THẤT BẠI, thấp hơn cả D_ft  │
+│ 3 │ E4_docs25.zip     │  25.0 │    25.0 │ 25 doc, cửa sổ trọn bài trần 8k     │ 0.1071 │ cắt doc xuống 25 cũng kém hơn 35    │
+│ 4 │ E2_win2500.zip    │  42.7 │    42.7 │ cửa sổ 2.500 ký tự quanh chunk      │ 0.1090 │ cửa sổ dài ăn điểm lớn ở tầng chunk │
+│ 5 │ E3_full8k.zip     │  42.7 │    42.7 │ trọn markdown gốc, trần 8.000       │ 0.1099 │ cửa sổ dài + doc list hết pool      │
+│ 6 │ N5_d35_cap20k.zip │  35.0 │    42.7 │ như N3, nới trần lên 20.000         │ 0.1101 │ nới trần QUÁ ĐÀ, h_chunk tụt        │
+│ 7 │ N3_d35_c44.zip    │  35.0 │    42.7 │ 35 doc + 42,7 cửa sổ, trần 8.000    │ 0.1112 │ TỐT NHẤT. Tách 2 danh sách ĂN ĐIỂM  │
+└───┴───────────────────┴───────┴─────────┴─────────────────────────────────────┴────────┴─────────────────────────────────────┘
+
+Bảng chấm chi tiết (res/<tên>.zip -> scores.txt). h = P x m, g = h / R.
+LUÔN tính h = P x m. Suy h ngược từ dạng đóng F2 = 5h/(4g+m) lệch ~12% vì macro-F2
+không bằng F2 của macro-P/R, đủ để đảo ngược dấu kết luận.
+
+┌───────────────┬────────┬────────┬────────┬───────┬───────┬──────────┬─────────┬─────────┬─────────┬─────────┬─────────┐
+│ File nộp      │ F2_doc │  P_doc │  R_doc │ h_doc │ g_doc │ F2_chunk │ P_chunk │ R_chunk │ h_chunk │ g_chunk │ h_c/h_d │
+├───────────────┼────────┼────────┼────────┼───────┼───────┼──────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
+│ D_ft          │ 0.1293 │ 0.1998 │ 0.1368 │  7.01 │  51.2 │   0.0316 │  0.0472 │  0.0349 │    1.89 │    54.1 │    0.27 │
+│ E1_docs44     │ 0.1253 │ 0.1653 │ 0.1387 │  7.06 │  50.9 │   0.0316 │  0.0472 │  0.0349 │    1.89 │    54.1 │    0.27 │
+│ E4_docs25     │ 0.1222 │ 0.2437 │ 0.1236 │  6.09 │  49.3 │   0.0920 │  0.1902 │  0.0922 │    4.75 │    51.6 │    0.78 │
+│ E2_win2500    │ 0.1253 │ 0.1653 │ 0.1387 │  7.06 │  50.9 │   0.0926 │  0.1262 │  0.1013 │    5.39 │    53.2 │    0.76 │
+│ E3_full8k     │ 0.1253 │ 0.1653 │ 0.1387 │  7.06 │  50.9 │   0.0944 │  0.1288 │  0.1031 │    5.50 │    53.4 │    0.78 │
+│ N5_d35_cap20k │ 0.1280 │ 0.1982 │ 0.1364 │  6.93 │  50.8 │   0.0922 │  0.1259 │  0.1008 │    5.38 │    53.4 │    0.78 │
+│ N3_d35_c44    │ 0.1280 │ 0.1982 │ 0.1364 │  6.93 │  50.8 │   0.0944 │  0.1288 │  0.1031 │    5.50 │    53.4 │    0.79 │
+└───────────────┴────────┴────────┴────────┴───────┴───────┴──────────┴─────────┴─────────┴─────────┴─────────┴─────────┘
+
+Đường cong h_doc (g_doc trung bình = 50.7). Ngưỡng đáng thêm một doc là h/(4g+m):
+
+┌──────────────┬────────────────┬──────────────┬────────┬────────────┐
+│ Khoảng m_doc │ h_doc          │ Biên mỗi doc │ Ngưỡng │ Phán quyết │
+├──────────────┼────────────────┼──────────────┼────────┼────────────┤
+│ 25.0 -> 35.0 │ 6.093 -> 6.932 │        8.39% │  2.91% │ đáng thêm  │
+│ 35.0 -> 35.1 │ 6.932 -> 7.010 │       78.00% │  2.95% │ đáng thêm  │
+│ 35.1 -> 42.7 │ 7.010 -> 7.061 │        0.67% │  2.88% │ KHÔNG đáng │
+└──────────────┴────────────────┴──────────────┴────────┴────────────┘
+
+KẾT LUẬN VÒNG 3
+
+  1. Cửa sổ dài là thay đổi DUY NHẤT ăn điểm, và ăn lớn.
+     h_chunk 1,89 -> 5,50 (gấp 2,9 lần), F2_chunk 0.0316 -> 0.0944, tỷ lệ h_c/h_d 0,27 -> 0,78.
+     Cơ chế không phải mẫu số mà là CĂN ĐÚNG VÙNG: chunk 877 ký tự thường vắt qua
+     ranh giới chunk tham chiếu nên chỉ phủ được một phần.
+     Trần 8.000 chỉ hơn cửa sổ 2.500 khoảng 2%, tức đã gần bão hoà.
+
+  2. Số doc nộp có ĐỈNH ở m ~ 35, không phải càng nhiều càng tốt.
+     Nới lên 42,7 làm F2_doc tụt 0.1293 -> 0.1253; cắt xuống 25 còn tệ hơn (0.1222).
+     Biên ở hạng 26-35 là 9,08% mỗi doc, rơi xuống 0,67% ở hạng 36-43, ngưỡng là ~2,9%.
+
+  3. Tầng chunk còn dư địa lớn nhất trong phần không đụng retrieval.
+     h_c/h_d = 0.79. Nếu lên 1,00 thì F2_chunk ~ 0.1353 và FINAL ~ 0.1316.
+
+  4. Nút thắt thật vẫn là h_doc = 6.93 trên 51 gold doc mỗi câu.
+     CẢNH BÁO diễn giải: pool chỉ chứa ~44 doc, nên khoảng 44 gold doc mỗi câu CHƯA TỪNG
+     được chấm. Việc h_doc bão hoà ở hạng 36-43 nói rằng POOL NÀY đã cạn, KHÔNG nói rằng
+     pool rộng hơn là vô ích. Đó là câu hỏi của Phase 1.
+
+  Tốt nhất vòng 3: N3_d35_c44.zip = 0.1112

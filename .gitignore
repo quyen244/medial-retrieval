@@ -43,3 +43,8 @@ mlflow.db
 /zip_folder
 /zip_folder_2
 /outputs
+
+# Phase 0: index doc_id -> domain, 29 MB, sinh lai bang scripts/phase0_assemble.py --build-index
+data/raw_documents_index.json
+# thu muc giai nen tam cua bang cham BTC
+res/*_x/
