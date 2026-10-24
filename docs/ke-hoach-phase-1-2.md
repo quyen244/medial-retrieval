@@ -152,6 +152,64 @@ Ba trường `title`, `heading_path`, `lead` là bản tóm tắt DO NGƯỜI VI
 Lưu ý cách (2) RẺ HƠN cách (3), vì 1,0M tài liệu ít hơn 3,93M chunk.
 Muốn đưa heading vào vector thì làm ở mức document, đừng encode lại chunk.
 
+### 1.4b Công thức ingest doc-level, đã khảo sát trên dữ liệu thật
+
+Đo trên mẫu 4.000 tài liệu ngẫu nhiên:
+
+| | vi (65%) | en (24%) | zh (11%) |
+|---|---:|---:|---:|
+| có `title` | 100% | 100% | 100% |
+| có `source.description` | **88,8%** | **0%** | **86,1%** |
+| có heading | 43,7% | **100%** | 11,5% |
+| content median | 2.993 | 1.660 | 893 |
+
+`description` và heading BÙ TRỪ cho nhau: PubMed không có description nhưng heading 100%
+(abstract cấu trúc Background/Methods/Results), hỏi đáp tiếng Trung hiếm heading nhưng
+description 86%. Nên một template duy nhất chạy được cả ba loại nguồn.
+
+Template, xếp theo mật độ tín hiệu giảm dần để khi cắt thì bỏ phần ít quan trọng nhất:
+
+```
+title | description | h1 > h2 > ... | lead
+```
+
+Ngân sách 1.500 ký tự (~450 token). Hai cái bẫy đã gặp và đã xử lý trong script:
+- `description` thường bị CMS cắt ra từ chính thân bài nên lead lặp lại nguyên văn nó
+  (đo trên ask.39.net: 300/612 ký tự trùng). Phải cắt bản trong thân bài đi.
+- Trang hỏi đáp đầy rác điều hướng: `我要咨询`, `医生回答`, `举报`, tên user, timestamp.
+
+Lưu ý `source.language` KHÔNG đáng tin ('eng', 'pol', None). Dùng `source.language_category`.
+
+### Vì sao encode mới chứ không lấy trung bình chunk vector
+
+Có thể dựng doc vector bằng cách trung bình các chunk vector đã nằm sẵn trong Qdrant,
+không tốn GPU. Nhưng KHÔNG nên: nó làm từ đúng thứ nguyên liệu đã cho ra `h_doc = 7`.
+Chunk giữa bài vốn không chứa title, nên trung bình của chúng vẫn không có title.
+`title` và `description` là hai trường chunk vector CHƯA TỪNG nhìn thấy - đó mới là
+thông tin mới. `description` thậm chí chưa bao giờ được đưa vào Qdrant.
+
+Dùng `encode_with_sparse()`: BGE-M3 cho cả dense lẫn sparse trong MỘT forward pass,
+nên doc index có hybrid ngay, miễn phí.
+
+### Lợi ích phụ: sửa luôn tường latency
+
+Chạy 1.1 trên máy local đo được 478 giây mỗi câu, tức 159 giờ cho 1.200 câu - bất khả thi.
+Tìm trên 1,0M doc với `limit=400` rẻ hơn nhiều so với tìm trên 3,93M chunk với `limit=2800`.
+Và vì Phase 0 đã chứng minh nộp cửa sổ markdown gốc thắng nộp chunk, danh sách chunk
+không cần truy xuất chunk nữa - đọc thẳng `data/raw_documents`. Index chunk thành ra
+KHÔNG bắt buộc trong pipeline mới.
+
+### Trình tự chạy trên server
+
+| Bước | Lệnh | Máy | Ước tính |
+|---|---|---|---|
+| 1 | `python -m scripts.qdrant_backup` | bất kỳ | snapshot trước đã |
+| 2 | `python -m scripts.build_doc_texts` | CPU | ~1,0M file, ra `data/doc_texts.jsonl` (~1,4 GB) |
+| 3 | `python -m scripts.ingest_doc_index --recreate` | **GPU** | encode + nạp `medical_docs` |
+| 4 | tìm doc-level -> rerank -> nộp | GPU | chưa viết, chờ bước 3 xong |
+
+Bước 2 chạy được ngay trên máy local, không cần đợi server.
+
 ## 4. Phase 2 - mở rộng theo láng giềng
 
 Lý do: gold khoảng 51 doc mỗi câu là một CỤM CHỦ ĐỀ, không phải vài bài trả lời đúng câu hỏi.
