@@ -95,7 +95,11 @@ retrieval:
 # Xếp hạng lại
 # ---------------------------------------------------------------------------
 rerank:
-  model: models/medical-reranker
+  # BAAI/bge-reranker-v2-m3: đa ngữ, cùng họ bge-m3 đang dùng cho embedding.
+  # models/medical-reranker (MiniLM finetune trên 3 mẫu, chỉ tiếng Anh) đã bị
+  # LOẠI - xem src/rag/pipeline/components/reranking.py. Sẽ đổi sang reranker
+  # mạnh hơn sau khi Phase 1 mở rộng pool xong (docs/phat-hien-tang-diem.md mục 4).
+  model: BAAI/bge-reranker-v2-m3
   # Tính cho CẢ cặp (câu hỏi + văn bản).
   # CẢNH BÁO: đo bằng chính tokenizer của model trên data/doc_texts.jsonl -
   # 43% tài liệu tiếng Trung vượt 512 token (p90 = 1.102). Đặt 512 là tự bóp
