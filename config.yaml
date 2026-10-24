@@ -1,0 +1,150 @@
+# Cấu hình pipeline ViBioMIR.
+#
+# Mọi tham số điều chỉnh được nằm ở đây. Giá trị trong file này là CẤU HÌNH
+# ĐANG THẮNG (FINAL 0.1117), không phải giá trị mặc định của code.
+#
+# Ghi đè từ dòng lệnh bằng đường dẫn chấm:
+#     --set rerank.max_length=1024 --set submission.m_doc=40
+#
+# Ý nghĩa mã bài nộp: docs/ky-hieu-bai-nop.md
+# Phát hiện đã đo:    docs/phat-hien-tang-diem.md
+
+qdrant:
+  url: http://localhost:6333
+  timeout: 600
+  # Index đoạn văn, 3.927.800 điểm. Dùng cho mọi bài vòng 1-3.
+  collection_chunks: medical_documents
+  # Index tài liệu, 1.003.391 điểm. Phase 1, chưa nạp.
+  collection_docs: medical_docs
+
+# ---------------------------------------------------------------------------
+# Xử lý câu hỏi trước khi tìm
+# ---------------------------------------------------------------------------
+query:
+  # Câu trên ngưỡng này là "câu dài" -> phân rã thành sub-query.
+  # 30 từ đo trên 1.200 câu thật: 66,3% nằm dưới ngưỡng.
+  long_threshold_words: 30
+
+  decompose:
+    enabled: true
+    # Nhánh dài tìm bằng 3 sub-query CỘNG câu gốc = 4 lượt. Câu gốc đi vào
+    # dạng thô, không augment: nó là lưới an toàn nếu phân rã chệch ý người hỏi.
+    include_raw_unit: true
+    # Mỗi sub-unit chỉ ghép thuật ngữ mà chính nó nhắc tới, thay vì nhồi cả
+    # khối thuật ngữ của câu gốc vào cả ba.
+    scope_terms_to_unit: true
+
+  augment:
+    # false = dùng câu trơn (--plain-units). Cấu hình đang thắng dùng câu trơn.
+    enabled: false
+    file: data/augment_v2_full/augmented.jsonl
+    icd_table: data/vocab/icd_bilingual.tsv
+    rxnorm_table: data/knowledge/rxnorm_concepts_final.csv
+    # ICD-11 do WHO căn sẵn 34.919 cặp en-zh; nối sang vi được 1.560 từ.
+    # Dùng làm few-shot cho bước dịch, CHƯA nối vào pipeline.
+    trilingual_table: data/vocab/trilingual_terms.tsv
+    llm_url: http://localhost:8000/v1
+    llm_model: Qwen/Qwen3-8B-AWQ
+    temperature: 0.0
+    seed: 42
+    concurrency: 16
+
+# ---------------------------------------------------------------------------
+# Tìm kiếm
+# ---------------------------------------------------------------------------
+retrieval:
+  # chunk = tìm trên index đoạn rồi gộp về tài liệu  (vòng 1-3, đã đo)
+  # doc   = tìm thẳng trên index tài liệu            (Phase 1, chưa đo)
+  level: chunk
+
+  chunk:
+    # dense-only | hybrid (dense + sparse RRF) | flat-hybrid (không chia nhánh)
+    mode: dense
+    # Hạn ngạch mỗi nhánh ngôn ngữ. Tổng 65 = kích thước pool ứng viên.
+    # CẢNH BÁO: gold có ~51 tài liệu mỗi câu, pool 65 đoạn chỉ ra ~44 tài liệu
+    # nên recall bị chặn cứng ở 13,9%. Xem docs/phat-hien-tang-diem.md mục 6.
+    branch_top_k: {vi: 35, en: 20, zh: 10}
+    # rrf | branch-rerank. branch-rerank giữ hạn ngạch sống tới tận bước rerank
+    # nên đoạn en/zh luôn được chấm, không bị RRF cắt trước.
+    selection: branch-rerank
+    # Giữ bao nhiêu của mỗi nhánh sau khi rerank nhánh đó. Tổng 50.
+    branch_keep: {vi: 26, en: 16, zh: 8}
+    fusion_top_k: 50
+    fusion_rrf_k: 60
+
+  doc:
+    # Số tài liệu lấy về rồi rerank. 60 = nông, 1000 = sâu.
+    top_docs: 60
+    hybrid: false
+    hnsw_ef: 256
+    encode_batch: 8
+
+  # Rerank riêng từng sub-query rồi giữ chỗ cho nó trong bài nộp.
+  sub_query:
+    rerank: true
+    # Mỗi sub-query giữ bao nhiêu ứng viên vào pool chung.
+    keep_top_k: 20
+    # global | fixed | sqrt | corpus - cách chia keep_top_k cho ba ngôn ngữ.
+    quota: global
+    # Top mấy của mỗi sub-query được giữ chỗ cứng trong bài nộp...
+    slots_per_sub: 3
+    # ...nếu hạng theo câu gốc không tệ hơn mức này.
+    slot_max_rank: 30
+
+# ---------------------------------------------------------------------------
+# Xếp hạng lại
+# ---------------------------------------------------------------------------
+rerank:
+  model: models/medical-reranker
+  # Tính cho CẢ cặp (câu hỏi + văn bản).
+  # CẢNH BÁO: đo bằng chính tokenizer của model trên data/doc_texts.jsonl -
+  # 43% tài liệu tiếng Trung vượt 512 token (p90 = 1.102). Đặt 512 là tự bóp
+  # nhánh zh, vốn đã là nhánh yếu nhất.
+  max_length: 1024
+  fp16: true
+  # Chấm bằng câu GỐC, không phải chuỗi đã augment: reranker được train trên
+  # câu người thật viết, đưa chuỗi ghép đa ngữ vào là lệch phân phối train.
+  use_augmented_query: false
+  # Cắt bớt tập ứng viên trước khi rerank. null = không cắt.
+  max_candidates: null
+
+# ---------------------------------------------------------------------------
+# Lắp bài nộp
+# ---------------------------------------------------------------------------
+submission:
+  # Hai tầng chấm độc lập bằng hai công thức F2 riêng, nên chọn số riêng.
+  # m_doc = 35 là ĐỈNH ĐÃ ĐO: 25 tụt, 43 cũng tụt.
+  m_doc: 35
+  m_chunk: 44
+
+  chunk_text:
+    # orig = đoạn đã index (877 ký tự)
+    # win  = cửa sổ quanh đoạn tốt nhất
+    # full = phần đầu markdown gốc           <- đang thắng
+    mode: full
+    # Trần ký tự cho mode=full. 8.000 là ĐỈNH ĐÃ ĐO: 2.500 tụt, 20.000 cũng tụt.
+    cap: 8000
+    # Kích thước cửa sổ cho mode=win.
+    window: 2500
+    # Bóc cú pháp markdown. ĐÃ ĐO: +0,0005 FINAL. Reference của BTC gần text
+    # thuần hơn markdown.
+    strip_markdown: true
+
+  out_dir: data/tmp/phase0
+  raw_root: data/raw_documents
+  raw_index: data/raw_documents_index.json
+
+# ---------------------------------------------------------------------------
+# Dựng index tài liệu (Phase 1)
+# ---------------------------------------------------------------------------
+doc_index:
+  input: data/doc_texts.jsonl
+  # Tổng ký tự mỗi tài liệu: title | description | heading > path | lead
+  budget: 1500
+  head_budget: 300
+  max_heads: 8
+  # Tẩy dấu thời gian, nút điều hướng, lý lịch bác sĩ, dòng "Xem thêm: <bài khác>".
+  # CHƯA áp dụng vào data/doc_texts.jsonl hiện có - file đó sinh bằng code cũ.
+  denoise: true
+  upsert_batch: 256
+  encode_batch: 32

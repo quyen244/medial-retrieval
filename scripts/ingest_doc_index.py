@@ -34,7 +34,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from qdrant_client import QdrantClient, models
 
-COLL = "medical_docs"
+from src.rag.config import add_config_args, config_from_args
+
 NS = uuid.UUID("7c4f2a10-93bd-4e55-8f21-6a0d9b3c1e47")
 
 
@@ -42,35 +43,39 @@ def point_id(doc_id) -> str:
     return str(uuid.uuid5(NS, f"doc:{doc_id}"))
 
 
-def ensure_collection(client, recreate: bool):
-    if recreate and client.collection_exists(COLL):
-        client.delete_collection(COLL)
-    if not client.collection_exists(COLL):
+def ensure_collection(client, coll, recreate: bool):
+    if recreate and client.collection_exists(coll):
+        client.delete_collection(coll)
+    if not client.collection_exists(coll):
         client.create_collection(
-            collection_name=COLL,
+            collection_name=coll,
             vectors_config={"dense": models.VectorParams(size=1024, distance=models.Distance.COSINE)},
             sparse_vectors_config={"sparse": models.SparseVectorParams(modifier=models.Modifier.IDF)},
         )
     for field, schema in (("language", "keyword"), ("domain", "keyword"), ("doc_id", "integer")):
         try:
-            client.create_payload_index(collection_name=COLL, field_name=field, field_schema=schema)
+            client.create_payload_index(collection_name=coll, field_name=field, field_schema=schema)
         except Exception:
             pass  # đã có
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", default="data/doc_texts.jsonl")
-    ap.add_argument("--qdrant-url", default="http://localhost:6333")
-    ap.add_argument("--batch", type=int, default=256, help="số doc mỗi lần upsert")
-    ap.add_argument("--encode-batch", type=int, default=32)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--recreate", action="store_true", help="xoá collection cũ trước khi nạp")
     ap.add_argument("--resume-from", type=int, default=0, help="bỏ qua N dòng đầu")
+    add_config_args(ap)
     args = ap.parse_args()
 
-    client = QdrantClient(url=args.qdrant_url, timeout=600)
-    ensure_collection(client, args.recreate)
+    cfg = config_from_args(args)
+    coll = cfg.get("qdrant.collection_docs", "medical_docs")
+    src_file = cfg.get("doc_index.input", "data/doc_texts.jsonl")
+    up_batch = cfg.get("doc_index.upsert_batch", 256)
+    enc_batch = cfg.get("doc_index.encode_batch", 32)
+
+    client = QdrantClient(url=cfg.get("qdrant.url", "http://localhost:6333"),
+                          timeout=cfg.get("qdrant.timeout", 600))
+    ensure_collection(client, coll, args.recreate)
 
     from src.rag.embedding import BgeM3Embedder
     t0 = time.time()
@@ -82,7 +87,7 @@ def main():
 
     # Tắt indexing trong lúc nạp hàng loạt, bật lại ở cuối -> một lần build
     # HNSW thay vì rebuild liên tục.
-    client.update_collection(collection_name=COLL,
+    client.update_collection(collection_name=coll,
                              optimizer_config=models.OptimizersConfigDiff(indexing_threshold=0))
 
     n, t_enc, t_up, start = 0, 0.0, 0.0, time.time()
@@ -94,7 +99,7 @@ def main():
             return
         t = time.time()
         dense, lexical = embedder.encode_with_sparse([r["text"] for r in rows],
-                                                     batch_size=args.encode_batch)
+                                                     batch_size=enc_batch)
         t_enc += time.time() - t
         points = []
         for r, dv, lw in zip(rows, dense, lexical):
@@ -108,19 +113,19 @@ def main():
                          "text": r["text"]},
             ))
         t = time.time()
-        client.upsert(collection_name=COLL, points=points, wait=False)
+        client.upsert(collection_name=coll, points=points, wait=False)
         t_up += time.time() - t
 
-    with open(args.input, encoding="utf-8") as fh:
+    with open(src_file, encoding="utf-8") as fh:
         for i, line in enumerate(fh):
             if i < args.resume_from:
                 continue
             batch.append(json.loads(line))
-            if len(batch) >= args.batch:
+            if len(batch) >= up_batch:
                 flush(batch)
                 n += len(batch)
                 batch = []
-                if n % (args.batch * 20) == 0:
+                if n % (up_batch * 20) == 0:
                     el = time.time() - start
                     print(f"[docidx] {n:,} doc | encode {t_enc:.0f}s upsert {t_up:.0f}s | "
                           f"{n/el:.0f} doc/s", flush=True)
@@ -129,13 +134,13 @@ def main():
     flush(batch)
     n += len(batch)
 
-    client.update_collection(collection_name=COLL,
+    client.update_collection(collection_name=coll,
                              optimizer_config=models.OptimizersConfigDiff(indexing_threshold=20000))
     el = time.time() - start
     print(f"\n[docidx] xong {n:,} doc trong {el/60:.1f} phút ({n/el:.0f} doc/s)")
     print(f"[docidx] encode {t_enc/60:.1f} phút | upsert {t_up/60:.1f} phút")
     print(f"[docidx] đang build HNSW nền, theo dõi bằng "
-          f"curl {args.qdrant_url}/collections/{COLL}")
+          f"curl {cfg.get(chr(34)+"qdrant.url"+chr(34))}/collections/{coll}")
     return 0
 
 
