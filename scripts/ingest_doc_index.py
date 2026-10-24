@@ -6,9 +6,12 @@ Thiết kế:
   - Một forward pass BGE-M3 cho ra CẢ dense lẫn sparse (encode_with_sparse),
     nên doc index có hybrid ngay, không phải chạy lại lần hai.
   - point id suy định từ doc_id, nên chạy lại là ghi đè chứ không nhân bản.
-  - Payload nhẹ: doc_id, language, domain, title, url, char_count. KHÔNG lưu
-    `text` - văn bản nộp bài lấy từ data/raw_documents (Phase 0 đã chứng minh
-    nộp cửa sổ markdown gốc thắng nộp chunk).
+  - Payload LƯU LUÔN `text` (~1.500 ký tự, tổng ~1,5 GB cho 1,0M doc). Nhờ
+    vậy bước rerank lấy được văn bản ngay từ kết quả tìm kiếm, khỏi phải đọc
+    400 file x 1.200 câu = 480k lượt đọc đĩa.
+    Riêng văn bản NỘP BÀI vẫn lấy từ data/raw_documents: Phase 0 đã chứng minh
+    nộp cửa sổ markdown gốc (trần 8.000) thắng nộp chunk, và chỉ cần đọc cho
+    ~43 doc mỗi câu chứ không phải 400.
 
 Vì sao collection riêng thay vì dùng lại `medical_documents`:
   - 1,0M điểm thay vì 3,93M, nên tìm với limit lớn rẻ hơn hẳn. Đây cũng là
@@ -101,7 +104,8 @@ def main():
                         "sparse": embedder.lexical_weights_to_sparse_vector(lw)},
                 payload={"doc_id": int(r["doc_id"]), "language": r.get("language"),
                          "domain": r.get("domain"), "title": r.get("title"),
-                         "url": r.get("url"), "char_count": r.get("char_count", 0)},
+                         "url": r.get("url"), "char_count": r.get("char_count", 0),
+                         "text": r["text"]},
             ))
         t = time.time()
         client.upsert(collection_name=COLL, points=points, wait=False)

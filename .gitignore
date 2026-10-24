@@ -48,3 +48,6 @@ mlflow.db
 data/raw_documents_index.json
 # thu muc giai nen tam cua bang cham BTC
 res/*_x/
+
+# Phase 1: doc text sinh lai bang scripts/build_doc_texts.py (~1.4 GB)
+data/doc_texts.jsonl
