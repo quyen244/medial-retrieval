@@ -99,6 +99,12 @@ Mọi mã viết tắt (`E1`, `N3`, `S2`, `D_ft`...) tra ở `docs/ky-hieu-bai-n
 Khi nhắc một mã lần đầu, LUÔN viết kèm nghĩa trong ngoặc: "N3 (35 doc + 43 cửa sổ, trần 8.000)".
 Tên mới phải tự mô tả, chứa luôn tham số: `doc_d35_c44_full8k`, không dùng chữ cái tuỳ ý.
 
+## Phát hiện đã đo
+
+Sổ ghi đầy đủ các kết luận có số đo thật, kèm bằng chứng và phán quyết:
+`docs/phat-hien-tang-diem.md`. Đọc trước khi đề xuất bất kỳ thay đổi nào về độ dài đoạn,
+số lượng nộp, hay cách xếp hạng - phần lớn đã thử rồi.
+
 ## Công cụ
 
 - `scripts/phase0_assemble.py` lắp lại bài nộp từ dump top-50, không cần GPU.

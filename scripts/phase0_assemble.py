@@ -33,6 +33,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.rag.pipeline.submission import submission_chunk_text, submission_doc_id, zip_submission
+from scripts.md_strip import strip_markdown
 
 RAW_ROOT = "data/raw_documents"
 INDEX_PATH = "data/raw_documents_index.json"
@@ -141,11 +142,13 @@ def doc_rank(candidates):
 
 
 def build(records, raw_docs, n_docs, n_chunks, chunk_mode, win_size, cap,
-          restrict_chunks=False):
+          restrict_chunks=False, strip_md=False):
     """restrict_chunks=True: chỉ nộp chunk thuộc các doc đã chọn. Dùng khi
     n_docs nhỏ hơn số doc của chunk list, để bài nộp không chứa chunk của doc
     vắng mặt trong `relevant_docs`. Hai tầng vẫn được chấm độc lập nên việc
     này không làm nhiễu phép đo tầng doc."""
+    prep = ((lambda x: submission_chunk_text(strip_markdown(x)))
+            if strip_md else submission_chunk_text)
     entries, stats = [], defaultdict(list)
     for r in records:
         cands = r["candidates"]
@@ -163,7 +166,7 @@ def build(records, raw_docs, n_docs, n_chunks, chunk_mode, win_size, cap,
             if restrict_chunks:
                 picked = [c for c in picked if c["doc_id"] in keep]
             chunks = [{"doc_id": submission_doc_id(c["doc_id"]),
-                       "chunk_text": submission_chunk_text(c["content"])}
+                       "chunk_text": prep(c["content"])}
                       for c in picked[:n_chunks]]
         else:  # một cửa sổ cho mỗi doc, theo đúng thứ hạng doc
             chunks = []
@@ -177,7 +180,7 @@ def build(records, raw_docs, n_docs, n_chunks, chunk_mode, win_size, cap,
                 else:
                     text = window(raw, c["content"], win_size)
                 chunks.append({"doc_id": submission_doc_id(d),
-                               "chunk_text": submission_chunk_text(text)})
+                               "chunk_text": prep(text)})
 
         stats["n_docs"].append(len(docs))
         stats["n_chunks"].append(len(chunks))
@@ -209,6 +212,8 @@ def main():
     ap.add_argument("--chunk-mode", choices=["orig", "win", "full"], default="orig")
     ap.add_argument("--window", type=int, default=2500)
     ap.add_argument("--cap", type=int, default=8000, help="trần ký tự cho chunk-mode=full")
+    ap.add_argument("--strip-md", action="store_true",
+                    help="boc cu phap markdown khoi chunk_text")
     ap.add_argument("--build-index", action="store_true")
     ap.add_argument("--probe", action="store_true", help="chỉ đo tỉ lệ căn chỉnh rồi thoát")
     args = ap.parse_args()
@@ -237,7 +242,8 @@ def main():
         return
 
     entries, stats = build(records, raw_docs, args.docs, args.chunks,
-                           args.chunk_mode, args.window, args.cap)
+                           args.chunk_mode, args.window, args.cap,
+                           strip_md=args.strip_md)
     validate(entries, len(records))
 
     os.makedirs(OUT_DIR, exist_ok=True)
