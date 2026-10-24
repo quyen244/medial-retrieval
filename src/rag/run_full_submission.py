@@ -115,7 +115,13 @@ def main():
                         help="model reranker: tên trên HF hoặc thư mục local, ví dụ ./models/medical-reranker "
                              "(mặc định BAAI/bge-reranker-v2-m3)")
     parser.add_argument("--retriever", type=str, default=None,
-                        help="qdrant-language (dense, mặc định) hoặc qdrant-hybrid (dense+sparse)")
+                        help="qdrant-language (dense, mặc định), qdrant-hybrid (dense+sparse, vẫn chia "
+                             "vi/en/zh) hoặc qdrant-hybrid-flat (dense+sparse, KHÔNG chia ngôn ngữ - "
+                             "dùng cùng --flat-retrieve-k)")
+    parser.add_argument("--flat-retrieve-k", type=int, default=None,
+                        help="Bật chế độ KHÔNG chia ngôn ngữ: một nhánh 'all' duy nhất lấy N ứng viên "
+                             "(dùng với --retriever qdrant-hybrid-flat), rồi rerank lấy --final-k. "
+                             "Ép --selection=rrf vì branch-rerank cần quota theo vi/en/zh.")
     parser.add_argument("--max-rerank-candidates", type=int, default=None,
                         help="cắt bớt tập hợp trước khi rerank; bỏ trống = không cắt")
     parser.add_argument("--rerank-with-augmented", action="store_true",
@@ -165,6 +171,16 @@ def main():
             raise SystemExit(f"Không thấy model reranker ở {args.reranker_model}")
         config.reranker_model = args.reranker_model
         console.print(f"[full_submission] reranker: {config.reranker_model}")
+    if args.flat_retrieve_k:
+        if args.selection and args.selection != "rrf":
+            console.print(f"[full_submission] --flat-retrieve-k: ép --selection=rrf (branch-rerank cần "
+                           f"quota vi/en/zh, không áp dụng cho 1 nhánh 'all')")
+        config.languages = ["all"]
+        config.branch_top_k = {"all": args.flat_retrieve_k}
+        config.fusion_top_k = args.flat_retrieve_k
+        config.selection = "rrf"
+        console.print(f"[full_submission] flat mode: 1 nhánh 'all', retriever={config.retriever}, "
+                       f"lấy {args.flat_retrieve_k}, rerank lấy {config.rerank_top_k}")
     from src.rag.pipeline.components.routing import DEFAULT_BRANCH_TOP_K, quota_from_counts
     counts = None
     if args.branch_quota == "sqrt" or args.sub_quota in ("sqrt", "corpus"):
@@ -234,7 +250,7 @@ def main():
             else:
                 texts.append(r["query"])
         t_enc = time.perf_counter()
-        if config.retriever == "qdrant-hybrid":
+        if config.retriever in ("qdrant-hybrid", "qdrant-hybrid-flat"):
             n_enc = vectorstore.prime_hybrid(texts, batch_size=32)
         else:
             n_enc = vectorstore.prime_dense(texts, batch_size=32)

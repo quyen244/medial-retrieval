@@ -1,85 +1,122 @@
-# TODO - sinh nhãn train reranker
+# TODO - ViBioMIR
 
-Spec đầy đủ: [docs/kien-truc-tong-quan.md](docs/kien-truc-tong-quan.md)
-Deadline 31/10.
+Hạn nộp 31/10 và 04/11.
+Ràng buộc cuộc thi: [CLAUDE.md](CLAUDE.md).
+Chẩn đoán: [docs/chan-doan-he-retrieval.md](docs/chan-doan-he-retrieval.md).
+Kế hoạch: [docs/ke-hoach-phase-1-2.md](docs/ke-hoach-phase-1-2.md).
+Kết quả mọi bài nộp: [ket_qua_thi_nghiem.txt](ket_qua_thi_nghiem.txt).
+Phát hiện đã đo, kèm bằng chứng và phán quyết: [docs/phat-hien-tang-diem.md](docs/phat-hien-tang-diem.md).
+Nghĩa của mọi mã viết tắt (E1, N3, S2, D_ft...): [docs/ky-hieu-bai-nop.md](docs/ky-hieu-bai-nop.md).
 
-## Đã chốt
+## Đứng ở đâu
 
-| | Quyết định |
-|---|---|
-| Teacher | Qwen3-8B-AWQ (điều lệ cho tới 15B, chọn 8B cho nhẹ máy) |
-| Dev set | 100 query gán tay, bắt buộc |
+| | |
+|---|---:|
+| FINAL tốt nhất | **0.1112** (N3_d35_c44) |
+| h_doc | 6,93 trên ~51 gold doc mỗi câu |
+| Doc recall | 13,7% |
+| h_chunk / h_doc | 0,79, ổn định qua mọi cấu hình |
 
-## Bảng việc
+**Chỉ còn một đại lượng cần tối ưu: `h_doc`.** Mọi thứ khác đã chốt.
+`FINAL ≈ 0,016 × h_doc`, tức mỗi tài liệu đúng tìm thêm được đáng +0,016 điểm.
 
-| # | Việc | GPU | Trạng thái |
+| h_doc | FINAL |
+|---:|---:|
+| 6,93 (nay) | 0.111 |
+| 15 | ~0.24 |
+| 25 | ~0.40 |
+
+**Trần của pool hiện tại đã ĐO, không phải suy đoán.** Bài E1 nộp toàn bộ 44 doc
+trong pool và chỉ trúng 7,06. Pool chứa đúng 7 gold doc; 44 trong 51 gold nằm
+hoàn toàn ngoài. Mọi cách rerank hay xếp lại bên trong pool đó đều bị chặn ở
+recall 13,9%. Đó là lý do phải mở phễu.
+
+## Đã xong
+
+| | Việc | Kết quả |
+|---|---|---|
+| P0-1 | Tách `relevant_docs` khỏi `relevant_chunks` | m_doc tối ưu ~35, nới lên 43 thì tụt |
+| P0-2 | Nộp cửa sổ markdown gốc thay cho chunk 877 ký tự | h_chunk 1,89 → 5,50, trần 8.000 là đỉnh |
+| P0-3 | Dựng ngược ground truth từ leaderboard | g_doc ≈ 51, g_chunk ≈ 53 |
+| P0-4 | Công cụ đọc ngược `res/*/scores.txt` | `scripts/phase0_readout.py` |
+| P1-0 | Khảo sát trường raw doc | tìm ra `source.description`, phủ 88,8% vi / 86,1% zh |
+| P1-1 | Lấy lại checkpoint reranker fine-tune | `scripts/fetch_reranker.py` |
+| P1-2 | ICD-11 en↔zh do WHO căn sẵn | 34.919 cặp, thay hẳn Wikidata (vốn nhiễu) |
+
+## Đang chạy
+
+| | Việc | Máy | Ghi chú |
 |---|---|---|---|
-| 0 | Dựng bảng ICD song ngữ vi-en | không | **xong** - `data/vocab/icd_bilingual.tsv` |
-| 1 | Sửa backbone `ms-marco-MiniLM` → `bge-reranker-v2-m3` | không | **xong** - `sft-reranker/main.py`, smoke test vi→en xếp đúng |
-| 2 | Script host vLLM | sau | **xong** - `scripts/serve_vllm.sh`, lên server chỉ việc chạy |
-| A | **Ingest corpus** - nút thắt thật, xem mục CHẶN | có | **chưa làm** |
-| 3 | Viết bước 1-2-3: chọn chunk, sinh query, lọc round-trip | không | **code + prompt xong**. Chờ việc A (ingest) để chạy pilot thật |
-| 3b | Audit độ phủ `audit_coverage.py` | có | **xong**, phát hiện việc A |
-| 4 | Pilot 300 chunk → **CỔNG CHẶN: soát tay 30 query sinh ra** | có | |
-| 5 | Viết bước 4-5: lấy ứng viên, chấm utility hai tầng | không | |
-| 6 | Pilot chấm → **CỔNG CHẶN: soát tay 50 cặp đã chấm** | có | |
-| 7 | Chạy full 5.000 chunk | có | |
-| 8 | Đổi loss sang listwise KL (cần dữ liệu từ việc 7) | không | |
-| 9 | Hiệu chỉnh cutoff cho F2 trên dev set | có | |
-| — | Xen kẽ: gán tay 100 query dev set | không | |
+| A | `scripts/build_doc_texts.py` → `data/doc_texts.jsonl` | CPU, local | ~1,0M file, chậm vì đọc đĩa |
 
-## CHẶN: corpus chưa được index
+## Trình tự trên server
 
-Chuyển sang GPU server thuê, Qdrant dựng mới - mọi số đo cũ trên máy local
-(tốc độ ingest, tỷ lệ đã index) không còn áp dụng, phải đo lại từ đầu trên
-máy mới trước khi tin bất kỳ ước lượng thời gian nào.
+Chạy đúng thứ tự này, không cần nghĩ thêm.
 
-Bước 1 của pipeline sinh nhãn cần chọn 5.000 chunk với tỷ lệ EN 60% / VI 30%.
-Chunk EN/VI phải có trong Qdrant trước khi bước 1 chạy được, kể cả pilot.
-Dùng `audit_coverage.py` để xác nhận độ phủ ngôn ngữ trước khi chạy bước 1.
+| # | Lệnh | Máy | Mục đích |
+|---|---|---|---|
+| 1 | `python -m scripts.qdrant_backup` | bất kỳ | **Làm trước tiên.** Collection 3,9M điểm đang nằm trong volume của project khác (xem Rủi ro) |
+| 2 | `python -m scripts.build_doc_texts` | CPU | bỏ qua nếu việc A đã xong trên local, chỉ cần copy file sang |
+| 3 | `python -m scripts.ingest_doc_index --recreate` | **GPU** | encode + nạp collection `medical_docs` (1,0M điểm, dense + sparse một forward pass) |
+| 4 | `python -m scripts.phase1_doc_retrieve --name S1_doc60 --top-docs 60` | **GPU** | **nông**. So với N3 → đo riêng hiệu ứng BIỂU DIỄN |
+| 5 | `python -m scripts.phase1_doc_retrieve --name S2_doc1000 --top-docs 1000` | **GPU** | **sâu**. So với S1 → đo riêng hiệu ứng CHIỀU SÂU |
+| 6 | nộp, bỏ `res/<tên>.zip`, chạy `python -m scripts.phase0_readout` | — | ra `h_doc` mới |
+| 7 | `python -m scripts.append_phase0_results` | — | cập nhật bảng kết quả |
 
-Xem mục "Việc cần quyết về ingest" bên dưới.
+Bước 4 và 5 khác nhau **đúng một tham số**, nên quy được trách nhiệm cho từng
+hiệu ứng. Vòng 1 và 2 có 21 thí nghiệm đổi nhiều thứ cùng lúc và không rút ra
+được gì; Phase 0 đi được vì mỗi bài chỉ đổi một biến.
 
-## Đã có
+## Sau khi có kết quả bước 4-5
 
-Prompt đã viết xong ở `prompts/gen_query_short.txt` và `prompts/gen_query_narrative.txt`.
-Qua validator, đã đăng ký MLflow registry (version 1 cả hai).
-Doc giải thích từng bước kèm sơ đồ: [docs/buoc-1-2-3-sinh-query.md](docs/buoc-1-2-3-sinh-query.md)
+| | Việc | Điều kiện |
+|---|---|---|
+| B | Chỉnh lại `m_doc`, `m_chunk` ở mức `h` mới | `m*` tăng theo `h`, phải dò lại |
+| C | Bật `--hybrid` (dense + sparse) | sparse đã nạp sẵn ở bước 3, chỉ thêm cờ |
+| D | Mở rộng láng giềng (Phase 2) | chỉ làm nếu bước 5 cho `h_doc` tăng |
+| E | Dịch query en/zh + HyDE | cần GPU đủ cho Qwen3-8B; xem mục 5 kế hoạch |
+| F | Reranker mạnh hơn | chỉ sau khi pool đã rộng |
 
-Viết xong thì chạy pilot:
+## Việc CPU làm được ngay, không cần server
 
-```bash
-python -m src.rag.labeling.run_generate --pilot
-```
+| | Việc | Ghi chú |
+|---|---|---|
+| G | Nộp thăm dò ngôn ngữ `scripts/phase1_lang_probe.py` | cho biết 7 gold doc hiện tại thuộc ngôn ngữ nào, quyết định có đáng đầu tư dịch en/zh không |
+| H | Few-shot dịch thuật từ ICD-11 | `data/vocab/trilingual_terms.tsv` đã dựng; cách dùng đúng là RETRIEVE vài cặp gần nhất cho mỗi query, không phải tra cứu toàn bảng |
 
-## Hai cổng chặn
+## Rủi ro
 
-**Việc 4** - soát tay 30 query sinh ra. Kiểm:
-- Phân phối dài/ngắn có khớp 66/34 không?
-- Có bê nguyên thuật ngữ lâm sàng từ chunk sang query không?
-- Tỷ lệ round-trip giữ lại bao nhiêu? **Dưới 40% thì sửa prompt, chạy lại.**
+- **Dữ liệu mong manh.** Collection `medical_documents` (3.927.800 điểm) nằm trong
+  volume `prompt-engineering-evaluation_qdrant_storage` của project khác, không
+  phải `r2ai_qdrant_data`. Ai đó chạy `docker compose down -v` ở project kia là
+  mất hết, phải ingest lại từ đầu. **Snapshot trước khi làm bất cứ gì.**
+- **`docker-compose.yaml` của repo này map sai cổng gRPC** (`6334:5334` thay vì
+  `6334:6334`) và trùng cổng với container đang chạy.
+- **Chưa biết hạn mức nộp bài mỗi ngày.** Cần nắm trước khi lên lịch đo.
+- **Chưa có dev set.** `data/labeling/dev_set.jsonl` có 100 query x ~30 ứng viên
+  nhưng `human_score` toàn None. Leaderboard vẫn là thước đo duy nhất, nên mỗi
+  bài nộp phải cô lập đúng một biến.
+- **Latency.** Phase 1.1 (tìm sâu trên index chunk) đo được 478 giây mỗi câu trên
+  máy local, tức 159 giờ cho 1.200 câu. Chưa chẩn đoán được là do Qdrant hay do
+  rerank trên GTX 1660 Ti. Doc index 1,0M điểm giảm phía tìm kiếm, nhưng phải
+  đo lại một câu trên server trước khi phóng cả 1.200.
 
-**Việc 6** - soát tay 50 cặp đã chấm. Kiểm teacher chấm có đúng không.
-**Không được chạy full nếu cổng này chưa qua.** Sai ở đây nghĩa là 5.000 query nhãn rác.
+## Hai mức phần cứng, đừng lẫn
 
-## Để dành, không làm lúc này
+| | Cấu hình | Dùng để |
+|---|---|---|
+| Local | GTX 1660 Ti 6 GB | thử nghiệm nhỏ, việc CPU |
+| Server | chưa biết | chạy thật |
 
-- Query router. 1.200 query là tập submission đã biết trước nên không có bài toán latency. Chi tiết ở mục 10 của spec.
-- Từ điển dân gian ↔ lâm sàng. Bảng ICD đã có sẵn, dùng được ngay khi cần.
-- Thuật ngữ tiếng Trung. Corpus zh đã crawl lên ~30% (trước đó 4,1%) - quyết định "bỏ" có thể cần xem lại, nhưng chưa làm lúc này.
-- Hard negative cùng chương ICD. Bật sau khi pilot chạy ổn.
+Qwen3-8B (dịch query, HyDE) và Qwen3-Reranker-4B chắc chắn không chạy nổi trên
+local, phải đợi server.
 
-## Việc cần quyết về ingest
+---
 
-1. **Chạy ingest trên GPU thuê, không chạy local.** Con số 1,6 doc/s đo trên GTX 1660 Ti,
-   card không có Tensor Core. Chính comment trong `ingest_documents.py` đã ghi: fp16 chậm
-   hơn fp32 2-4 lần trên card này, và dặn *"re-measure on different hardware"*.
-   5060 Ti có Tensor Core và 16 GB, nên fp16 + batch lớn sẽ đổi hẳn con số. Giả định
-   "fp32 nhanh hơn" là đặc thù của 1660 Ti, **không được mang sang máy mới mà không đo lại**.
+## Lưu trữ: giai đoạn sinh nhãn reranker
 
-2. **Ưu tiên thứ tự domain.** Nếu hết thời gian thì phần đã ingest phải là phần đáng giá nhất.
-   Query là bệnh nhân hỏi bác sĩ, nên ưu tiên: vinmec, medlatec, suckhoedoisong,
-   nhathuoclongchau, bachmai trước; báo tổng hợp (thanhnien, laodong) sau cùng.
-
-3. **PubMed 240k tài liệu tiếng Anh là bắt buộc**, vì đó là đường truy xuất chính vi→en.
-   Không được để nó xuống cuối hàng đợi.
+Việc này đã hoàn thành phần quan trọng (`models/medical-reranker` đang dùng ở
+mọi bài nộp, tải lại bằng `scripts/fetch_reranker.py`). Spec đầy đủ ở
+[docs/kien-truc-tong-quan.md](docs/kien-truc-tong-quan.md). Các việc còn dở
+(listwise KL loss, dev set gán tay, hiệu chỉnh cutoff) tạm gác vì nút thắt hiện
+tại là recall của phễu, không phải chất lượng xếp hạng.
