@@ -93,6 +93,12 @@ Không thể tìm 51 tài liệu đúng khi chỉ nhìn 65 ứng viên, nên m�
 - `data/labeling/dev_set.jsonl` CHƯA được gán nhãn (`human_score` toàn None), không dùng để đo được.
 - Không có ground truth tại chỗ. Leaderboard là công cụ đo duy nhất.
 
+## Đặt tên bài nộp
+
+Mọi mã viết tắt (`E1`, `N3`, `S2`, `D_ft`...) tra ở `docs/ky-hieu-bai-nop.md`.
+Khi nhắc một mã lần đầu, LUÔN viết kèm nghĩa trong ngoặc: "N3 (35 doc + 43 cửa sổ, trần 8.000)".
+Tên mới phải tự mô tả, chứa luôn tham số: `doc_d35_c44_full8k`, không dùng chữ cái tuỳ ý.
+
 ## Công cụ
 
 - `scripts/phase0_assemble.py` lắp lại bài nộp từ dump top-50, không cần GPU.

@@ -5,6 +5,7 @@ Ràng buộc cuộc thi: [CLAUDE.md](CLAUDE.md).
 Chẩn đoán: [docs/chan-doan-he-retrieval.md](docs/chan-doan-he-retrieval.md).
 Kế hoạch: [docs/ke-hoach-phase-1-2.md](docs/ke-hoach-phase-1-2.md).
 Kết quả mọi bài nộp: [ket_qua_thi_nghiem.txt](ket_qua_thi_nghiem.txt).
+Nghĩa của mọi mã viết tắt (E1, N3, S2, D_ft...): [docs/ky-hieu-bai-nop.md](docs/ky-hieu-bai-nop.md).
 
 ## Đứng ở đâu
 
