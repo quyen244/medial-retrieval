@@ -25,6 +25,46 @@ from src.rag.pipeline.submission import submission_chunk_text, submission_doc_id
 N_QUERIES = 1200
 
 
+def write_submission(name, rows, m_doc, m_chunk, cap=8000, strip=True, out_dir="data/tmp/phase1"):
+    """rows: [(id, doc_id xếp hạng cho relevant_docs, doc_id xếp hạng cho relevant_chunks)].
+    Hai danh sách có thể đến từ hai thứ hạng khác nhau - hai tầng chấm độc lập."""
+    raw_docs = RawDocs(load_index())
+    prep = (lambda x: submission_chunk_text(strip_markdown(x))) if strip else submission_chunk_text
+
+    entries, n_doc, n_chunk, chars, missing = [], [], [], [], 0
+    for qid, doc_rank, chunk_rank in rows:
+        docs = [submission_doc_id(d) for d in doc_rank[:m_doc]]
+        chunks = []
+        for d in chunk_rank[:m_chunk]:
+            raw = raw_docs.markdown(d)
+            if not raw:
+                missing += 1
+                continue
+            chunks.append({"doc_id": submission_doc_id(d), "chunk_text": prep(raw[:cap])})
+        entries.append({"id": int(qid), "relevant_docs": docs, "relevant_chunks": chunks})
+        n_doc.append(len(docs))
+        n_chunk.append(len(chunks))
+        chars += [len(c["chunk_text"]) for c in chunks]
+
+    ids = [e["id"] for e in entries]
+    assert len(ids) == len(set(ids)) == N_QUERIES, f"cần đủ {N_QUERIES} id, đang có {len(set(ids))}"
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, f"{name}.json")
+    with open(out, "w", encoding="utf-8") as fh:
+        json.dump(entries, fh, ensure_ascii=False)
+    zp = zip_submission(out)
+    size = os.path.getsize(zp) / 1e6
+    if size >= 100:
+        os.remove(zp)
+        raise SystemExit(f"{zp} nặng {size:.1f} MB, vượt giới hạn 100 MB của BTC. Giảm --m-chunk "
+                         f"(~1,58 MB mỗi chunk ở trần 8.000) hoặc --cap.")
+    chars.sort()
+    print(f"{name}: m_doc TB {statistics.mean(n_doc):.1f} | m_chunk TB {statistics.mean(n_chunk):.1f} | "
+          f"chunk median {chars[len(chars) // 2]} ký tự | thiếu bản gốc {missing}")
+    print(f"-> {zp} ({size:.1f} MB, giới hạn 100 MB)")
+    return zp
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pool", required=True)
@@ -40,41 +80,10 @@ def main():
     sizes = [len(p["candidates"]) for p in pool]
     if min(sizes) < max(args.m_doc, args.m_chunk):
         print(f"CẢNH BÁO: pool nhỏ nhất {min(sizes)} doc < m yêu cầu; câu đó nộp ít hơn")
-    raw_docs = RawDocs(load_index())
-    prep = submission_chunk_text if args.no_strip else (lambda x: submission_chunk_text(strip_markdown(x)))
-
-    entries, n_doc, n_chunk, chars, missing = [], [], [], [], 0
-    for p in pool:
-        cands = p["candidates"]   # đã xếp theo rerank_score giảm dần
-        docs = [submission_doc_id(c["doc_id"]) for c in cands[: args.m_doc]]
-        chunks = []
-        for c in cands[: args.m_chunk]:
-            raw = raw_docs.markdown(c["doc_id"])
-            if not raw:
-                missing += 1
-                continue
-            chunks.append({"doc_id": submission_doc_id(c["doc_id"]), "chunk_text": prep(raw[: args.cap])})
-        entries.append({"id": int(p["id"]), "relevant_docs": docs, "relevant_chunks": chunks})
-        n_doc.append(len(docs))
-        n_chunk.append(len(chunks))
-        chars += [len(c["chunk_text"]) for c in chunks]
-
-    ids = [e["id"] for e in entries]
-    assert len(ids) == len(set(ids)) == N_QUERIES, f"cần đủ {N_QUERIES} id, đang có {len(set(ids))}"
-    os.makedirs(args.out_dir, exist_ok=True)
-    out = os.path.join(args.out_dir, f"{args.name}.json")
-    with open(out, "w", encoding="utf-8") as fh:
-        json.dump(entries, fh, ensure_ascii=False)
-    zp = zip_submission(out)
-    size = os.path.getsize(zp) / 1e6
-    if size >= 100:
-        os.remove(zp)
-        raise SystemExit(f"{zp} nặng {size:.1f} MB, vượt giới hạn 100 MB của BTC. Giảm --m-chunk "
-                         f"(~1,58 MB mỗi chunk ở trần 8.000) hoặc --cap.")
-    chars.sort()
-    print(f"{args.name}: m_doc TB {statistics.mean(n_doc):.1f} | m_chunk TB {statistics.mean(n_chunk):.1f} | "
-          f"chunk median {chars[len(chars) // 2]} ký tự | thiếu bản gốc {missing}")
-    print(f"-> {zp} ({size:.1f} MB, giới hạn 100 MB)")
+    # candidates đã xếp theo rerank_score giảm dần
+    rows = [(p["id"], [c["doc_id"] for c in p["candidates"]], [c["doc_id"] for c in p["candidates"]])
+            for p in pool]
+    write_submission(args.name, rows, args.m_doc, args.m_chunk, args.cap, not args.no_strip, args.out_dir)
 
 
 if __name__ == "__main__":
