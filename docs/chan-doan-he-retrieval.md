@@ -146,8 +146,11 @@ Mục tiêu train có thể lệch với mục tiêu chấm.
 Đây là giả thuyết, chưa verify, nhưng nó giải thích vì sao fine-tune không ăn.
 
 Ngân sách: 1200 câu x 400 cặp = 480k cặp.
-Trên 5060 Ti 16GB, Qwen3-Reranker-4B không khả thi trong thời gian nộp bài.
-Chọn 0.6B hoặc giữ bge-reranker-v2-m3 nhưng chạy trên pool gấp 10 lần.
+Hai mức phần cứng, đừng lẫn:
+- Máy local: GTX 1660 Ti 6 GB (đo bằng nvidia-smi 2026-10-23). Chỉ đủ cho bge-m3 và bge-reranker-v2-m3 ở fp16 (~1,2 GB mỗi model). Dùng để thử nghiệm quy mô nhỏ.
+- Server sẽ kết nối sau: chưa biết cấu hình, là nơi chạy thật.
+Ước tính ngân sách GPU trong tài liệu này phải gắn với máy nào, nếu không thì vô nghĩa.
+Riêng Qwen3-Reranker-4B hay Qwen3-8B cho dịch/HyDE thì chắc chắn không chạy được trên máy local, phải đợi server.
 
 ### 5. Metadata
 

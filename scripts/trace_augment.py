@@ -1,6 +1,7 @@
 """In ra input/output của từng stage augment cho một query ngắn và một query dài.
 
     python -m scripts.trace_augment
+    python -m scripts.trace_augment --id 2               # chỉ 1 query theo id
     python -m scripts.trace_augment --short-id 2 --long-id 1
     python -m scripts.trace_augment --show-prompts      # in cả prompt gửi LLM
 
@@ -157,6 +158,7 @@ def pick(rows: List[dict], long: bool, threshold: int):
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--queries", default="data/queries/real_queries.jsonl")
+    p.add_argument("--id", type=int, default=None, help="trace đúng 1 query theo id (bỏ qua --short-id/--long-id)")
     p.add_argument("--short-id", type=int, default=None, help="id query ngắn (mặc định: query ngắn đầu tiên)")
     p.add_argument("--long-id", type=int, default=None, help="id query dài (mặc định: query dài đầu tiên)")
     p.add_argument("--show-prompts", action="store_true")
@@ -177,15 +179,25 @@ def main(argv=None) -> int:
 
     rows = read_queries(args.queries)
     by_id = {int(r["id"]): r for r in rows}
+
+    prompts = prompt_store.sync_all(prompt_store.AUGMENT_PROMPTS)
+    icd, rx = load_tables(cfg)
+    chat = steps.make_chat(cfg)
+
+    if args.id is not None:
+        row = by_id.get(args.id)
+        if row is None:
+            print(f"Không tìm thấy id={args.id} trong {args.queries}")
+            return 1
+        label = "QUERY DÀI" if steps.word_count(row["query"]) > cfg.narrative_word_threshold else "QUERY NGẮN"
+        trace_one(label, row, chat, prompts, cfg, icd, rx, args.show_prompts)
+        return 0
+
     short_row = by_id.get(args.short_id) if args.short_id is not None else pick(rows, False, cfg.narrative_word_threshold)
     long_row = by_id.get(args.long_id) if args.long_id is not None else pick(rows, True, cfg.narrative_word_threshold)
     if short_row is None or long_row is None:
         print(f"Không chọn được đủ 2 query từ {args.queries} (short={short_row is not None}, long={long_row is not None})")
         return 1
-
-    prompts = prompt_store.sync_all(prompt_store.AUGMENT_PROMPTS)
-    icd, rx = load_tables(cfg)
-    chat = steps.make_chat(cfg)
 
     trace_one("QUERY NGẮN", short_row, chat, prompts, cfg, icd, rx, args.show_prompts)
     trace_one("QUERY DÀI", long_row, chat, prompts, cfg, icd, rx, args.show_prompts)

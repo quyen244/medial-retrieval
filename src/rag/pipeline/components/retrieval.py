@@ -78,3 +78,23 @@ class HybridQdrantLanguageRetriever(Retriever):
 
     def get_params(self) -> Dict[str, Any]:
         return {"type": "qdrant-hybrid", "language": self.language, "collection": self.vectorstore.collection_name}
+
+
+@ComponentRegistry.register("retriever", "qdrant-hybrid-flat")
+class FlatHybridRetriever(Retriever):
+    """Không chia ngôn ngữ: một nhánh duy nhất, hybrid (dense+sparse, RRF
+    server-side qua VectorStore.hybrid_search) trên TOÀN BỘ collection, không
+    filter theo `language`. Dùng cùng PipelineConfig(languages=["all"],
+    selection="rrf") để pipeline chạy đúng một lượt retrieve rồi rerank,
+    thay vì 3 nhánh vi/en/zh như StaticRouter mặc định."""
+
+    def __init__(self, vectorstore: VectorStore, language: str):
+        self.vectorstore = vectorstore
+        self.language = language  # nhãn nhánh (vd "all"), KHÔNG dùng để filter
+
+    def retrieve(self, query: QueryItem, top_k: int) -> List[Candidate]:
+        points = self.vectorstore.hybrid_search(query.text, top_k=top_k, language=None)
+        return _points_to_candidates(points, self.language)
+
+    def get_params(self) -> Dict[str, Any]:
+        return {"type": "qdrant-hybrid-flat", "collection": self.vectorstore.collection_name}

@@ -134,7 +134,7 @@ class RetrievalPipeline:
 
         branch_results: Dict[str, List[Candidate]] = {}
 
-        if self.config.retriever == "qdrant-hybrid" and hasattr(self.vectorstore, "prime_hybrid"):
+        if self.config.retriever in ("qdrant-hybrid", "qdrant-hybrid-flat") and hasattr(self.vectorstore, "prime_hybrid"):
             self.vectorstore.prime_hybrid([query.text])  # encode 1 lần cho cả 3 nhánh
         if self.config.retriever == "qdrant-language" and "dense_vec" not in (query.metadata or {}):
             vec = self.vectorstore.__dict__.get("_dense_cache", {}).get(query.text)
