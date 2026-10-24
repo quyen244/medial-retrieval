@@ -46,7 +46,8 @@ Chữ cái đầu chỉ là **đợt làm việc**, không mang nghĩa kỹ thu�
 | `E2_win2500` | cửa sổ 2.500 ký tự quanh chunk tốt nhất | 42,7 | 42,7 | cửa sổ 2.500 | 0.1090 |
 | `E3_full8k` | trọn markdown gốc | 42,7 | 42,7 | trọn bài, trần 8.000 | 0.1099 |
 | `N5_d35_cap20k` | như N3 nhưng nới trần lên 20.000 | 35 | 42,7 | trọn bài, trần 20.000 | 0.1101 |
-| **`N3_d35_c44`** | **35 doc + 43 cửa sổ, trần 8.000 - TỐT NHẤT** | 35 | 42,7 | trọn bài, trần 8.000 | **0.1112** |
+| `N3_d35_c44` | 35 doc + 43 cửa sổ, trần 8.000 | 35 | 42,7 | trọn bài, trần 8.000 | 0.1112 |
+| **`chunk_d35_c44_full8k_plain`** | **như N3 nhưng bóc sạch cú pháp markdown - TỐT NHẤT** | 35 | 42,7 | trọn bài trần 8.000, text thuần | **0.1117** |
 
 Hai bài đã dựng rồi xoá vì dựa trên kết luận sai (tưởng doc list càng ngắn càng tốt):
 `N1_d25_c44` (25 doc) và `N2_d12_c44` (12 doc).
@@ -79,7 +80,7 @@ Chỉ bài `D_ft` được chấm (0.0805, theo luật mới). Các bài còn l�
 | `S2_doc1000` | y hệt S1 nhưng lấy 1000 doc | so với S1 → hiệu ứng của **chiều sâu** |
 | `P1_enzh_only` | chỉ nộp doc tiếng Anh và tiếng Trung trong pool | 7 gold doc hiện tìm được thuộc ngôn ngữ nào |
 | `P2_vi_only` | chỉ nộp doc tiếng Việt | như trên, phía còn lại |
-| `chunk_d35_c44_full8k_plain` | như `N3_d35_c44` nhưng bóc sạch cú pháp markdown | reference của BTC là markdown hay text thuần (ĐÃ DỰNG, chờ nộp) |
+| `chunk_d35_c44_full4k_plain` | như bài `_plain` nhưng hạ trần xuống 4.000 ký tự | hiệu ứng mẫu số còn khai thác được nữa không (đã dựng, chờ nộp) |
 
 `C65` và `T2800` là tên nội bộ trong `scripts/phase1_deep_retrieve.py`
 (đối chứng 65 chunk và thí nghiệm 2800 chunk), không phải tên file nộp.

@@ -20,11 +20,13 @@ NOTE = {
     "E4_docs25":     ("25 doc, cửa sổ trọn bài trần 8k", "cắt doc xuống 25 cũng kém hơn 35"),
     "E2_win2500":    ("cửa sổ 2.500 ký tự quanh chunk", "cửa sổ dài ăn điểm lớn ở tầng chunk"),
     "E3_full8k":     ("trọn markdown gốc, trần 8.000", "cửa sổ dài + doc list hết pool"),
-    "N3_d35_c44":    ("35 doc + 42,7 cửa sổ, trần 8.000", "TỐT NHẤT. Tách 2 danh sách ĂN ĐIỂM"),
+    "N3_d35_c44":    ("35 doc + 42,7 cửa sổ, trần 8.000", "tách 2 danh sách ĂN ĐIỂM"),
+    "chunk_d35_c44_full8k_plain":
+                     ("như N3, bóc sạch cú pháp markdown", "TỐT NHẤT. Reference BTC là text thuần"),
     "N5_d35_cap20k": ("như N3, nới trần lên 20.000", "nới trần QUÁ ĐÀ, h_chunk tụt"),
 }
 ORDER = ["D_ft", "E1_docs44", "E4_docs25", "E2_win2500", "E3_full8k",
-         "N5_d35_cap20k", "N3_d35_c44"]
+         "N5_d35_cap20k", "N3_d35_c44", "chunk_d35_c44_full8k_plain"]
 
 
 def table(headers, rows, aligns):

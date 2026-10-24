@@ -141,16 +141,25 @@ ký tự cú pháp          : 1,09%
 token link/URL         : 0,00%   (trafilatura bỏ link mặc định)
 ```
 
-**Phán quyết: chi phí mẫu số không đáng kể.**
+**Phán quyết: ĐÃ NỘP, TĂNG. Reference của BTC gần text thuần hơn markdown.**
+
+```
+                 FINAL    DOCS_F2   CHUNKS_F2   CHUNKS_P   h_chunk
+N3_d35_c44       0.1112   0.128     0.0944      0.1288     5,500
+..._plain        0.1117   0.128     0.0955      0.1300     5,551
+```
+
+`DOCS_F2`, `DOCS_PRECISION` và `DOCS_RECALL` giống nhau từng chữ số, đúng như thiết kế,
+nên toàn bộ delta thuộc về tầng chunk.
 Bài `chunk_d35_c44_full8k_plain` (như `N3_d35_c44` nhưng bóc sạch cú pháp) đã dựng, chờ nộp.
 Cô lập hoàn hảo: `relevant_docs` giống hệt 1200/1200 câu, nên `F2_doc` buộc phải giữ nguyên 0.1253.
 Token giảm 1,70%, ký tự giảm 1,31%, 93,5% số đoạn bị thay đổi, không đoạn nào rỗng.
 
-Hạn chế của phép thử, phải biết trước khi tiêu một lượt nộp: nó KHÔNG đối xứng.
+Hạn chế đã lường trước: phép thử KHÔNG đối xứng.
 Nếu reference là text thuần thì bỏ cú pháp chỉ giảm mẫu số, điểm tăng.
 Nếu reference là markdown thì bỏ đi giảm cả tử lẫn mẫu, điểm gần như đứng yên.
 Nên kết quả 'tăng rõ' kết luận được, còn 'đứng yên' thì mơ hồ.
-Giá trị thông tin thấp hơn hai bài Phase 1, xếp sau nếu quota nộp eo hẹp.
+Nó đã tăng, nên kết luận chắc.
 
 ## 11. FINAL quy về một đại lượng duy nhất
 
@@ -164,6 +173,31 @@ h_doc 25          ->  FINAL ~0.40
 
 Hệ quả: mỗi tài liệu gold tìm thêm được đáng +0,016 điểm.
 Mọi việc khác đã chốt; chỉ còn `h_doc` cần tối ưu.
+
+## 12. Mẫu số của luật chấm mới CÓ thật, đo được bằng hai phép ngược chiều
+
+Trước đây suy diễn "nộp dài bị phạt" đã sai một lần (xem mục 5), vì hiệu ứng căn đúng vùng
+lấn át hiệu ứng mẫu số. Giờ cố định cách căn vùng (đều là `raw[:cap]`, cùng doc list), hiệu
+ứng mẫu số lộ ra:
+
+| Bài | Trần | Ký tự TB | h_chunk | Đổi ký tự -> đổi trúng |
+|---|---:|---:|---:|---|
+| `N3_d35_c44` | 8.000 | 3.463 | 5,500 | mốc |
+| `N5_d35_cap20k` | 20.000 | 3.731 | 5,376 | +7,7% ký tự -> **-2,25%** trúng |
+| `chunk_d35_c44_full8k_plain` | 8.000 | 3.418 | 5,551 | -1,31% ký tự -> **+0,93%** trúng |
+
+Hai phép đo độc lập, cùng dấu.
+
+Bóc cú pháp hiệu quả gấp 2,4 lần trên mỗi phần trăm ký tự (0,71 so với 0,29), hợp lý vì
+token cú pháp chắc chắn không khớp còn phần đuôi tài liệu thì khớp một phần.
+
+**Phán quyết: thêm ký tự thì mất trúng, bớt ký tự vô dụng thì được trúng.**
+
+Hệ quả, chưa kiểm chứng: hạ trần từ 8.000 xuống 4.000 nên tăng tiếp.
+Bài `chunk_d35_c44_full4k_plain` khác bài đang thắng đúng một biến, dựng trên CPU.
+Lưu ý mục 3 vẫn đúng: dưới khoảng 2.500 ký tự thì mất căn vùng và tụt mạnh, nên có
+một điểm tối ưu nằm đâu đó giữa 2.500 và 8.000 chứ không phải càng ngắn càng tốt.
+
 
 ---
 
