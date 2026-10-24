@@ -39,6 +39,9 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from scripts.md_strip import strip_markdown
+from scripts.text_denoise import denoise
+
 RAW = "data/raw_documents"
 INDEX = "data/raw_documents_index.json"
 
@@ -55,15 +58,16 @@ def doc_text(doc: dict, budget: int, head_budget: int, max_heads: int) -> str:
     src, con = doc.get("source", {}), doc.get("content", {})
     md = con.get("markdown") or ""
 
-    title = clean(src.get("title") or "")
-    desc = clean(src.get("description") or "")
-    heads = [clean(h) for h in _HEAD.findall(md)][:max_heads]
+    title = denoise(clean(strip_markdown(src.get("title") or "")))
+    desc = denoise(clean(strip_markdown(src.get("description") or "")))
+    heads = [clean(strip_markdown(h)) for h in _HEAD.findall(md)][:max_heads]
     # Bỏ heading trùng title và heading rỗng/quá ngắn ("Results", "Abstract"
     # vẫn giữ: với PubMed chúng đánh dấu cấu trúc, rẻ và không hại).
     heads = [h for h in heads if h and h != title]
     head_s = " > ".join(heads)[:head_budget]
 
-    body = clean(_HEAD.sub(" ", md))
+    # Heading phải rút ra TRƯỚC khi bóc cú pháp, vì nó nhận diện bằng dấu #.
+    body = clean(strip_markdown(_HEAD.sub(" ", md)))
 
     # description thường được CMS cắt ra từ chính thân bài, nên lead hay lặp
     # lại nguyên văn nó. Đo trên mẫu ask.39.net: 300/612 ký tự bị trùng, tức
@@ -74,12 +78,10 @@ def doc_text(doc: dict, budget: int, head_budget: int, max_heads: int) -> str:
         if pos >= 0:
             body = (body[:pos] + " " + body[pos + len(desc):]).strip()
 
-    # Rác điều hướng của trang hỏi đáp và trang báo. Mỗi mẫu phải neo chắc để
-    # không cắt nhầm nội dung thật.
-    for junk in ("我要咨询", "医生回答", "向医生提问", "举报", "有帮助",
-                 "展开全部", "收起", "Xem thêm", "Chia sẻ"):
-        body = body.replace(junk, " ")
-    body = _WS.sub(" ", body).strip()
+    # Rác khuôn mẫu: dấu thời gian, nút điều hướng, dòng "Xem thêm: <bài khác>".
+    # Chi tiết và lý do ở scripts/text_denoise.py. Đo trên 5.000 doc ngẫu nhiên:
+    # động tới 65,4% tài liệu, bỏ 0,81% ký tự toàn tập nhưng 9,91% ở ask.39.net.
+    body = _WS.sub(" ", denoise(body)).strip()
 
     parts = [p for p in (title, desc, head_s) if p]
     used = sum(len(p) + 3 for p in parts)
