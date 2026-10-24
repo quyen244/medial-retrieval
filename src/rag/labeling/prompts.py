@@ -38,6 +38,10 @@ REQUIRED_VARS: Dict[str, List[str]] = {
     "symptom_translation": ["symptoms", "query"],
     "query_decomposition": ["query"],
     "retrieval_target": ["query", "glossary"],
+    # Nhánh dịch câu gốc sang en/zh (scripts/translate_queries.py).
+    "query_translation": ["query", "medical_entities", "few_shots"],
+    # Sửa chính tả câu gốc, chạy TRƯỚC trích thực thể và dịch (scripts/correct_queries.py).
+    "query_spelling_correction": ["query", "few_shots"],
 }
 
 # Prompt của riêng pha augment, để gọi sync_all() cho đúng nhóm thay vì đồng
@@ -91,6 +95,20 @@ def _validate(name: str, text: str) -> None:
             f"  Đang có: {', '.join(sorted(found)) or '(không có biến nào)'}\n"
             f"  Xem prompts/README.md."
         )
+
+
+def load(name: str) -> str:
+    """Nạp và kiểm biến như sync(), nhưng KHÔNG đụng MLflow. Cho các script
+    offline không mở run (scripts/translate_queries.py). Điền biến bằng
+    fill()."""
+    text = _read(name)
+    _validate(name, text)
+    return text
+
+
+def fill(template: str, **values: str) -> str:
+    """Thay {{ten_bien}} đúng như MLflow làm, không cần PromptVersion."""
+    return _VAR_RE.sub(lambda m: str(values.get(m.group(1), m.group(0))), template)
 
 
 def _latest_template(name: str) -> Optional[str]:
