@@ -45,8 +45,16 @@ class CrossEncoderReranker(Reranker):
         cả các cặp thuộc câu hỏi khác nhau - điểm từng cặp độc lập với nhau."""
         if not pairs:
             return []
+        # Xếp theo độ dài rồi mới chia lô: mỗi lô bị độn tới cặp dài nhất của
+        # nó, text doc dài từ vài chục tới 1.500 ký tự nên độn lẫn lộn là
+        # phí GPU. Điểm từng cặp không đổi (có attention mask), trả đúng thứ tự cũ.
+        order = sorted(range(len(pairs)), key=lambda i: len(pairs[i][0]) + len(pairs[i][1]))
         with self._lock:
-            return [float(s) for s in self.model.predict(pairs, batch_size=32)]
+            scores = self.model.predict([pairs[i] for i in order], batch_size=32)
+        out = [0.0] * len(pairs)
+        for i, s in zip(order, scores):
+            out[i] = float(s)
+        return out
 
     def rerank(self, query: QueryItem, candidates: List[Candidate], top_k: int) -> List[Candidate]:
         if not candidates:

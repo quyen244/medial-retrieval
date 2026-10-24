@@ -208,6 +208,172 @@ Bài `chunk_d35_c44_full4k_plain` (trần 4.000, trung bình 2.570 ký tự) đ�
 nốt phía ngắn trong cùng họ "lấy phần đầu". Không kỳ vọng nó tăng; mục đích là loại
 hẳn biến độ dài khỏi danh sách việc cần làm.
 
+## 13. Index cấp document: h_doc 6,93 -> 11,63, FINAL 0.1117 -> 0.1894
+
+Bài `doc_d35_c44_top60_bge` (2026-10-24), đo bằng `h = P x m`:
+
+| | `chunk_d35_c44_full8k_plain` | `doc_d35_c44_top60_bge` |
+|---|---:|---:|
+| FINAL | 0.1117 | **0.1894** |
+| DOCS_F2 / P / R | 0.1280 / 0.1982 / 0.1364 | **0.1972 / 0.3323 / 0.2009** |
+| CHUNKS_F2 / P / R | 0.0955 / 0.1300 / 0.1043 | **0.1815 / 0.2703 / 0.1893** |
+| h_doc (m_doc 35) | 6,93 | **11,63** |
+| h_chunk | 5,55 (m 42,7) | **11,89** (m 44) |
+| h_chunk / h_doc | 0,80 | 1,02 |
+
+Cách làm: tìm thẳng trên `medical_docs` (một điểm mỗi tài liệu, text = title |
+description | heading | phần đầu, ≤1.500 ký tự, đã làm sạch bằng
+`scripts/denoise_doc_texts.py`), dense BGE-M3, KHÔNG lọc ngôn ngữ, lấy 60 doc,
+rerank bằng câu gốc, nộp 35 doc và 44 cửa sổ markdown gốc trần 8.000 ký tự đã bóc
+cú pháp. Index chunk `medical_documents` không được dùng.
+
+**Phán quyết: đổi biểu diễn là bước nhảy lớn nhất từ trước tới nay**, đúng chẩn đoán
+`docs/chan-doan-he-retrieval.md`: nút thắt là pool và biểu diễn, không phải reranker hay
+độ dài chunk (mọi bài Phase 0 nằm trong 0.107-0.112).
+
+Ba điểm phải đọc đúng:
+
+- **Lẫn hai biến.** Bài đổi cả biểu diễn lẫn reranker (BGE thay bản fine-tune của
+  N3). Muốn tách cần bài đối chứng `chunk_N3_bge` (N3 với reranker BGE).
+- **h_chunk / h_doc vượt 1** vì tầng chunk nộp 44 doc còn tầng doc nộp 35, và pool
+  mới có đủ 60 doc khác nhau. Pool chunk cũ chỉ ra ~44 doc nên nhiều chunk chung doc.
+  Tỉ số 0,79 "đứng yên" ở mục 9 là tính chất của pool chunk, không phải hằng số.
+- **Mục 11 đứng vững:** `0,016 x 11,63 = 0,186`, thực đo 0.1894.
+
+Doc nộp lên: vi 87% / en 7% / zh 5% (câu hỏi tiếng Việt, chưa dịch).
+
+Hệ quả: `m_doc = 35` là tối ưu cho h = 7. Ngưỡng biên `h/(4g+m)` giờ là
+11,6/(4 x 51 + 35) ≈ 4,9%, trong khi precision trung bình 33%, nên m* nhiều khả năng
+cao hơn 35. Phải đo, không suy (mục 5).
+
+## 14. Nộp dài hơn từ cùng pool top60: FINAL 0.1894 -> 0.2090
+
+Bài `doc_d50_c55_top60_bge`: lắp offline từ đúng pool đã rerank của mục 13
+(`scripts/assemble_doc_submission.py`), chỉ đổi số nộp.
+
+| | m_doc | h_doc | DOCS_F2 | m_chunk | h_chunk | CHUNKS_F2 | FINAL |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| d35_c44 | 35 | 11,63 | 0.1972 | 44 | 11,89 | 0.1815 | 0.1894 |
+| d50_c55 | 50 | 14,90 | 0.2251 | 55 | 13,67 | 0.1930 | **0.2090** |
+
+Biên đo được:
+- doc hạng 36-50: +3,27 trúng / 15 = **21,8% mỗi doc**, ngưỡng `h/(4g+m)` = 4,9%
+- chunk hạng 45-55: +1,77 trúng / 11 = **16,1% mỗi chunk**, ngưỡng 4,6%
+
+**Phán quyết: còn xa đỉnh ở cả hai tầng.** Khác hẳn pool chunk cũ (mục 2: biên hạng
+36-43 chỉ 0,6%). Pool doc-level đủ tốt để doc hạng 50 vẫn trúng 1/5.
+
+Hai giới hạn từ đây:
+- Tầng doc bị chặn bởi kích thước pool (top60 chỉ có 60 doc). Muốn nới phải dùng pool sâu hơn.
+- Tầng chunk bị chặn bởi **giới hạn 100 MB**: ~1,58 MB mỗi chunk của 1.200 câu ở trần
+  8.000, nên m_chunk tối đa ~58-60. Nới tiếp buộc phải hạ trần ký tự. Trần 8.000 là đỉnh
+  đo ở mục 12 khi CHƯA bị chặn bởi kích thước file, nên đánh đổi m_chunk và trần chưa đo.
+
+## 15. Pool sâu top300: tầng doc tăng, tầng chunk GIẢM - FINAL 0.2090 -> 0.2230
+
+Bài `doc_d80_c55_top300_bge`: dense lấy 300 doc, rerank BGE cả 300 bằng câu gốc, nộp
+80 doc / 55 chunk (trần 8.000). So với mục 14, tầng chunk giữ nguyên m = 55 để cô lập
+hiệu ứng của chiều sâu.
+
+| | m_doc | h_doc | DOCS_F2 | m_chunk | h_chunk | CHUNKS_F2 | FINAL |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| d50_c55_top60 | 50 | 14,90 | 0.2251 | 55 | 13,67 | 0.1930 | 0.2090 |
+| d80_c55_top300 | 80 | **18,95** | **0.2574** | 55 | 12,60 | 0.1887 | **0.2230** |
+
+Đo offline trên hai file nộp (không tốn lượt):
+- Top 50 doc của hai bài chỉ trùng **26,3 doc** mỗi câu: reranker kéo khoảng nửa top 50 từ
+  hạng dense 61-300 lên.
+- 55 chunk trùng **28,1**: khoảng 27 chunk mỗi câu bị thay. Chunk mới vào dài hơn
+  (TB 3.653 ký tự so với 3.224 của chunk bị đẩy ra).
+
+**Tầng doc:** biên hạng 51-80 khoảng (18,95 - 14,90)/30 = 13,5% mỗi doc, ngưỡng
+`h/(4g+m)` = 18,95/284 = 6,7%. Còn đáng nới thêm. (Con số biên lẫn cả việc top 50 đã đổi,
+chỉ dùng để định hướng, không phải biên thuần.)
+
+**Tầng chunk:** cùng m = 55 mà h_chunk giảm 1,07. Doc mà reranker kéo từ sâu lên trúng ở
+tầng doc nhưng ít trúng chunk hơn doc chúng đẩy ra. Hai giả thuyết, CHƯA tách được:
+1. Chunk dài hơn → mẫu số LCS (độ dài chunk nộp) lớn hơn → dễ trượt ngưỡng 0,40.
+2. Thứ hạng dense mang thông tin mà reranker (chỉ đọc 1.500 ký tự đầu) bỏ qua; pool nông
+   ngầm giữ ràng buộc "dense cũng thấy liên quan".
+
+**Phán quyết:** chiều sâu có lợi cho `relevant_docs`, có hại nhẹ cho `relevant_chunks`.
+Hai tầng không nhất thiết phải lấy từ cùng một thứ hạng; lấy chunk từ pool top60 và doc từ
+pool top300 ước tính được FINAL ≈ (0.2574 + 0.1930)/2 = 0.225 (chưa nộp).
+
+## 16. Pool B (orig + sửa chính tả + en + zh) nộp nhầm ở 35/44: FINAL 0.1836
+
+File nộp là zip script retrieve TỰ SINH theo mặc định config (35 doc / 44 chunk), không
+phải bản lắp offline 80/55. Không so thẳng được với 0.2230 (khác m), nhưng so được với
+`doc_d35_c44_top60_bge` (cùng m).
+
+| | pool | m_doc | h_doc | DOCS_F2 | m_chunk | h_chunk | CHUNKS_F2 | FINAL |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| d35_c44_top60 | top60, orig | 35 | **11,63** | **0.1972** | 44 | **11,89** | **0.1815** | **0.1894** |
+| B 35/44 | top300, orig+corr+en+zh | 35 | 10,97 | 0.1914 | 44 | 11,13 | 0.1758 | 0.1836 |
+
+Đo offline trên các pool:
+- Top 35 của B trùng **28,0 / 35** doc với top 35 của pool top300 chỉ-orig; chỉ 5% doc
+  trong top 35 là doc mà list orig không tìm ra. Ở hạng đầu, B gần như = top300 chỉ-orig.
+- Reranker (chấm bằng câu tiếng Việt) dồn doc en/zh xuống: pool B có 63% doc en/zh nhưng
+  top 80 sau rerank chỉ còn 24% (top 35: 15%). Điểm rerank trung vị doc vi 0,23, en/zh 0,01.
+
+**Phán quyết (có điều kiện):** ở m nhỏ, pool sâu làm TỤT hạng đầu cả hai tầng (h_doc -0,66,
+h_chunk -0,76). Vì B ≈ top300-orig ở top 35, phần tụt này nhiều khả năng do chiều sâu chứ
+không do biến thể - khớp với mục 15 (tầng chunk tụt khi đổi top60 -> top300). Chiều sâu chỉ
+có lợi vì cho phép nộp nhiều doc hơn. Hiệu ứng riêng của biến thể dịch CHƯA đo được: chúng
+kéo doc en/zh vào pool nhưng reranker loại phần lớn trước khi tới phần nộp.
+
+Bài học quy trình: script retrieve luôn sinh kèm một zip theo `submission.*` của config;
+bản nộp phải là bản `assemble_doc_submission` có `d<m>_c<m>` trong tên.
+
+## 17. Pool B ở 80/55: biến thể dịch gần như trung tính - FINAL 0.2216
+
+| | pool | h_doc | DOCS_F2 | DOCS_R | h_chunk | CHUNKS_F2 | FINAL |
+|---|---|---:|---:|---:|---:|---:|---:|
+| d80_c55_top300 | chỉ orig | 18,95 | **0.2574** | **0.3117** | 12,60 | 0.1887 | **0.2230** |
+| d80_c55_top300_vcorr_enzh | orig+corr+en+zh | 18,96 | 0.2520 | 0.3029 | 12,99 | 0.1913 | 0.2216 |
+
+- Tầng doc: tổng số trúng NHƯ NHAU (18,95 vs 18,96) nhưng DOCS_F2 thấp hơn 0.0054 vì recall
+  macro thấp hơn: trúng dồn vào ít câu hơn / câu có nhiều gold hơn. Macro-F2 thưởng cho trải
+  đều trên các câu, không chỉ tổng số trúng.
+- Tầng chunk: +0,39 trúng (+0.0026 F2). Vẫn dưới pool top60 (13,67).
+
+**Phán quyết:** với rerank bằng câu tiếng Việt, thêm bản dịch vào pool KHÔNG có lợi ròng.
+Khớp mục 16: reranker loại phần lớn doc en/zh mà bản dịch kéo vào. Muốn bản dịch đóng góp
+phải đổi cách rerank (`scripts/rescore_pools.py`, rerank theo ngôn ngữ doc).
+
+## 18. Thêm aspects (pool C) làm tụt cả hai tầng - FINAL 0.2013
+
+| | pool | h_doc | DOCS_F2 | h_chunk | CHUNKS_F2 | FINAL |
+|---|---|---:|---:|---:|---:|---:|
+| B 80/55 | orig+corr+en+zh | **18,96** | **0.2520** | **12,99** | **0.1913** | **0.2216** |
+| C 80/55 | B + aspects (TB 17,8 lượt tìm mỗi câu) | 17,15 | 0.2276 | 11,98 | 0.1749 | 0.2013 |
+
+- Pool C: 179/300 doc là doc câu gốc không tìm ra. Top 80 của C trùng B 55/80; 9% top 80
+  là doc CHỈ aspects tìm ra.
+- Top 80 của C có nhiều doc en/zh hơn B (31% so với 24%) mà vẫn kém hơn.
+
+**Phán quyết:** aspects HẠI (-1,8 doc, -1,0 chunk trúng). Mỗi aspect là một khía cạnh hẹp,
+17,8 list RRF lấn át list câu gốc, kéo vào doc đúng chủ đề con nhưng lệch nhu cầu chính.
+Lưu ý cho hướng rerank theo ngôn ngữ: đẩy thêm doc en/zh vào top 80 KHÔNG tự động có lợi
+(ở đây lẫn với hiệu ứng aspects nên không kết luận chắc).
+
+## 19. Nới m_doc 80 -> 110 trên pool top300: FINAL 0.2230 -> 0.2316
+
+Bài `doc_d110_c55_top300_bge`: y hệt `doc_d80_c55_top300_bge`, chỉ đổi m_doc.
+
+| m_doc | h_doc | DOCS_P | DOCS_R | DOCS_F2 | FINAL |
+|---:|---:|---:|---:|---:|---:|
+| 80 | 18,95 | 0.2369 | 0.3117 | 0.2574 | 0.2230 |
+| 110 | **22,83** | 0.2075 | 0.3598 | **0.2745** | **0.2316** |
+
+Tầng chunk không đổi (0.1887), đúng như kỳ vọng: hai tầng chấm độc lập.
+
+Biên hạng 81-110: 3,88 / 30 = **12,9% mỗi doc**, ngưỡng `h/(4g+m)` = 22,83/314 = 7,3%.
+Đường biên giảm rất chậm: 21,8% (36-50) -> 13,5% (51-80) -> 12,9% (81-110).
+
+**Phán quyết:** vẫn còn xa đỉnh. Tầng doc KHÔNG bị giới hạn dung lượng (doc_id rất nhỏ),
+nên nới tiếp lên 150-200 chỉ tốn lượt nộp. Pool top300 cho phép tới 300.
 
 ## Nguyên tắc rút ra về cách thí nghiệm
 

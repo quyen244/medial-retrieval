@@ -34,6 +34,8 @@ def build_argparser():
     p.add_argument("--concurrency", type=int, default=None)
     p.add_argument("--out-dir", default=None)
     p.add_argument("--run-name", default=None)
+    p.add_argument("--no-entity-translation", action="store_true",
+                   help="chỉ trích thực thể + phân rã + retrieval_target, KHÔNG dịch từng thực thể")
     return p
 
 
@@ -48,6 +50,8 @@ def apply_overrides(cfg: AugmentConfig, args) -> AugmentConfig:
     ):
         if value is not None:
             setattr(cfg, attr, value)
+    if args.no_entity_translation:
+        cfg.translate_entities = False
     return cfg
 
 
