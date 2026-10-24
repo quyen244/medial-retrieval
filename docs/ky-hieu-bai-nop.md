@@ -30,6 +30,7 @@ Chữ cái đầu chỉ là **đợt làm việc**, không mang nghĩa kỹ thu�
 | `docs44` | lấy hết doc có trong pool (~44) |
 | `hyb` | bật nhánh sparse, tìm hybrid dense + sparse |
 | `noslot` | tắt cơ chế giữ chỗ cho sub-query |
+| `plain` | bóc cú pháp markdown khỏi `chunk_text` (`scripts/md_strip.py`) |
 
 ## Bảng đầy đủ các bài ĐÃ NỘP
 
@@ -78,6 +79,7 @@ Chỉ bài `D_ft` được chấm (0.0805, theo luật mới). Các bài còn l�
 | `S2_doc1000` | y hệt S1 nhưng lấy 1000 doc | so với S1 → hiệu ứng của **chiều sâu** |
 | `P1_enzh_only` | chỉ nộp doc tiếng Anh và tiếng Trung trong pool | 7 gold doc hiện tìm được thuộc ngôn ngữ nào |
 | `P2_vi_only` | chỉ nộp doc tiếng Việt | như trên, phía còn lại |
+| `chunk_d35_c44_full8k_plain` | như `N3_d35_c44` nhưng bóc sạch cú pháp markdown | reference của BTC là markdown hay text thuần (ĐÃ DỰNG, chờ nộp) |
 
 `C65` và `T2800` là tên nội bộ trong `scripts/phase1_deep_retrieve.py`
 (đối chứng 65 chunk và thí nghiệm 2800 chunk), không phải tên file nộp.

@@ -141,9 +141,16 @@ ký tự cú pháp          : 1,09%
 token link/URL         : 0,00%   (trafilatura bỏ link mặc định)
 ```
 
-**Phán quyết: chi phí mẫu số không đáng kể.** Nhưng phép thử vẫn đáng chạy vì nó trả lời câu hỏi lớn hơn con số 1%:
-reference của BTC là markdown hay text thuần.
-Bài `chunk_d35_c44_full8k_plain` (như N3 nhưng bóc sạch cú pháp) đang chờ nộp.
+**Phán quyết: chi phí mẫu số không đáng kể.**
+Bài `chunk_d35_c44_full8k_plain` (như `N3_d35_c44` nhưng bóc sạch cú pháp) đã dựng, chờ nộp.
+Cô lập hoàn hảo: `relevant_docs` giống hệt 1200/1200 câu, nên `F2_doc` buộc phải giữ nguyên 0.1253.
+Token giảm 1,70%, ký tự giảm 1,31%, 93,5% số đoạn bị thay đổi, không đoạn nào rỗng.
+
+Hạn chế của phép thử, phải biết trước khi tiêu một lượt nộp: nó KHÔNG đối xứng.
+Nếu reference là text thuần thì bỏ cú pháp chỉ giảm mẫu số, điểm tăng.
+Nếu reference là markdown thì bỏ đi giảm cả tử lẫn mẫu, điểm gần như đứng yên.
+Nên kết quả 'tăng rõ' kết luận được, còn 'đứng yên' thì mơ hồ.
+Giá trị thông tin thấp hơn hai bài Phase 1, xếp sau nếu quota nộp eo hẹp.
 
 ## 11. FINAL quy về một đại lượng duy nhất
 
