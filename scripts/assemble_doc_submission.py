@@ -25,9 +25,23 @@ from src.rag.pipeline.submission import submission_chunk_text, submission_doc_id
 N_QUERIES = 1200
 
 
-def write_submission(name, rows, m_doc, m_chunk, cap=8000, strip=True, out_dir="data/tmp/phase1"):
+def middle_window(text, size):
+    """Đoạn `size` ký tự nằm giữa bài, căn về khoảng trắng gần nhất để không cắt
+    giữa chữ. Bài ngắn hơn size thì giữ nguyên."""
+    if len(text) <= size:
+        return text
+    a = (len(text) - size) // 2
+    sp = text.rfind(" ", 0, a + 1)
+    a = sp + 1 if sp > a - 50 else a
+    b = text.rfind(" ", a, a + size + 1)
+    return text[a: b if b > a + size - 50 else a + size]
+
+
+def write_submission(name, rows, m_doc, m_chunk, cap=8000, strip=True, out_dir="data/tmp/phase1",
+                     window="head"):
     """rows: [(id, doc_id xếp hạng cho relevant_docs, doc_id xếp hạng cho relevant_chunks)].
-    Hai danh sách có thể đến từ hai thứ hạng khác nhau - hai tầng chấm độc lập."""
+    Hai danh sách có thể đến từ hai thứ hạng khác nhau - hai tầng chấm độc lập.
+    window: head = cap ký tự đầu bài; middle = cap ký tự ở giữa bài."""
     raw_docs = RawDocs(load_index())
     prep = (lambda x: submission_chunk_text(strip_markdown(x))) if strip else submission_chunk_text
 
@@ -40,7 +54,8 @@ def write_submission(name, rows, m_doc, m_chunk, cap=8000, strip=True, out_dir="
             if not raw:
                 missing += 1
                 continue
-            chunks.append({"doc_id": submission_doc_id(d), "chunk_text": prep(raw[:cap])})
+            text = prep(raw[:cap]) if window == "head" else middle_window(prep(raw), cap)
+            chunks.append({"doc_id": submission_doc_id(d), "chunk_text": text})
         entries.append({"id": int(qid), "relevant_docs": docs, "relevant_chunks": chunks})
         n_doc.append(len(docs))
         n_chunk.append(len(chunks))

@@ -358,6 +358,23 @@ phải đổi cách rerank (`scripts/rescore_pools.py`, rerank theo ngôn ngữ 
 Lưu ý cho hướng rerank theo ngôn ngữ: đẩy thêm doc en/zh vào top 80 KHÔNG tự động có lợi
 (ở đây lẫn với hiệu ứng aspects nên không kết luận chắc).
 
+## 19. Nới m_doc 80 -> 110 trên pool top300: FINAL 0.2230 -> 0.2316
+
+Bài `doc_d110_c55_top300_bge`: y hệt `doc_d80_c55_top300_bge`, chỉ đổi m_doc.
+
+| m_doc | h_doc | DOCS_P | DOCS_R | DOCS_F2 | FINAL |
+|---:|---:|---:|---:|---:|---:|
+| 80 | 18,95 | 0.2369 | 0.3117 | 0.2574 | 0.2230 |
+| 110 | **22,83** | 0.2075 | 0.3598 | **0.2745** | **0.2316** |
+
+Tầng chunk không đổi (0.1887), đúng như kỳ vọng: hai tầng chấm độc lập.
+
+Biên hạng 81-110: 3,88 / 30 = **12,9% mỗi doc**, ngưỡng `h/(4g+m)` = 22,83/314 = 7,3%.
+Đường biên giảm rất chậm: 21,8% (36-50) -> 13,5% (51-80) -> 12,9% (81-110).
+
+**Phán quyết:** vẫn còn xa đỉnh. Tầng doc KHÔNG bị giới hạn dung lượng (doc_id rất nhỏ),
+nên nới tiếp lên 150-200 chỉ tốn lượt nộp. Pool top300 cho phép tới 300.
+
 ## Nguyên tắc rút ra về cách thí nghiệm
 
 Vòng 1 và 2 có 21 bài nộp đổi nhiều thứ cùng lúc và không rút ra được gì.

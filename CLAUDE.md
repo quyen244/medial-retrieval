@@ -46,6 +46,7 @@ Luôn tính `h = P x m`, ĐỪNG suy `h` từ `F2 = 5h/(4g+m)`: dạng đóng l�
 | **doc_d80_c55_top300_bge** (2026-10-25) | **0.2230** | 80,0 | **18,95** | **0.2574** | 55,0 | 12,60 | 0.1887 | 0,66 |
 | doc_d80_c55_top300_bge_vcorr_enzh (2026-10-25) | 0.2216 | 80,0 | 18,96 | 0.2520 | 55,0 | 12,99 | 0.1913 | 0,69 |
 | doc_d80_c55_top300_bge_vcorr_enzh_asp (2026-10-25) | 0.2013 | 80,0 | 17,15 | 0.2276 | 55,0 | 11,98 | 0.1749 | 0,70 |
+| **doc_d110_c55_top300_bge** (2026-10-25) | **0.2316** | 110,0 | **22,83** | **0.2745** | 55,0 | 12,60 | 0.1887 | 0,55 |
 
 Bài cuối là bài đầu tiên tìm trên index cấp document (`medical_docs`, 1.003.391 điểm,
 title + description + heading + phần đầu bài ≤1.500 ký tự), lấy 60 doc rồi rerank.

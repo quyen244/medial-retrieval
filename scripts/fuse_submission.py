@@ -15,6 +15,8 @@ Cách xếp hạng relevant_docs (--methods, nhiều cách một lần):
   maxall      max mọi điểm đã chấm của doc (cần --scope all, cách B)
 relevant_chunks lấy từ --chunk-pool theo thứ tự rerank của chính pool đó
 (pool top60 cho h_chunk cao nhất đã đo, mục 15-17 docs/phat-hien-tang-diem.md).
+Nhiều pool (--chunk-pool top60 top300) thì nối tiếp, bỏ trùng: hết 60 doc của
+top60 mới lấy tiếp theo thứ tự top300.
 
     python -m scripts.fuse_submission --dry                       # chỉ in chẩn đoán
     python -m scripts.fuse_submission --methods matched max mix0.5 rrf
@@ -76,12 +78,14 @@ def rank_docs(cands, scores, qid, method):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--doc-pool", default="B", choices=sorted(POOLS), help="pool cung cấp ứng viên cho relevant_docs")
-    ap.add_argument("--chunk-pool", default="top60", choices=sorted(POOLS))
+    ap.add_argument("--chunk-pool", nargs="+", default=["top60"], choices=sorted(POOLS))
     ap.add_argument("--rescore", default=f"{D}/rescore_bge.jsonl")
     ap.add_argument("--methods", nargs="+", default=["orig", "matched", "max", "mix0.5", "rrf"])
     ap.add_argument("--m-doc", type=int, default=80)
     ap.add_argument("--m-chunk", type=int, default=55)
     ap.add_argument("--cap", type=int, default=8000)
+    ap.add_argument("--window", choices=["head", "middle"], default="head",
+                    help="chunk_text lấy cap ký tự đầu bài hay ở giữa bài")
     ap.add_argument("--dry", action="store_true", help="chỉ in chẩn đoán, không ghi bài nộp")
     ap.add_argument("--out-dir", default=D)
     args = ap.parse_args()
@@ -90,11 +94,10 @@ def main():
     for r in map(json.loads, open(args.rescore, encoding="utf-8")):
         scores[(int(r["id"]), r["kind"])].update(r["scores"])
     doc_pool = load_pool(POOLS[args.doc_pool])
-    chunk_pool = load_pool(POOLS[args.chunk_pool])
     lang = {(q, c["doc_id"]): c["language"] for q, cs in doc_pool.items() for c in cs}
     miss = sum(1 for (q, d), lg in lang.items() if lg in ("en", "zh") and d not in scores[(q, MATCH[lg])])
     n_enzh = sum(1 for lg in lang.values() if lg in ("en", "zh"))
-    print(f"[fuse] doc pool {args.doc_pool} | chunk pool {args.chunk_pool} | doc en/zh chưa có điểm "
+    print(f"[fuse] doc pool {args.doc_pool} | chunk pool {'+'.join(args.chunk_pool)} | doc en/zh chưa có điểm "
           f"cùng ngôn ngữ: {miss:,}/{n_enzh:,}")
 
     base = {q: rank_docs(cs, scores, q, "orig")[: args.m_doc] for q, cs in doc_pool.items()}
@@ -110,11 +113,17 @@ def main():
     if args.dry:
         return
 
-    chunk_rank = {q: [c["doc_id"] for c in cs] for q, cs in chunk_pool.items()}
+    chunk_rank = defaultdict(list)
+    for label in args.chunk_pool:
+        for q, cs in load_pool(POOLS[label]).items():
+            seen = set(chunk_rank[q])
+            chunk_rank[q] += [c["doc_id"] for c in cs if c["doc_id"] not in seen]
+    cap_tag = ("" if args.cap == 8000 else f"_cap{args.cap}") + ("_mid" if args.window == "middle" else "")
     for method in args.methods:
-        name = f"fuse_d{args.m_doc}_c{args.m_chunk}_{args.doc_pool}_{method}_c{args.chunk_pool}"
+        name = (f"fuse_d{args.m_doc}_c{args.m_chunk}_{args.doc_pool}_{method}"
+                f"_c{'+'.join(args.chunk_pool)}{cap_tag}")
         rows = [(q, ranked[method][q], chunk_rank[q]) for q in sorted(doc_pool)]
-        write_submission(name, rows, args.m_doc, args.m_chunk, args.cap, True, args.out_dir)
+        write_submission(name, rows, args.m_doc, args.m_chunk, args.cap, True, args.out_dir, args.window)
 
 
 if __name__ == "__main__":
