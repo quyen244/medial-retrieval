@@ -174,32 +174,40 @@ h_doc 25          ->  FINAL ~0.40
 Hệ quả: mỗi tài liệu gold tìm thêm được đáng +0,016 điểm.
 Mọi việc khác đã chốt; chỉ còn `h_doc` cần tối ưu.
 
-## 12. Mẫu số của luật chấm mới CÓ thật, đo được bằng hai phép ngược chiều
+## 12. Hai cơ chế khác nhau, đừng gộp: làm sạch token rác ≠ cắt ngắn văn bản
 
-Trước đây suy diễn "nộp dài bị phạt" đã sai một lần (xem mục 5), vì hiệu ứng căn đúng vùng
-lấn át hiệu ứng mẫu số. Giờ cố định cách căn vùng (đều là `raw[:cap]`, cùng doc list), hiệu
-ứng mẫu số lộ ra:
+Bản đầu của mục này gộp hai thứ vào một cột "% ký tự → % trúng" như thể là một hiện tượng
+đo hai lần. Sai. Chúng khác cơ chế:
 
-| Bài | Trần | Ký tự TB | h_chunk | Đổi ký tự -> đổi trúng |
-|---|---:|---:|---:|---|
-| `N3_d35_c44` | 8.000 | 3.463 | 5,500 | mốc |
-| `N5_d35_cap20k` | 20.000 | 3.731 | 5,376 | +7,7% ký tự -> **-2,25%** trúng |
-| `chunk_d35_c44_full8k_plain` | 8.000 | 3.418 | 5,551 | -1,31% ký tự -> **+0,93%** trúng |
+| Thay đổi | Token bị động tới | Khớp reference được không |
+|---|---|---|
+| Bóc cú pháp (`chunk_d35_c44_full8k_plain`) | ký hiệu `#`, `**`, `>` và dấu gạch bảng | **không bao giờ** |
+| Nới trần 8k → 20k (`N5_d35_cap20k`) | chữ thật ở phần đuôi tài liệu | khớp một phần |
 
-Hai phép đo độc lập, cùng dấu.
+Bỏ token không bao giờ khớp là LÀM SẠCH: mẫu số giảm, tử số giữ nguyên, lợi thuần.
+Bỏ chữ thật thì tử số giảm theo. Không đặt chung thước đo được.
 
-Bóc cú pháp hiệu quả gấp 2,4 lần trên mỗi phần trăm ký tự (0,71 so với 0,29), hợp lý vì
-token cú pháp chắc chắn không khớp còn phần đuôi tài liệu thì khớp một phần.
+**Phán quyết về làm sạch: có tác dụng, +0,93% h_chunk.** Xem mục 10.
 
-**Phán quyết: thêm ký tự thì mất trúng, bớt ký tự vô dụng thì được trúng.**
+**Phán quyết về độ dài: trần 8.000 là đỉnh, cả hai phía đều tụt.**
 
-Hệ quả, chưa kiểm chứng: hạ trần từ 8.000 xuống 4.000 nên tăng tiếp.
-Bài `chunk_d35_c44_full4k_plain` khác bài đang thắng đúng một biến, dựng trên CPU.
-Lưu ý mục 3 vẫn đúng: dưới khoảng 2.500 ký tự thì mất căn vùng và tụt mạnh, nên có
-một điểm tối ưu nằm đâu đó giữa 2.500 và 8.000 chứ không phải càng ngắn càng tốt.
+```
+E2_win2500   trung bình 1.967 ký tự  ->  CHUNKS_F2  0.0927
+E3_full8k    trung bình 3.463 ký tự  ->  CHUNKS_F2  0.0944
+N5_cap20k    trung bình 3.731 ký tự  ->  CHUNKS_F2  0.0922
+```
 
+Ngắn hơn thua, dài hơn cũng thua. Hợp với mục 3: có ngưỡng căn vùng ở khoảng 2.500 ký tự,
+dưới đó mất căn vùng, trên 8.000 thì phần thêm vào loãng hơn phần đã có.
 
----
+Lưu ý `E2` so với `E3` có nhiễu: E2 là cửa sổ căn vào chunk tốt nhất, E3 lấy phần đầu
+tài liệu, nên khác cả vị trí lẫn độ dài. Phép so sạch về độ dài là `E3` với `N5`
+(cùng lấy phần đầu, chỉ khác trần), và nó cho dài hơn thì tụt.
+
+Bài `chunk_d35_c44_full4k_plain` (trần 4.000, trung bình 2.570 ký tự) đã dựng để đóng
+nốt phía ngắn trong cùng họ "lấy phần đầu". Không kỳ vọng nó tăng; mục đích là loại
+hẳn biến độ dài khỏi danh sách việc cần làm.
+
 
 ## Nguyên tắc rút ra về cách thí nghiệm
 
