@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.rag.augment.config import AugmentConfig
 from src.rag.augment.steps import json_object, make_chat
+from src.rag.augment.query_normalize import QueryNormalizer
 from src.rag.labeling import prompts as prompt_store
 
 QUERIES = "data/queries/real_queries.jsonl"
@@ -45,11 +46,11 @@ _WORD = re.compile(r"\w+", re.U)
 _PIECE = re.compile(r"\s+|\S+")
 _NONLETTER = re.compile(r"[\W_]+", re.U)
 
-# Viết tắt kiểu chat mà luật "dãy con" không bắt được ("oy" không phải dãy
-# con của "roi"). Khoá đã bỏ dấu, viết thường.
-ABBREV = {"oy": "rồi", "ko": "không", "k": "không", "kh": "không", "dc": "được", "đc": "được",
-          "j": "gì", "bt": "bình thường", "xn": "xét nghiệm", "trc": "trước", "e": "em",
-          "vs": "với", "ntn": "như thế nào", "bs": "bác sĩ", "sd": "sử dụng", "mk": "mình"}
+# Bảng tiền xử lý tất định (bung viết tắt, nói tránh, khẩu ngữ), chạy TRƯỚC
+# LLM. Luật kiểm chỗ sửa dùng chung danh sách viết tắt của bảng này, khoá đã
+# bỏ dấu ("đc" -> "dc") cho khớp bare().
+NORMALIZER = QueryNormalizer()
+ABBREV = {}
 
 
 def nfc(s):
@@ -61,6 +62,9 @@ def bare(s):
     s = unicodedata.normalize("NFD", s.lower()).replace("đ", "d").replace("đ", "d")
     s = "".join(c for c in s if unicodedata.category(c) != "Mn").replace("đ", "d")
     return _NONLETTER.sub("", s)
+
+
+ABBREV.update({bare(k): v for k, v in NORMALIZER.abbrev_map().items()})
 
 
 def _subseq(a, b):
@@ -278,7 +282,7 @@ def main():
         t = time.time()
         # NFC trước mọi thứ: 4/1.200 câu lưu dạng tổ hợp (NFD), diff sẽ báo
         # "ngày -> ngày" dù nhìn giống hệt, và token sparse không khớp tài liệu.
-        src = nfc(q["query"])
+        src, norm_changes = NORMALIZER.apply(nfc(q["query"]))
         raw = chat(build_prompt(template, src, shots_text), args.max_tokens)
         obj = json_object(raw) or {}
         llm = nfc((obj.get("corrected_query") or "").strip())
@@ -288,6 +292,7 @@ def main():
             flags.append("reverted_edit")
         return {"id": q["id"], "query": q["query"], "corrected_query": final,
                 "changed": final != q["query"], "nfc_changed": src != q["query"],
+                "normalized_query": src, "normalize_changes": norm_changes,
                 "llm_query": llm, "edits_kept": kept, "edits_reverted": reverted,
                 "flags": flags, "latency_s": round(time.time() - t, 2),
                 "raw": None if obj else raw}
