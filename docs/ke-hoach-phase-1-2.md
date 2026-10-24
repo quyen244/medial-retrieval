@@ -66,15 +66,29 @@ Tốn 1 lượt nộp, không tốn GPU, chạy được trong lúc GPU bận vi
 
 Đây là việc quan trọng nhất trong cả kế hoạch. Mọi thứ sau nó phụ thuộc vào kết quả của nó.
 
-Thay đổi so với hiện tại:
+**KHÔNG dựng index mới.** Dùng đúng index chunk 3,93M đang có, chỉ gọi nó khác đi.
+Doc-level index là mục 1.4, chỉ làm nếu 1.1 thất bại.
 
-| | Hiện tại | Sau |
+Chạy bản TRẦN TRỤI: đổi đúng một thứ là chiều sâu, giữ nguyên mọi thành phần khác của N3.
+
+| Thành phần | N3 (nay) | 1.1 trần trụi |
 |---|---|---|
-| Lọc ngôn ngữ | vi/en/zh riêng, quota cố định | bỏ hẳn, một nhánh phẳng |
-| Chiều sâu | 65 chunk | 3.000 chunk |
-| Gộp về doc | không có | max điểm chunk mỗi doc |
-| Rerank | 65 chunk | chunk tốt nhất của 400 doc |
+| Query | phân rã, chỉ tiếng Việt | giữ nguyên |
+| Nhánh | dense | giữ nguyên |
+| Lọc ngôn ngữ | vi/en/zh, quota cố định | giữ nguyên, chỉ nhân tỷ lệ lên |
+| **Chiều sâu** | **vi 35 / en 20 / zh 10 = 65** | **vi 1500 / en 850 / zh 450 ≈ 2.800** |
+| Gộp về doc | không có | max điểm chunk mỗi doc (bắt buộc) |
+| Rerank | 65 chunk | chunk tốt nhất của 400 doc (bắt buộc) |
 | Nộp | 35 doc + 43 cửa sổ | giữ nguyên |
+
+Giữ nguyên tỷ lệ 35/20/10 khi nhân lên để không lẫn thêm biến ngôn ngữ vào.
+
+Hai dòng cuối có đánh dấu "bắt buộc" vì không thể đưa 2.800 chunk vào cross-encoder.
+Đó là đường ống kỹ thuật, không phải giả thuyết độc lập, nên vẫn tính là một thí nghiệm một giả thuyết.
+
+Lý do phải kỷ luật đến mức này: vòng 1 và vòng 2 có 21 thí nghiệm, phần lớn đổi vài thứ cùng lúc,
+và tất cả đều cho delta gần 0 mà không rút ra được điều gì.
+Phase 0 đi được chính vì E1 chỉ đổi danh sách doc còn E2/E3 chỉ đổi văn bản chunk.
 
 Ba chi tiết triển khai dễ làm hỏng nếu bỏ qua:
 
@@ -101,7 +115,19 @@ Lý do kỳ vọng hybrid ăn ở đây: query y khoa tiếng Việt chứa tên
 
 ### 1.3 Đa truy vấn kèm bản dịch
 
-Ba query độc lập (vi gốc, en, zh), mỗi query một lượt dense và một lượt sparse, RRF sáu danh sách.
+Bốn biến thể query độc lập, mỗi biến thể một lượt dense và một lượt sparse, RRF tám danh sách:
+
+| Biến thể | Nội dung | Vì sao |
+|---|---|---|
+| `q_vi` | câu hỏi gốc | mốc |
+| `q_en` | bản dịch tiếng Anh | 20% corpus là tiếng Anh |
+| `q_zh` | bản dịch tiếng Trung | 20% corpus là tiếng Trung |
+| `q_hyde` | đoạn y văn giả định do Qwen3-8B viết ra từ câu hỏi | kéo query về cùng phân phối văn bản với tài liệu |
+
+HyDE đáng làm vì câu hỏi người bệnh viết bằng giọng kể, còn tài liệu viết bằng giọng y văn - hai phân phối khác nhau nên vector lệch nhau.
+Chi phí 1.200 lời gọi LLM, vài phút, rẻ hơn tóm tắt corpus khoảng 800 lần.
+
+Thêm từng biến thể một, mỗi lần một lượt nộp, chứ không bật cả bốn cùng lúc.
 Chi tiết phần tri thức dịch thuật ở mục 5.
 
 Ràng buộc học được bằng giá đắt ở vòng 1: **tuyệt đối không nối thuật ngữ và bản dịch vào cùng một chuỗi query**.
@@ -112,9 +138,19 @@ Mỗi bản dịch phải là một lượt truy xuất riêng, gộp bằng RRF
 
 Nếu mở phễu mà `h_doc` không nhúc nhích thì vấn đề nằm ở biểu diễn và xếp hạng. Theo thứ tự chi phí tăng dần:
 
-1. Doc-level index: `title + heading_path + phần mở đầu`, 1,0M doc x 1024-d fp16 = 2,1 GB, encode lại khoảng 1 giờ GPU. Biểu diễn khác thì thứ hạng khác.
-2. Reranker mạnh hơn (Qwen3-Reranker-0.6B) chạy trên pool sâu.
-3. Đổi encoder.
+| | Cách | Chi phí GPU |
+|---|---|---|
+| 1 | BM25 trên `title + heading_path`, index trên CPU | **0** |
+| 2 | Doc-level dense index: `title + heading_path + lead` | ~35 phút |
+| 3 | Encode lại 3,93M chunk có tiền tố heading | 2-3 giờ |
+| 4 | Reranker mạnh hơn (Qwen3-Reranker-0.6B) trên pool sâu | tuỳ pool |
+| 5 | Đổi encoder | cao |
+
+`lead` là đoạn mở đầu (sapo) của bài, khoảng 600 ký tự đầu của thân bài.
+Ba trường `title`, `heading_path`, `lead` là bản tóm tắt DO NGƯỜI VIẾT tạo ra, đã lưu sẵn trong payload nhưng hiện không được đưa vào vector - ta chỉ encode `content` của chunk.
+
+Lưu ý cách (2) RẺ HƠN cách (3), vì 1,0M tài liệu ít hơn 3,93M chunk.
+Muốn đưa heading vào vector thì làm ở mức document, đừng encode lại chunk.
 
 ## 4. Phase 2 - mở rộng theo láng giềng
 
@@ -186,6 +222,10 @@ Bốn bước lọc bắt buộc nếu dùng glossary:
 ### 5.4 Thứ tự làm, đã đổi so với dự định ban đầu
 
 Vì độ phủ chỉ 39,8% và nhiễu ánh xạ là có thật, glossary KHÔNG nên là bước đầu.
+
+Không cho LLM tóm tắt corpus: 1,0M tài liệu x ~100 token đầu ra = 100 triệu token, tức 14-28 giờ GPU thuần sinh, chưa kể encode lại.
+Tài liệu đã có sẵn bản tóm tắt của người viết là `title + heading_path + lead` (mục 1.4 cách 2).
+Chỗ đáng cho LLM sinh văn bản là phía QUERY (1.200 mục), không phải phía corpus.
 
 **Bước 1 - dịch trực tiếp bằng Qwen3-8B.**
 Độ phủ 100%, không có lỗi ánh xạ, chính là Baseline ở slide 15 của mentor.
