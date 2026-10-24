@@ -12,14 +12,14 @@ export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
 
 # --enable-prefix-caching: buoc cham tang 2 gui 8 request cung mot query,
 #   prompt dat query TRUOC tai lieu nen phan instruction+query dung chung.
-# --max-model-len 8192: query ke benh dai nhat 281 tu + tai lieu, 8192 du rong.
+# --max-model-len (MAX_LEN, mac dinh 8192): query ke benh dai nhat 281 tu + tai lieu, 8192 du rong.
 # --gpu-memory-utilization 0.6 (mac dinh): ~5.5GB weights + ~4GB KV cache, chua
 #   ~6GB cho BGE-M3 + reranker chay cung GPU (pipeline sinh nhan). Chay vLLM mot
 #   minh (vd. pha augment) muon nhanh hon: GPU_MEM_UTIL=0.88
 exec vllm serve "$MODEL" \
   --quantization awq \
   --port "$PORT" \
-  --max-model-len 8192 \
+  --max-model-len "${MAX_LEN:-8192}" \
   --gpu-memory-utilization "${GPU_MEM_UTIL:-0.6}" \
   --enable-prefix-caching \
   --no-enable-log-requests

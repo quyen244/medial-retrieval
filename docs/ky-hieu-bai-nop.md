@@ -47,7 +47,13 @@ Chữ cái đầu chỉ là **đợt làm việc**, không mang nghĩa kỹ thu�
 | `E3_full8k` | trọn markdown gốc | 42,7 | 42,7 | trọn bài, trần 8.000 | 0.1099 |
 | `N5_d35_cap20k` | như N3 nhưng nới trần lên 20.000 | 35 | 42,7 | trọn bài, trần 20.000 | 0.1101 |
 | `N3_d35_c44` | 35 doc + 43 cửa sổ, trần 8.000 | 35 | 42,7 | trọn bài, trần 8.000 | 0.1112 |
-| **`chunk_d35_c44_full8k_plain`** | **như N3 nhưng bóc sạch cú pháp markdown - TỐT NHẤT** | 35 | 42,7 | trọn bài trần 8.000, text thuần | **0.1117** |
+| `chunk_d35_c44_full8k_plain` | như N3 nhưng bóc sạch cú pháp markdown | 35 | 42,7 | trọn bài trần 8.000, text thuần | 0.1117 |
+| `doc_d35_c44_top60_bge` | tìm trên index cấp document (`medical_docs`), 60 doc, rerank BGE | 35 | 44 | trọn bài trần 8.000, text thuần | 0.1894 |
+| `doc_d50_c55_top60_bge` | như trên, lắp lại offline nộp 50 doc / 55 chunk | 50 | 55 | trọn bài trần 8.000, text thuần | 0.2090 |
+| `doc_top300_bge_vcorr_enzh` | pool 300 gộp RRF từ câu gốc + câu sửa chính tả + bản dịch en + zh, rerank bằng câu gốc. Nộp NHẦM zip mặc định 35/44 | 35 | 44 | trọn bài trần 8.000, text thuần | 0.1836 |
+| **`doc_d80_c55_top300_bge`** | **pool dense 300 doc, rerank BGE cả 300, nộp 80 doc / 55 chunk - TỐT NHẤT** | 80 | 55 | trọn bài trần 8.000, text thuần | **0.2230** |
+| `doc_d80_c55_top300_bge_vcorr_enzh` | pool B (orig + câu sửa chính tả + en + zh, RRF), rerank bằng câu gốc, 80 doc / 55 chunk | 80 | 55 | trọn bài trần 8.000, text thuần | 0.2216 |
+| `doc_d80_c55_top300_bge_vcorr_enzh_asp` | pool C = B + aspects (mỗi retrieval_target x vi/en/zh một list), 80 doc / 55 chunk | 80 | 55 | trọn bài trần 8.000, text thuần | 0.2013 |
 
 Hai bài đã dựng rồi xoá vì dựa trên kết luận sai (tưởng doc list càng ngắn càng tốt):
 `N1_d25_c44` (25 doc) và `N2_d12_c44` (12 doc).

@@ -258,14 +258,20 @@ def build(chat: ChatFn, prompts, cfg, qid: int, query: str,
     if failed:
         aq.failures.append("extract")
 
-    aq.diseases, n_dis_fail = resolve_diseases(chat, prompts, cfg, diseases, icd, query)
-    if n_dis_fail:
-        aq.failures.append("disease_translation")
-    aq.medications = resolve_medications(medications, rx)
-    aq.symptoms, sym_failed = resolve_symptoms(chat, prompts, cfg, symptoms, query)
+    if cfg.translate_entities:
+        aq.diseases, n_dis_fail = resolve_diseases(chat, prompts, cfg, diseases, icd, query)
+        if n_dis_fail:
+            aq.failures.append("disease_translation")
+        aq.medications = resolve_medications(medications, rx)
+        aq.symptoms, sym_failed = resolve_symptoms(chat, prompts, cfg, symptoms, query)
+        if sym_failed:
+            aq.failures.append("symptom_translation")
+    else:
+        # Chỉ giữ chữ tiếng Việt đã trích, không một lời gọi dịch nào.
+        aq.diseases = [Term(vi=n, source_en="none") for n in diseases]
+        aq.medications = [Term(vi=n, source_en="none") for n in medications]
+        aq.symptoms = [Term(vi=n, source_en="none") for n in symptoms]
     all_terms = aq.diseases + aq.medications + aq.symptoms
-    if sym_failed:
-        aq.failures.append("symptom_translation")
 
     if aq.is_long:
         subs, failed = decompose(chat, prompts, cfg, query)

@@ -25,6 +25,12 @@ class AugmentConfig:
     # nhắc (bị phân rã làm rụng) vẫn được ghép vào mọi sub-unit để khỏi mất.
     scope_terms_to_unit: bool = True
 
+    # Dịch TỪNG thực thể (disease_translation, symptom_translation, tra ICD/RxNorm).
+    # Tắt từ augment_v3: bản dịch đơn lẻ sai là cả dây chuyền sau chép theo
+    # ("dắt" -> dyspareunia, "u nhú" -> leiomyoma). Câu được dịch NGUYÊN CÂU ở
+    # scripts/translate_queries.py; thực thể chỉ giữ chữ tiếng Việt.
+    translate_entities: bool = True
+
     # --- tra bảng ---
     icd_table: str = "data/vocab/icd_bilingual.tsv"
     rxnorm_table: str = "data/knowledge/rxnorm_concepts_final.csv"

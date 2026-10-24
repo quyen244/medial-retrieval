@@ -166,6 +166,10 @@ def load_embedder():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="data/translate/query_translation.jsonl")
+    ap.add_argument("--queries", default=QUERIES,
+                    help="jsonl có id + query; dùng data/spelling/corrected_for_augment.jsonl để dịch câu đã sửa")
+    ap.add_argument("--augmented", default=AUGMENTED,
+                    help="augmented.jsonl cung cấp thực thể; phải sinh từ CÙNG bộ câu với --queries")
     ap.add_argument("--sample", type=int, default=0,
                     help="lấy N câu ngẫu nhiên, nửa ngắn nửa dài, để soát bằng mắt")
     ap.add_argument("--seed", type=int, default=7)
@@ -194,8 +198,8 @@ def main():
         cfg.llm_url = args.llm_url
     chat = make_chat(cfg)
     template = prompt_store.load(PROMPT)
-    augmented = {int(json.loads(l)["qid"]): json.loads(l) for l in open(AUGMENTED, encoding="utf-8")}
-    queries = [json.loads(l) for l in open(QUERIES, encoding="utf-8")]
+    augmented = {int(json.loads(l)["qid"]): json.loads(l) for l in open(args.augmented, encoding="utf-8")}
+    queries = [json.loads(l) for l in open(args.queries, encoding="utf-8")]
 
     if args.sample:
         rnd = random.Random(args.seed)

@@ -42,6 +42,8 @@ REQUIRED_VARS: Dict[str, List[str]] = {
     "query_translation": ["query", "medical_entities", "few_shots"],
     # Sửa chính tả câu gốc, chạy TRƯỚC trích thực thể và dịch (scripts/correct_queries.py).
     "query_spelling_correction": ["query", "few_shots"],
+    # HyDE cho biến thể truy xuất hyde (scripts/gen_hyde.py).
+    "hyde_doc": ["query", "retrieval_targets", "diseases", "symptoms", "medications"],
 }
 
 # Prompt của riêng pha augment, để gọi sync_all() cho đúng nhóm thay vì đồng

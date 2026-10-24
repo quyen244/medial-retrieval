@@ -78,6 +78,19 @@ retrieval:
     hybrid: false
     hnsw_ef: 256
     encode_batch: 8
+    # Biến thể truy xuất, mỗi cái một lượt tìm riêng, gộp RRF cấp doc rồi giữ
+    # top_docs (scripts/phase1_doc_retrieve.py). [orig] = bài mốc.
+    # orig | corrected | en | zh | aspects
+    variants: [orig]
+    # Số doc mỗi list trước RRF. null = bằng top_docs.
+    per_list_k: null
+    rrf_k: 60
+    corrected_file: data/spelling/corrected_queries.jsonl
+    translation_file: data/translate/query_translation_v3.jsonl
+    augmented_file: data/augment_v3_corrected/augmented.jsonl
+    hyde_file: data/hyde/hyde_v1.jsonl
+    # Pool cũ để dùng lại điểm rerank (cùng reranker + max_length). [] = chấm hết.
+    rerank_cache: []
 
   # Rerank riêng từng sub-query rồi giữ chỗ cho nó trong bài nộp.
   sub_query:
@@ -117,9 +130,10 @@ rerank:
 # ---------------------------------------------------------------------------
 submission:
   # Hai tầng chấm độc lập bằng hai công thức F2 riêng, nên chọn số riêng.
-  # m_doc = 35 là ĐỈNH ĐÃ ĐO: 25 tụt, 43 cũng tụt.
-  m_doc: 35
-  m_chunk: 44
+  # Pool doc-level top300: 80/55 là bài tốt nhất đã đo (0.2230, 2026-10-25).
+  # m_doc = 35 chỉ đúng với pool chunk cũ. m_chunk tối đa ~58 vì giới hạn 100 MB.
+  m_doc: 80
+  m_chunk: 55
 
   chunk_text:
     # orig = đoạn đã index (877 ký tự)

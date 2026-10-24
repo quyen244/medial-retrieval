@@ -39,7 +39,19 @@ Luôn tính `h = P x m`, ĐỪNG suy `h` từ `F2 = 5h/(4g+m)`: dạng đóng l�
 | **E3_full8k** | **0.1099** | 42,7 | 7,06 | 0.1253 | 42,7 | **5,50** | **0.0944** | **0,78** |
 | E4_docs25 | 0.1071 | 25,0 | 6,09 | 0.1222 | 25,0 | 4,76 | 0.0920 | 0,78 |
 | N3_d35_c44 | 0.1112 | 35,0 | 6,93 | 0.1280 | 42,7 | 5,50 | 0.0944 | 0,79 |
-| **chunk_d35_c44_full8k_plain** | **0.1117** | 35,0 | 6,93 | 0.1280 | 42,7 | **5,55** | **0.0955** | **0,80** |
+| chunk_d35_c44_full8k_plain | 0.1117 | 35,0 | 6,93 | 0.1280 | 42,7 | 5,55 | 0.0955 | 0,80 |
+| doc_d35_c44_top60_bge (2026-10-24) | 0.1894 | 35,0 | 11,63 | 0.1972 | 44,0 | 11,89 | 0.1815 | 1,02 |
+| doc_d50_c55_top60_bge (2026-10-24) | 0.2090 | 50,0 | 14,90 | 0.2251 | 55,0 | **13,67** | **0.1930** | 0,92 |
+| doc_d35_c44_top300_bge_vcorr_enzh (nộp nhầm zip mặc định, 2026-10-25) | 0.1836 | 35,0 | 10,97 | 0.1914 | 44,0 | 11,13 | 0.1758 | 1,01 |
+| **doc_d80_c55_top300_bge** (2026-10-25) | **0.2230** | 80,0 | **18,95** | **0.2574** | 55,0 | 12,60 | 0.1887 | 0,66 |
+| doc_d80_c55_top300_bge_vcorr_enzh (2026-10-25) | 0.2216 | 80,0 | 18,96 | 0.2520 | 55,0 | 12,99 | 0.1913 | 0,69 |
+| doc_d80_c55_top300_bge_vcorr_enzh_asp (2026-10-25) | 0.2013 | 80,0 | 17,15 | 0.2276 | 55,0 | 11,98 | 0.1749 | 0,70 |
+
+Bài cuối là bài đầu tiên tìm trên index cấp document (`medical_docs`, 1.003.391 điểm,
+title + description + heading + phần đầu bài ≤1.500 ký tự), lấy 60 doc rồi rerank.
+Nó đổi HAI thứ so với bài trên: biểu diễn doc và reranker (`BAAI/bge-reranker-v2-m3`
+thay `models/medical-reranker`). Chưa tách được phần nào do cái nào.
+Chi tiết: `docs/phat-hien-tang-diem.md` mục 13.
 
 `g_doc` ổn định quanh 50-51, `g_chunk` quanh 53-54.
 
