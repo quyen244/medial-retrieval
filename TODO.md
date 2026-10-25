@@ -77,6 +77,27 @@ hiệu ứng. Vòng 1 và 2 có 21 thí nghiệm đổi nhiều thứ cùng lúc
 | E | Dịch query en/zh + HyDE | cần GPU đủ cho Qwen3-8B; xem mục 5 kế hoạch |
 | F | Reranker mạnh hơn | chỉ sau khi pool đã rộng |
 
+## Phase sau: tận dụng index chunk `medical_documents` (3,9M điểm)
+
+Ghi 2026-10-24, sau khi `doc_d35_c44_top60_bge` (index doc-level) đạt FINAL 0.1894.
+Index doc chỉ thấy 1.500 ký tự đầu mỗi bài; index chunk thấy cả bài. Hai cái bổ sung
+cho nhau, chưa đo mức bổ sung.
+
+| | Việc | Giúp tầng | Điều kiện |
+|---|---|---|---|
+| I0 | **Đo trước, không tốn lượt nộp**: ~50 câu, so doc-list gộp từ index chunk với top-300 của `medical_docs` | — | làm TRƯỚC I1-I4; trùng gần hết thì bỏ cả nhóm |
+| I1 | Index chunk thành một list nữa trong RRF (gộp chunk về doc theo điểm max) | doc, chunk | I0 cho nhiều doc mới |
+| I2 | Điểm rerank doc = max(điểm phần đầu bài, điểm chunk khớp nhất của doc) | doc | sửa điểm mù 1.500 ký tự của reranker |
+| I3 | Bài > 8.000 ký tự (~10% doc): nộp cửa sổ quanh chunk khớp nhất thay vì phần đầu | chunk | E2 vs E3 ở Phase 0 cho thấy với bài ngắn không lợi gì |
+| I4 | Mở rộng láng giềng bằng `recommend` trên vector chunk đã lưu | doc | = D ở trên |
+
+Rủi ro: tìm sâu trên index chunk từng mất 478 s/câu trên máy cũ; 3,9M vector fp32 ~16 GB
+có thể phải đọc từ đĩa. Đo latency một câu trước khi phóng cả 1.200.
+
+Biến chưa thử, để sau:
+- Hybrid (dense + sparse) cho các biến thể: sparse khớp từ vựng nên có thể có ích riêng cho bản en/zh.
+- Rerank bằng câu ĐÃ SỬA chính tả thay vì câu gốc.
+
 ## Việc CPU làm được ngay, không cần server
 
 | | Việc | Ghi chú |

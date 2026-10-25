@@ -1,0 +1,64 @@
+# Bảng tiền xử lý câu hỏi, chạy TRƯỚC bước sửa chính tả bằng LLM (scripts/correct_queries.py).
+# Mỗi dòng: pattern<TAB>replacement<TAB>type<TAB>require<TAB>forbid<TAB>note
+#   pattern     : regex Python, tự bọc ranh giới từ (?<!\w)...(?!\w). Không có cờ IGNORECASE:
+#                 viết tắt chat thường là chữ thường, còn chữ hoa thường là mã y khoa (K+, SD, DC).
+#   require     : regex phải khớp trong cửa sổ quanh chỗ khớp (40 ký tự mỗi bên); trống = không cần.
+#   forbid      : regex KHÔNG được khớp trong cửa sổ đó; trống = không cấm.
+#   Cửa sổ gồm: ngữ cảnh trái + "⟨" + chỗ khớp + "⟩" + ngữ cảnh phải, để require/forbid
+#   neo được vào ngay trước hoặc ngay sau chỗ khớp.
+# Các dòng được áp theo thứ tự, mẫu dài đặt trước mẫu ngắn.
+#
+# === viết tắt kiểu chat (đều thấy trong 1.200 câu thật trừ khi ghi "phổ biến") ===
+ko	không	abbrev_chat			9 câu
+kh	không	abbrev_chat			phổ biến
+hok	không	abbrev_chat			phổ biến
+k	không	abbrev_chat		\d⟨|⟨k⟩\s*(?:[+\d]|g\b)	2 câu; cấm 500k, k+, kg
+đc	được	abbrev_chat			7 câu
+dc	được	abbrev_chat			3 câu
+trc	trước	abbrev_chat			2 câu
+ngta	người ta	abbrev_chat			1 câu
+ntn	như thế nào	abbrev_chat			phổ biến
+bthg	bình thường	abbrev_chat			phổ biến
+bth	bình thường	abbrev_chat			phổ biến
+bt	bình thường	abbrev_chat			phổ biến
+xn	xét nghiệm	abbrev_chat			1 câu
+bsi	bác sĩ	abbrev_chat			1 câu (Bsi)
+Bsi	Bác sĩ	abbrev_chat			1 câu
+bs	bác sĩ	abbrev_chat			phổ biến
+hnay	hôm nay	abbrev_chat			phổ biến
+nhiu	nhiêu	abbrev_chat			phổ biến
+oy	rồi	abbrev_chat			1 câu
+mk	mình	abbrev_chat			phổ biến
+j	gì	abbrev_chat		[A-Za-z]\s*,\s*⟨|⟨j⟩\s*,	cấm danh sách chữ cái a,b,c
+e	em	abbrev_chat		(?i:vitamin|nhóm|type|typ|loại|chữ|kênh|serotype)\s*⟨|[A-Za-z]\s*,\s*⟨|⟨e⟩\s*[,.-]?\s*(?:coli|[A-Za-z]\b)	13 câu; cấm vitamin E, E.coli, a,b,c,d,e
+#
+# === viết tắt y khoa: chỉ những cái nghĩa rõ, có điều kiện khi mơ hồ ===
+THA	tăng huyết áp	abbrev_med			1 câu (THA vô căn)
+ĐTĐ	đái tháo đường	abbrev_med			phổ biến
+đtđ	đái tháo đường	abbrev_med			phổ biến
+TNTC	thai ngoài tử cung	abbrev_med			1 câu, ngữ cảnh beta HCG
+NST	nhiễm sắc thể	abbrev_med			3 câu
+scp	ngày sau chuyển phôi	abbrev_med	\d\s*⟨		chỉ khi đi sau số ngày: "9 scp"
+XQ	X-quang	abbrev_med	(?i:chụp|phim|kết quả)\s*⟨|⟨XQ⟩\s*(?i:ngực|phổi|tim|xương|bụng|thẳng|nghiêng|răng)	\d+\s*/\s*\d+\s*mg	2 câu; cấm "Cozaar XQ 5/50mg" (tên thuốc)
+#
+# === cách nói tránh chỉ bộ phận sinh dục: BẮT BUỘC có ngữ cảnh cơ thể ===
+cô bé	âm hộ	euphemism	(?i:mép|môi|vùng|chỗ|lông)\s*(?:trong|ngoài)?\s*⟨|⟨cô bé⟩\s*(?i:của\s+(?:em|con|mình|vợ|bé)|bị|ngứa|sưng|đau|ra|có\s+mùi|nổi|mọc)	⟨cô bé⟩\s*(?:\d|nhà|năm|đang|học|tuổi)	1 câu (id968)
+cậu bé	dương vật	euphemism	⟨cậu bé⟩\s*(?i:của\s+(?:em|anh|chồng|mình)|bị|ngứa|sưng|đau|cương|xuất|ra|nổi|mọc|cong)	⟨cậu bé⟩\s*(?:\d|nhà|năm|đang|học|tuổi)	0 câu, phòng khi gặp
+cậu nhỏ	dương vật	euphemism	⟨cậu nhỏ⟩\s*(?i:của\s+(?:em|anh|chồng|mình)|bị|ngứa|sưng|đau|cương|xuất|ra|nổi|mọc|cong)	(?i:ông|bà|mẹ|bố|ba|cô|dì|chú)\s+⟨	cấm nghĩa "ông cậu"
+cô nhỏ	âm hộ	euphemism	⟨cô nhỏ⟩\s*(?i:của\s+(?:em|con|mình|vợ)|bị|ngứa|sưng|đau|ra|nổi|mọc)
+trym	dương vật	euphemism			tiếng lóng, không mơ hồ
+vùng kín	vùng sinh dục	euphemism
+chỗ kín	vùng sinh dục	euphemism
+#
+# === khẩu ngữ -> từ y khoa ===
+có bầu	mang thai	colloquial			12 câu
+mang bầu	mang thai	colloquial
+bà bầu	phụ nữ mang thai	colloquial
+mẹ bầu	phụ nữ mang thai	colloquial
+bầu	mang thai	colloquial	⟨bầu⟩\s*(?:được\s*)?\d+(?:[.,]\d+)?\s*(?i:tuần|tháng)|(?i:đang|em|tôi|mình|vợ)\s*⟨		"em bầu 36 tuần", "đang bầu"
+đi cầu	đi đại tiện	colloquial			1 câu
+ỉa	đại tiện	colloquial			1 câu
+ị	đại tiện	colloquial	(?i:đi)\s*⟨		1 câu ("đi ị")
+đái	tiểu	colloquial	⟨đái⟩\s*(?i:rắt|dắt|buốt|ra\s+máu|dầm|són|không\s+tự\s+chủ|nhiều|đêm)	⟨đái⟩\s*(?i:tháo)	cấm "đái tháo đường" (tên bệnh)
+tới tháng	hành kinh	colloquial		⟨tới tháng⟩\s*\d	cấm "tới tháng 9"
+đến tháng	hành kinh	colloquial	(?i:như\s+kiểu|khi|lúc|mỗi\s+lần|sắp|chưa|bị)\s*⟨	⟨đến tháng⟩\s*\d	2 câu; cấm "Đến tháng 9/2019"
