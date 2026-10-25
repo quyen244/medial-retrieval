@@ -3,6 +3,7 @@
 Sổ ghi các kết luận ĐÃ ĐO, kèm bằng chứng và phán quyết.
 Chỉ ghi vào đây thứ có số đo thật; suy luận chưa kiểm chứng để ở [ke-hoach-phase-1-2.md](ke-hoach-phase-1-2.md).
 Nghĩa của mọi mã viết tắt: [ky-hieu-bai-nop.md](ky-hieu-bai-nop.md).
+Thí nghiệm đang chờ đo: [theo-doi-thi-nghiem.md](theo-doi-thi-nghiem.md).
 
 Mỗi mục ghi: phát hiện, bằng chứng, phán quyết, hệ quả.
 
@@ -161,18 +162,37 @@ Nếu reference là markdown thì bỏ đi giảm cả tử lẫn mẫu, điểm
 Nên kết quả 'tăng rõ' kết luận được, còn 'đứng yên' thì mơ hồ.
 Nó đã tăng, nên kết luận chắc.
 
-## 11. FINAL quy về một đại lượng duy nhất
+## 11. Đường cong FINAL theo `h_doc` là lõm, đừng fit đường thẳng
 
-`FINAL ≈ 0,016 x h_doc`, hiệu chỉnh từ năm bài nộp vòng 3.
+Mọi điểm đã đo, mỗi dòng là một bài nộp:
 
 ```
-h_doc 6,93 (nay)  ->  FINAL 0.111
-h_doc 15          ->  FINAL ~0.24
-h_doc 25          ->  FINAL ~0.40
+h_doc  6,93  ->  FINAL 0.1117      h_doc 18,95  ->  FINAL 0.2230
+h_doc 11,63  ->  FINAL 0.1894      h_doc 22,83  ->  FINAL 0.2316
+h_doc 14,90  ->  FINAL 0.2090      h_doc 27,84  ->  FINAL 0.2562
 ```
 
-Hệ quả: mỗi tài liệu gold tìm thêm được đáng +0,016 điểm.
-Mọi việc khác đã chốt; chỉ còn `h_doc` cần tối ưu.
+`h_doc` gấp 4 lần nhưng FINAL chỉ gấp 2,3 lần.
+Lý do nằm trong công thức: ta nâng `h` bằng cách nâng `m`, mà `F2 = 5h/(4g+m)` có `m` ở mẫu số.
+Mỗi doc thêm vào vừa cộng tử số vừa cộng mẫu số, nên lợi biên giảm dần.
+
+**Phán quyết: không ngoại suy FINAL, chỉ nội suy trong bảng trên.**
+Tính thẳng `F2 = 5h/(4g+m)` cũng không chốt được vì `g` không còn xác định: từ bài d160,
+`h/R` cho `g_doc ≈ 67` còn dạng đóng cho `≈ 82`, trong khi mục 8 ghi 51.
+Ba số này lệch nhau quá xa để dùng dự đoán (lý do ở mục 5: macro-F2 không bằng F2 của macro-P/R).
+
+May là mọi phán quyết về biên ở mục 20-21 KHÔNG đổi dấu trong cả khoảng `g` 51-82,
+vì `g` chỉ vào ngưỡng chứ không vào biên đo được:
+
+```
+g_doc = 51  ->  ngưỡng tầng doc 7,6%
+g_doc = 67  ->  ngưỡng tầng doc 6,5%
+g_doc = 82  ->  ngưỡng tầng doc 5,7%
+biên tầng doc đo được ở hạng 111-160:  10,0%
+```
+
+Tầng chunk cũng vậy: biên 12,2% so với ngưỡng 4,5-6,3% trong cả khoảng `g_chunk` 53-82.
+Nên "còn đáng nới thêm" ở mục 20-21 kết luận được; còn "đỉnh ở đâu" thì không.
 
 ## 12. Hai cơ chế khác nhau, đừng gộp: làm sạch token rác ≠ cắt ngắn văn bản
 
@@ -238,7 +258,8 @@ Ba điểm phải đọc đúng:
 - **h_chunk / h_doc vượt 1** vì tầng chunk nộp 44 doc còn tầng doc nộp 35, và pool
   mới có đủ 60 doc khác nhau. Pool chunk cũ chỉ ra ~44 doc nên nhiều chunk chung doc.
   Tỉ số 0,79 "đứng yên" ở mục 9 là tính chất của pool chunk, không phải hằng số.
-- **Mục 11 đứng vững:** `0,016 x 11,63 = 0,186`, thực đo 0.1894.
+- **Tầng doc và tầng chunk tăng gần bằng nhau** (h_doc +4,70, h_chunk +6,34), nên không
+  thể quy mức tăng cho riêng tầng nào.
 
 Doc nộp lên: vi 87% / en 7% / zh 5% (câu hỏi tiếng Việt, chưa dịch).
 
@@ -374,6 +395,105 @@ Biên hạng 81-110: 3,88 / 30 = **12,9% mỗi doc**, ngưỡng `h/(4g+m)` = 22,
 
 **Phán quyết:** vẫn còn xa đỉnh. Tầng doc KHÔNG bị giới hạn dung lượng (doc_id rất nhỏ),
 nên nới tiếp lên 150-200 chỉ tốn lượt nộp. Pool top300 cho phép tới 300.
+
+## 20. Tách hai tầng lấy từ hai pool khác nhau, m_doc 110 -> 160: FINAL 0.2316 -> 0.2389
+
+Bài `fuse_d160_c55_top300_orig_ctop60`: `relevant_docs` lấy 160 doc từ pool top300, `relevant_chunks` lấy 55 chunk từ pool top60.
+Đúng bài mà mục 15 đề xuất ở dòng "lấy chunk từ pool top60 và doc từ pool top300", dự đoán FINAL ≈ 0.225.
+
+| | m_doc | h_doc | DOCS_F2 | m_chunk | h_chunk | CHUNKS_F2 | FINAL |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 19. d110_c55_top300 | 110 | 22,83 | 0.2745 | 55 | 12,60 | 0.1887 | 0.2316 |
+| 20. d160_c55 (chunk top60) | 160 | **27,84** | **0.2849** | 55 | **13,67** | **0.1930** | **0.2389** |
+
+Hai thay đổi cùng lúc, nhưng cả hai đều kiểm chứng được riêng:
+- Tầng chunk khớp mục 14 từng chữ số (`h_chunk` 13,67, `CHUNKS_F2` 0.1930), đúng như kỳ vọng vì dùng lại chunk list của pool top60.
+- Tầng doc chỉ đổi `m` trên cùng pool top300.
+
+Biên hạng 111-160: `(27,84 - 22,83)/50` = **10,0% mỗi doc**, ngưỡng `h/(4g+m)` = 7,6% nếu `g_doc` = 51.
+
+**Phán quyết: vẫn trên ngưỡng, nhưng khoảng cách đang hẹp lại từ hai đầu.**
+Biên giảm 21,8% -> 13,5% -> 12,9% -> 10,0% trong khi ngưỡng tăng 4,9% -> 6,7% -> 7,3% -> 7,6%, vì `m` nằm ở mẫu số.
+Phán quyết này không phụ thuộc giá trị `g` (xem mục 11), nhưng vị trí giao điểm thì phụ thuộc, nên KHÔNG ngoại suy ra `m*`.
+Muốn biết đỉnh thì nộp `m_doc` = 220 - tầng doc không tốn dung lượng nên chỉ tốn một lượt.
+
+Hệ quả: khẳng định mục 15 - hai tầng không cần lấy từ cùng một thứ hạng.
+Tầng doc muốn pool sâu, tầng chunk muốn pool nông.
+
+## 21. Nhiều cửa sổ ngắn thắng ít cửa sổ dài khi trần 100 MB đã chặn: FINAL 0.2389 -> 0.2562
+
+Bài `fuse_d160_c100_top300_orig_ctop60+top300_cap2700`: chunk nối hai pool (hết 60 doc của top60 thì lấy tiếp top300), trần ký tự hạ từ 8.000 xuống 2.700.
+`relevant_docs` giống hệt mục 20 ở cả 1200 câu, nên `DOCS_F2` buộc phải giữ nguyên 0.2849 - cô lập hoàn hảo, toàn bộ delta thuộc tầng chunk.
+
+| | m_chunk | mean ký tự | h_chunk | CHUNKS_P | CHUNKS_F2 | FINAL | zip |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 20. c55, trần 8.000 | 55 | 3.540 | 13,67 | 0.2485 | 0.1930 | 0.2389 | 86,1 MB |
+| 21. c100, trần 2.700 | 100 | 2.158 | **19,16** | 0.1916 | **0.2275** | **0.2562** | **98,9 MB** |
+
+**Phán quyết: đổi độ dài lấy số lượng là có lợi, +0,0345 `CHUNKS_F2` = +0,017 FINAL.**
+
+Đây là câu trả lời cho câu hỏi để mở ở mục 14 ("trần 8.000 là đỉnh đo ở mục 12 khi CHƯA bị chặn bởi kích thước file, nên đánh đổi m_chunk và trần chưa đo").
+Mục 3 và 12 vẫn đúng trong phạm vi của chúng: khi dung lượng còn thừa thì nới trần không hại, cắt ngắn thì hại.
+Khi dung lượng đã chặn, bài toán đổi từ "trần bao nhiêu" sang "chia 100 MB thế nào", và đỉnh dịch hẳn sang phía nhiều cửa sổ ngắn.
+
+Ràng buộc đo được, dùng để lập kế hoạch:
+
+```
+byte/ký tự trong JSON = 1,37        tỉ lệ nén zip = 0,277
+=> biên giới 100 MB:  m_chunk x mean_ký_tự ≈ 215.000
+   c=100 @ 2.158 (đang ở đây, 98,9 MB)   c=120 @ 1.790
+   c=140 @ 1.535                          c=160 @ 1.345
+```
+
+Biên hạng 56-100: `(19,16 - 13,67)/45` = **12,2% mỗi chunk**, ngưỡng `h/(4g+m)` = `19,16/312` = 6,1%.
+Còn gấp đôi ngưỡng, nhưng mọi bước tiếp phải trả bằng độ dài.
+
+Hệ quả và rủi ro: mục 3 đo `877 ký tự -> h_chunk 2,00` (sụp hẳn) còn `E2_win2500` ở 1.967 ký tự vẫn cho 0.0927.
+Vách sụp nằm đâu đó giữa 877 và 1.967, CHƯA đo.
+Đi tới `c=140 @ 1.535` là bước vào đúng vùng chưa biết đó.
+
+## 22. Bài học quy trình: file điểm tải về phải đổi tên ngay
+
+Thư mục `res/` có 7 zip cho 5 phép đo: hai cặp trùng từng byte (cùng cả `elapsedTime` lẻ 13 chữ số thập phân, tức cùng một lần chấm tải về hai lần).
+
+| File | Thực chất |
+|---|---|
+| `fuse_d160_c55_top300_orig_ctop60.zip` | đúng tên, mục 20 |
+| `doc_d110_c55_top300_bge.zip` | **bản sao của trên**; d110 thật là 0.2316 (mục 19) |
+| `fuse_d160_c100_..._ctop60t.zip` | đúng tên, mục 21 |
+| `scoring_result.zip` | **bản sao của trên**, chưa đổi tên sau khi tải |
+| `fuse_d110_c55_top300_mix0.3_ctop300.zip` | FINAL 0.2327, nhưng chủ của điểm này còn SUY LUẬN |
+| `doc_top300_bge_vcorr_enzh_hyde.zip` | **bản sao của trên** |
+
+Cặp cuối chưa chốt được: điểm 0.2327 có `DOCS_P` = 0.2093, cho `h_doc` = 23,02 nếu `m` = 110 (bản mix0.3)
+hoặc 16,74 nếu `m` = 80 (bản HyDE).
+23,02 khớp liền mạch với 22,83 của d110 thuần (mục 19), còn 16,74 đòi HyDE phải kém d80 thuần (18,95) mà `DOCS_R` lại cao hơn hẳn - khó xảy ra.
+Nên khả năng cao là của mix0.3, nhưng CHƯA đo. Phải tải lại một trong hai bài để chốt, vì vậy chưa cấp mục số cho nó.
+| `doc_d80_c55_top300_bge_vcorr_enzh_a.zip` | đúng tên, mục 18 (`a` = aspects) |
+
+Hai bài `fuse_d160_*` có `relevant_docs` giống hệt nhau cả 1200 câu, nên tầng doc của chúng chấm ra số y hệt.
+Đó là thứ làm việc gán nhãn sai khó phát hiện: nhìn `DOCS_P`/`DOCS_R` trùng khít thì dễ kết luận sai rằng hai bài dùng chung `m_doc`.
+Cách chữa là đọc thẳng `len(relevant_docs)` trong file nộp, không suy từ `scores.txt`.
+
+**Phán quyết: `scoring_result.zip` phải được đổi tên thành tên bài ngay khi tải, trước khi tải bài kế tiếp.**
+Và trước khi ghi một dòng vào file này, đối chiếu `m_doc`/`m_chunk` với file nộp thật.
+
+## 23. RRF doc list với doc từ nhánh chunk: FINAL 0.2562 -> 0.2509 (thua)
+
+Bài `fuse_d160_c100_top300_chunkrrf_ctop60+top300_cap2700` (thí nghiệm T06 trong [theo-doi-thi-nghiem.md](theo-doi-thi-nghiem.md)).
+Chỉ đổi cách chọn 160 doc: RRF k=60 giữa thứ hạng rerank của pool top300 và thứ hạng doc từ dump chunk `D_ft_top50`.
+`relevant_chunks` giữ nguyên mục 21, nên `CHUNKS_F2` ra đúng 0.2275.
+
+| | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | FINAL |
+|---|---:|---:|---:|---:|---:|
+| Mục 21 (orig) | 0.1740 | 0.4168 | 27,84 | 0.2849 | 0.2562 |
+| T06 chunkrrf | 0.1646 | 0.4105 | 26,34 | 0.2743 | 0.2509 |
+
+Mỗi câu thay 26,5/160 doc (đo offline), trong đó 20,3 doc chỉ nhánh chunk thấy.
+Tập thay vào trúng ít hơn tập bị đẩy ra 1,50 doc mỗi câu.
+
+**Phán quyết: RRF không trọng số với nhánh chunk làm tụt tầng doc. Không dùng.**
+Còn để ngỏ: dùng nhánh chunk chỉ để xếp lại doc đã có trong pool, chưa đo.
 
 ## Nguyên tắc rút ra về cách thí nghiệm
 
