@@ -1,0 +1,1018 @@
+{
+  "version": 1,
+  "factors": {
+    "base": {
+      "name": "Mốc",
+      "desc": "Bài gốc làm điểm xuất phát"
+    },
+    "A": {
+      "name": "Chuỗi đem đi tìm",
+      "desc": "Query dịch en/zh, sửa chính tả, aspects, HyDE"
+    },
+    "B": {
+      "name": "Truy xuất",
+      "desc": "Index, độ sâu pool, hybrid dense + sparse"
+    },
+    "C": {
+      "name": "Rerank",
+      "desc": "Model rerank, query dùng để chấm, chuẩn hoá điểm theo ngôn ngữ"
+    },
+    "D": {
+      "name": "Chunk → doc",
+      "desc": "Dùng bằng chứng từ index chunk để xếp hạng doc"
+    },
+    "E": {
+      "name": "Hình dạng bài nộp",
+      "desc": "m_doc, m_chunk, độ dài và vị trí cửa sổ, nén zip"
+    }
+  },
+  "nodes": [
+    {
+      "id": "D_ft",
+      "label": "D_ft",
+      "factor": "base",
+      "parents": [],
+      "change": "Chunk-first: tìm trên index chunk, rerank bằng reranker fine-tune, nộp chunk 877 ký tự",
+      "status": "measured",
+      "verdict": "neutral",
+      "date": "2026-10-23",
+      "file": "res/D_ft.zip",
+      "m_doc": 35.1,
+      "m_chunk": 40,
+      "scores": {
+        "final": 0.0805,
+        "docs_f2": 0.1293,
+        "chunks_f2": 0.0316,
+        "docs_p": 0.1998,
+        "docs_r": 0.1368,
+        "chunks_p": 0.0472,
+        "chunks_r": 0.0349
+      },
+      "note": "Mốc vòng 3 theo luật LCS mới. Reranker models/medical-reranker về sau bị loại."
+    },
+    {
+      "id": "E1_docs44",
+      "label": "E1 · doc list hết pool",
+      "factor": "E",
+      "parents": [
+        "D_ft"
+      ],
+      "change": "m_doc 35 → 42,7 (lấy hết doc trong pool)",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-23",
+      "file": "res/E1.zip",
+      "m_doc": 42.7,
+      "m_chunk": 40,
+      "scores": {
+        "final": 0.0785,
+        "docs_f2": 0.1253,
+        "chunks_f2": 0.0316,
+        "docs_p": 0.1653,
+        "docs_r": 0.1387,
+        "chunks_p": 0.0472,
+        "chunks_r": 0.0349
+      },
+      "ref": "mục 2",
+      "note": "Biên hạng 36-43 chỉ 0,6% mỗi doc: dưới ngưỡng."
+    },
+    {
+      "id": "E2_win2500",
+      "label": "E2 · cửa sổ 2.500",
+      "factor": "E",
+      "parents": [
+        "E1_docs44"
+      ],
+      "change": "chunk 877 ký tự → cửa sổ 2.500 ký tự quanh chunk tốt nhất",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-23",
+      "file": "res/E2.zip",
+      "m_doc": 42.7,
+      "m_chunk": 42.7,
+      "scores": {
+        "final": 0.109,
+        "docs_f2": 0.1253,
+        "chunks_f2": 0.0926,
+        "docs_p": 0.1653,
+        "docs_r": 0.1387,
+        "chunks_p": 0.1262,
+        "chunks_r": 0.1013
+      },
+      "ref": "mục 3",
+      "note": "Chunk dài thắng gấp 3 dù mẫu số LCS là chunk nộp."
+    },
+    {
+      "id": "E3_full8k",
+      "label": "E3 · trọn bài, trần 8.000",
+      "factor": "E",
+      "parents": [
+        "E2_win2500"
+      ],
+      "change": "cửa sổ 2.500 → markdown gốc, trần 8.000 ký tự",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-23",
+      "file": "res/E3_full8k.zip",
+      "m_doc": 42.7,
+      "m_chunk": 42.7,
+      "scores": {
+        "final": 0.1099,
+        "docs_f2": 0.1253,
+        "chunks_f2": 0.0944,
+        "docs_p": 0.1653,
+        "docs_r": 0.1387,
+        "chunks_p": 0.1288,
+        "chunks_r": 0.1031
+      },
+      "ref": "mục 4",
+      "note": "Gần như cùng bài với E2."
+    },
+    {
+      "id": "E4_docs25",
+      "label": "E4 · cắt còn 25",
+      "factor": "E",
+      "parents": [
+        "E3_full8k"
+      ],
+      "change": "m_doc / m_chunk 42,7 → 25 / 25",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-23",
+      "file": "res/E4.zip",
+      "m_doc": 25,
+      "m_chunk": 25,
+      "scores": {
+        "final": 0.1071,
+        "docs_f2": 0.1222,
+        "chunks_f2": 0.092,
+        "docs_p": 0.2437,
+        "docs_r": 0.1236,
+        "chunks_p": 0.1902,
+        "chunks_r": 0.0922
+      },
+      "ref": "mục 2"
+    },
+    {
+      "id": "N3_d35_c44",
+      "label": "N3 · 35 doc + 43 cửa sổ",
+      "factor": "E",
+      "parents": [
+        {
+          "id": "D_ft",
+          "takes": "doc list 35"
+        },
+        {
+          "id": "E3_full8k",
+          "takes": "chunk trọn bài"
+        }
+      ],
+      "change": "Tách hai tầng: doc list ngắn của D_ft, chunk dài của E3",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-23",
+      "file": "res/N3_d35_c44.zip",
+      "m_doc": 35,
+      "m_chunk": 42.7,
+      "scores": {
+        "final": 0.1112,
+        "docs_f2": 0.128,
+        "chunks_f2": 0.0944,
+        "docs_p": 0.1982,
+        "docs_r": 0.1364,
+        "chunks_p": 0.1288,
+        "chunks_r": 0.1031
+      },
+      "ref": "mục 1",
+      "note": "Hai tầng chấm độc lập nên tách hai danh sách."
+    },
+    {
+      "id": "N5_d35_cap20k",
+      "label": "N5 · trần 20.000",
+      "factor": "E",
+      "parents": [
+        "N3_d35_c44"
+      ],
+      "change": "trần 8.000 → 20.000 ký tự",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-23",
+      "file": "res/N5_d35_cap20k.zip",
+      "m_doc": 35,
+      "m_chunk": 42.7,
+      "scores": {
+        "final": 0.1101,
+        "docs_f2": 0.128,
+        "chunks_f2": 0.0922,
+        "docs_p": 0.1982,
+        "docs_r": 0.1364,
+        "chunks_p": 0.1259,
+        "chunks_r": 0.1008
+      },
+      "ref": "mục 3"
+    },
+    {
+      "id": "chunk_plain",
+      "label": "Bóc markdown",
+      "factor": "E",
+      "parents": [
+        "N3_d35_c44"
+      ],
+      "change": "bóc cú pháp markdown khỏi chunk_text",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-23",
+      "file": "res/chunk_d35_c44_full8k_plain.zip",
+      "m_doc": 35,
+      "m_chunk": 42.7,
+      "scores": {
+        "final": 0.1117,
+        "docs_f2": 0.128,
+        "chunks_f2": 0.0955,
+        "docs_p": 0.1982,
+        "docs_r": 0.1364,
+        "chunks_p": 0.13,
+        "chunks_r": 0.1043
+      },
+      "ref": "mục 10"
+    },
+    {
+      "id": "doc_d35_top60",
+      "label": "Index cấp doc + bge",
+      "factor": "B",
+      "parents": [
+        "chunk_plain"
+      ],
+      "change": "index chunk → index doc medical_docs (top60) và reranker → bge-reranker-v2-m3",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-24",
+      "file": "res/doc_d35_c44_top60_bge.zip",
+      "m_doc": 35,
+      "m_chunk": 44,
+      "scores": {
+        "final": 0.1894,
+        "docs_f2": 0.1972,
+        "chunks_f2": 0.1815,
+        "docs_p": 0.3323,
+        "docs_r": 0.2009,
+        "chunks_p": 0.2703,
+        "chunks_r": 0.1893
+      },
+      "ref": "mục 13",
+      "note": "Đổi HAI thứ cùng lúc (biểu diễn doc và reranker), chưa tách được phần nào do cái nào."
+    },
+    {
+      "id": "doc_d50_c55_top60",
+      "label": "d50 · c55 · top60",
+      "factor": "E",
+      "parents": [
+        "doc_d35_top60"
+      ],
+      "change": "m_doc / m_chunk 35 / 44 → 50 / 55",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-24",
+      "file": "res/doc_d50_c55_top60_bge.zip",
+      "m_doc": 50,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.209,
+        "docs_f2": 0.2251,
+        "chunks_f2": 0.193,
+        "docs_p": 0.2981,
+        "docs_r": 0.241,
+        "chunks_p": 0.2485,
+        "chunks_r": 0.2081
+      },
+      "ref": "mục 14"
+    },
+    {
+      "id": "doc_B_d35_mistake",
+      "label": "Pool B nộp nhầm 35/44",
+      "factor": "A",
+      "parents": [
+        "doc_d35_top60"
+      ],
+      "change": "pool top60 → pool B (RRF câu gốc + câu sửa + en + zh, 300 doc); nộp nhầm zip mặc định 35/44",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-25",
+      "file": "res/doc_top300_bge_vcorr_enzh.zip",
+      "m_doc": 35,
+      "m_chunk": 44,
+      "scores": {
+        "final": 0.1836,
+        "docs_f2": 0.1914,
+        "chunks_f2": 0.1758,
+        "docs_p": 0.3133,
+        "docs_r": 0.1968,
+        "chunks_p": 0.253,
+        "chunks_r": 0.1856
+      },
+      "ref": "mục 16"
+    },
+    {
+      "id": "doc_d80_top300",
+      "label": "Pool sâu top300 · d80",
+      "factor": "B",
+      "parents": [
+        "doc_d50_c55_top60"
+      ],
+      "change": "pool top60 → top300 và m_doc 50 → 80",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-25",
+      "file": "res/doc_d80_c55_top300_bge.zip",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.223,
+        "docs_f2": 0.2574,
+        "chunks_f2": 0.1887,
+        "docs_p": 0.2369,
+        "docs_r": 0.3117,
+        "chunks_p": 0.229,
+        "chunks_r": 0.2081
+      },
+      "ref": "mục 15",
+      "note": "Tầng doc tăng, tầng chunk giảm so với pool top60."
+    },
+    {
+      "id": "doc_d80_B",
+      "label": "Pool B · d80",
+      "factor": "A",
+      "parents": [
+        "doc_d80_top300"
+      ],
+      "change": "pool top300 → pool B (thêm câu sửa chính tả + dịch en/zh để TÌM)",
+      "status": "measured",
+      "verdict": "neutral",
+      "date": "2026-10-25",
+      "file": "res/doc_d80_c55_top300_bge_vcorr_enzh.zip",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.2216,
+        "docs_f2": 0.252,
+        "chunks_f2": 0.1913,
+        "docs_p": 0.237,
+        "docs_r": 0.3029,
+        "chunks_p": 0.2362,
+        "chunks_r": 0.211
+      },
+      "ref": "mục 17",
+      "note": "h_doc như nhau (18,95 vs 18,96) nhưng DOCS_F2 thấp hơn: dịch để tìm không có lợi ròng."
+    },
+    {
+      "id": "doc_d80_C_asp",
+      "label": "Pool C · aspects",
+      "factor": "A",
+      "parents": [
+        "doc_d80_B"
+      ],
+      "change": "pool B → pool C (thêm aspects vi/en/zh)",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-25",
+      "file": "res/doc_d80_c55_top300_bge_vcorr_enzh_asp.zip",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.2013,
+        "docs_f2": 0.2276,
+        "chunks_f2": 0.1749,
+        "docs_p": 0.2144,
+        "docs_r": 0.2728,
+        "chunks_p": 0.2178,
+        "chunks_r": 0.1924
+      },
+      "ref": "mục 18"
+    },
+    {
+      "id": "doc_d80_Bhyde",
+      "label": "Pool B + HyDE · d80",
+      "factor": "A",
+      "parents": [
+        "doc_d80_B"
+      ],
+      "change": "pool B → pool Bhyde (thêm lượt tìm bằng đoạn HyDE, RRF 5 danh sách giữ 300)",
+      "status": "measured",
+      "verdict": "neutral",
+      "date": "2026-10-25",
+      "file": "res/doc_top300_bge_vcorr_enzh_hyde.zip",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.2225,
+        "docs_f2": 0.2563,
+        "chunks_f2": 0.1888,
+        "docs_p": 0.2364,
+        "docs_r": 0.3121,
+        "chunks_p": 0.2309,
+        "chunks_r": 0.2079
+      },
+      "ref": "mục 25",
+      "note": "So với pool B: DOCS_F2 +0,0043 (h_doc 18,91 vs 18,96). Vẫn dưới pool top300 chỉ câu gốc (0.2574). Chunk list lấy từ chính pool Bhyde."
+    },
+    {
+      "id": "doc_d110_top300",
+      "label": "Nới m_doc 110",
+      "factor": "E",
+      "parents": [
+        "doc_d80_top300"
+      ],
+      "change": "m_doc 80 → 110",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-25",
+      "m_doc": 110,
+      "m_chunk": 55,
+      "h_doc": 22.83,
+      "scores": {
+        "final": 0.2316,
+        "docs_f2": 0.2745,
+        "chunks_f2": 0.1887,
+        "chunks_p": 0.229,
+        "chunks_r": 0.2081
+      },
+      "ref": "mục 19",
+      "note": "File điểm trong res/ bị đặt nhầm tên (mục 22); h_doc 22,83 lấy từ sổ phát hiện."
+    },
+    {
+      "id": "mix03_d110_top300",
+      "label": "mix0.3 · d110 · chunk top300",
+      "factor": "C",
+      "parents": [
+        "doc_d110_top300"
+      ],
+      "change": "xếp doc theo 0,3·s_m + 0,7·s_o (s_m: điểm với câu cùng ngôn ngữ doc) thay vì s_o, pool top300, d110",
+      "status": "measured",
+      "date": "2026-10-25",
+      "file": "res/fuse_d110_c55_top300_mix0.3_ctop300.zip",
+      "m_doc": 110,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.2327,
+        "docs_f2": 0.2766,
+        "chunks_f2": 0.1887,
+        "docs_p": 0.2093,
+        "docs_r": 0.3636,
+        "chunks_p": 0.229,
+        "chunks_r": 0.2081
+      },
+      "ref": "mục 25",
+      "note": "Đã chốt chủ của 0.2327 (T10): bài HyDE ra 0.2225 nên 0.2327 là mix0.3. DOCS_F2 +0,0021, h_doc 23,02 so với 22,83. Pool top300 ~80% doc vi nên s_m ít khi khác s_o: hiệu ứng nhỏ.",
+      "verdict": "win"
+    },
+    {
+      "id": "fuse_d160_c55",
+      "label": "d160 · chunk top60 c55",
+      "factor": "E",
+      "parents": [
+        {
+          "id": "doc_d110_top300",
+          "takes": "doc list top300"
+        },
+        {
+          "id": "doc_d50_c55_top60",
+          "takes": "chunk list top60"
+        }
+      ],
+      "change": "Doc list từ pool top300 nới tới 160, chunk list lấy từ pool top60",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-25",
+      "file": "res/fuse_d160_c55_top300_orig_ctop60.zip",
+      "m_doc": 160,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.2389,
+        "docs_f2": 0.2849,
+        "chunks_f2": 0.193,
+        "docs_p": 0.174,
+        "docs_r": 0.4168,
+        "chunks_p": 0.2485,
+        "chunks_r": 0.2081
+      },
+      "ref": "mục 20",
+      "note": "Biên hạng 111-160: 10,0% mỗi doc."
+    },
+    {
+      "id": "fuse_d160_c100_cap2700",
+      "label": "d160 · c100 · trần 2.700",
+      "factor": "E",
+      "parents": [
+        "fuse_d160_c55"
+      ],
+      "change": "c55 trần 8.000 → c100 trần 2.700 (chunk nối pool top60 rồi top300)",
+      "status": "measured",
+      "verdict": "win",
+      "date": "2026-10-25",
+      "file": "res/fuse_d160_c100_top300_orig_ctop60t.zip",
+      "m_doc": 160,
+      "m_chunk": 100,
+      "scores": {
+        "final": 0.2562,
+        "docs_f2": 0.2849,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.174,
+        "docs_r": 0.4168,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      },
+      "ref": "mục 21",
+      "note": "Ở trần 100 MB: m_chunk × ký tự TB ≈ 215.000. Đổi độ dài lấy số lượng: biên 12,2% mỗi chunk."
+    },
+    {
+      "id": "T06_chunkrrf",
+      "label": "T06 · RRF doc + chunk",
+      "factor": "D",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "doc list → RRF(doc list, doc từ dump chunk top50 cũ)",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-25",
+      "file": "res/fuse_d160_c100_top300_chunkrrf_ctop60+top300_cap2700.zip",
+      "m_doc": 160,
+      "m_chunk": 100,
+      "scores": {
+        "final": 0.2509,
+        "docs_f2": 0.2743,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.1646,
+        "docs_r": 0.4105,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      },
+      "ref": "mục 23",
+      "note": "26,5 doc thay vào mỗi câu trúng ít hơn 1,50 doc so với 26,5 doc bị đẩy ra."
+    },
+    {
+      "id": "T08_d220",
+      "label": "T08 · m_doc 220",
+      "factor": "E",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "m_doc 160 → 220",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-25",
+      "file": "res/fuse_d220_c100_top300_orig_ctop60+top300_cap2700.zip",
+      "m_doc": 220,
+      "m_chunk": 100,
+      "scores": {
+        "final": 0.2542,
+        "docs_f2": 0.281,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.145,
+        "docs_r": 0.4601,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      },
+      "ref": "mục 24",
+      "note": "Biên hạng 161-220 còn 6,8% mỗi doc, dưới ngưỡng."
+    },
+    {
+      "id": "T19",
+      "label": "T19 · mix0.3 trên bài SOTA",
+      "factor": "C",
+      "parents": [
+        {
+          "id": "fuse_d160_c100_cap2700",
+          "takes": "pool top300, d160, chunk list"
+        },
+        {
+          "id": "mix03_d110_top300",
+          "takes": "cách xếp mix0.3"
+        }
+      ],
+      "change": "orig → mix0.3 trên pool top300, d160",
+      "status": "pending",
+      "compare": "DOCS_F2 0.2849 (đọc tầng doc của bài B1)",
+      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods mix0.3 --m-doc 160 --m-chunk 120 --cap 2250 --out-dir data --chunk-pool top60 top300",
+      "note": "mix0.3 thắng nhẹ ở d110 trên pool top300 (mục 25). Không tốn GPU.",
+      "batch": "B1"
+    },
+    {
+      "id": "T20",
+      "label": "T20 · doc tiếng Việt trước",
+      "factor": "C",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "batch": "B2",
+      "change": "orig → vifirst: mọi doc vi (theo điểm rerank) đứng trước mọi doc en/zh",
+      "status": "pending",
+      "compare": "DOCS_F2 0.2849 (đọc tầng doc của bài B2)",
+      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods vifirst --m-doc 160 --m-chunk 100 --cap 2700 --chunk-order vifirst --out-dir data --chunk-pool top60 top300",
+      "note": "Đi ngược T03/T04: 5 bài đã đo cho thấy đẩy en/zh lên càng mạnh càng thua (mục 26). Offline: thay 16,8/160 doc mỗi câu, top 160 thành 91% vi (từ 80%). 276/1200 câu không đủ 160 doc vi trong pool nên vẫn giữ một phần en/zh."
+    },
+    {
+      "id": "T21",
+      "label": "T21 · chunk list tiếng Việt trước",
+      "factor": "E",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "batch": "B2",
+      "change": "chunk list: doc vi lên đầu, giữ thứ tự trong mỗi nhóm",
+      "status": "pending",
+      "compare": "CHUNKS_F2 0.2275 (đọc tầng chunk của bài B2)",
+      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods vifirst --m-doc 160 --m-chunk 100 --cap 2700 --chunk-order vifirst --out-dir data --chunk-pool top60 top300",
+      "note": "Offline: chunk list 100 hiện có 17,5 doc en/zh mỗi câu. Chưa có số đo nào về ngôn ngữ ở tầng chunk; đi chung bài với T20 nên không tốn thêm lượt."
+    },
+    {
+      "id": "T22",
+      "label": "T22 · gộp HyDE, chỉ doc vi",
+      "factor": "A",
+      "parents": [
+        {
+          "id": "fuse_d160_c100_cap2700",
+          "takes": "pool top300 + chunk list"
+        },
+        {
+          "id": "doc_d80_Bhyde",
+          "takes": "doc vi của pool Bhyde"
+        }
+      ],
+      "change": "pool top300 → hợp top300 + doc TIẾNG VIỆT của Bhyde, xếp theo điểm rerank",
+      "status": "pending",
+      "compare": "DOCS_F2 0.2849 · CHUNKS_F2 phải ra 0.2275",
+      "command": "python -m scripts.fuse_submission --doc-pool top300 Bhyde --extra-lang vi --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300",
+      "note": "Bản an toàn của T11: bỏ phần en/zh mà mục 26 cho thấy là rủi ro. Offline: 10,0 doc mới/câu lọt top 160 (T11 đủ ngôn ngữ: 19,7)."
+    },
+    {
+      "id": "T11",
+      "label": "T11 · gộp pool HyDE",
+      "factor": "A",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "pool top300 → hợp top300 + Bhyde, xếp theo điểm rerank",
+      "status": "pending",
+      "compare": "DOCS_F2 0.2849 · CHUNKS_F2 phải ra 0.2275",
+      "command": "python -m scripts.fuse_submission --doc-pool top300 Bhyde --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300",
+      "note": "Offline: 418 doc/câu, 19,7 doc mới lọt top 160 (vi 9,1 / zh 5,6 / en 5,0). Rủi ro: một nửa doc mới là en/zh, đúng nhóm đã thua ở mục 26. Ưu tiên T22 (chỉ doc vi) trước."
+    },
+    {
+      "id": "T12",
+      "label": "T12 · pool top1000",
+      "factor": "B",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "pool top300 → top1000 (cùng câu gốc, cùng reranker)",
+      "status": "pending",
+      "compare": "DOCS_F2 0.2849 · CHUNKS_F2 phải ra 0.2275",
+      "command": "python scripts/phase1_doc_retrieve.py --name doc_top1000_bge --set retrieval.doc.top_docs=1000 --set \"retrieval.doc.rerank_cache=[data/tmp/phase1/doc_top300_bge_pool.jsonl]\"",
+      "note": "Hạng retrieval 251-300 vẫn đưa 17 doc/câu vào top 160 sau rerank: chỗ cắt 300 đang chặn."
+    },
+    {
+      "id": "T13",
+      "label": "T13 · hybrid index doc",
+      "factor": "B",
+      "parents": [
+        "T12"
+      ],
+      "change": "dense → dense + sparse, cùng độ sâu với T12",
+      "status": "pending",
+      "compare": "DOCS_F2 của T12",
+      "note": "Audit ghi medical_docs có vector sparse; kiểm lại trên Qdrant trước khi chạy."
+    },
+    {
+      "id": "T14",
+      "label": "T14 · Qwen3-Reranker-4B",
+      "factor": "C",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "bge-reranker-v2-m3 → Qwen3-Reranker-4B trên pool top300",
+      "status": "pending",
+      "compare": "DOCS_F2 0.2849 · CHUNKS_F2 phải ra 0.2275",
+      "command": "python -m scripts.rerank_pool",
+      "note": "Cần ~9 GB VRAM. Cuối lượt in trung vị điểm vi/en/zh, tức kết quả T05."
+    },
+    {
+      "id": "T05",
+      "label": "T05 · chẩn đoán ngôn ngữ",
+      "factor": "C",
+      "parents": [
+        "T14"
+      ],
+      "change": "đo trung vị điểm rerank vi/en/zh của Qwen3-4B",
+      "status": "pending",
+      "compare": "không nộp",
+      "note": "Khoảng cách vi với en/zh co lại thì vấn đề nằm ở model; còn nguyên thì là thang điểm (ghép với T03/T04)."
+    },
+    {
+      "id": "T01",
+      "label": "T01 · chấm bằng câu cùng ngôn ngữ",
+      "factor": "C",
+      "parents": [
+        {
+          "id": "doc_d80_B",
+          "takes": "pool B, d80"
+        },
+        {
+          "id": "doc_d50_c55_top60",
+          "takes": "chunk top60"
+        }
+      ],
+      "change": "orig → matched (vi ← câu sửa, en ← dịch en, zh ← dịch zh)",
+      "status": "measured",
+      "file": "res/fuse_d80_c55_B_matched_ctop60.zip",
+      "note": "CHUNKS_F2 ra đúng 0.1930: bài dựng đúng. h_doc 15,12 so với 18,96: chấm hoàn toàn bằng câu cùng ngôn ngữ thua nặng.",
+      "verdict": "lose",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "date": "2026-10-25",
+      "ref": "mục 26",
+      "scores": {
+        "final": 0.199,
+        "docs_f2": 0.2051,
+        "chunks_f2": 0.193,
+        "docs_p": 0.189,
+        "docs_r": 0.2509,
+        "chunks_p": 0.2485,
+        "chunks_r": 0.2081
+      }
+    },
+    {
+      "id": "mix03_B_d80",
+      "label": "mix0.3 · pool B · d80",
+      "factor": "C",
+      "parents": [
+        {
+          "id": "doc_d80_B",
+          "takes": "pool B, d80"
+        },
+        {
+          "id": "doc_d50_c55_top60",
+          "takes": "chunk top60"
+        }
+      ],
+      "change": "orig → mix0.3 (0.3·s_m + 0.7·s_o)",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-25",
+      "file": "res/fuse_d80_c55_B_mix0.3_ctop60.zip",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.2177,
+        "docs_f2": 0.2424,
+        "chunks_f2": 0.193,
+        "docs_p": 0.2288,
+        "docs_r": 0.2928,
+        "chunks_p": 0.2485,
+        "chunks_r": 0.2081
+      },
+      "ref": "mục 26",
+      "note": "h_doc 18,30 so với 18,96 của orig. CHUNKS_F2 0.1930: bài dựng đúng."
+    },
+    {
+      "id": "mix05_B_d80",
+      "label": "mix0.5 · pool B · d80",
+      "factor": "C",
+      "parents": [
+        {
+          "id": "doc_d80_B",
+          "takes": "pool B, d80"
+        },
+        {
+          "id": "doc_d50_c55_top60",
+          "takes": "chunk top60"
+        }
+      ],
+      "change": "orig → mix0.5 (0.5·s_m + 0.5·s_o)",
+      "status": "measured",
+      "verdict": "lose",
+      "date": "2026-10-25",
+      "file": "res/fuse_d80_c55_B_mix0.5_ctop60.zip",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "scores": {
+        "final": 0.2131,
+        "docs_f2": 0.2332,
+        "chunks_f2": 0.193,
+        "docs_p": 0.2205,
+        "docs_r": 0.2809,
+        "chunks_p": 0.2485,
+        "chunks_r": 0.2081
+      },
+      "ref": "mục 26",
+      "note": "h_doc 17,64 so với 18,96 của orig. CHUNKS_F2 0.1930: bài dựng đúng."
+    },
+    {
+      "id": "T02",
+      "label": "T02 · RRF hai bảng điểm",
+      "factor": "C",
+      "parents": [
+        {
+          "id": "doc_d80_B",
+          "takes": "pool B, d80"
+        },
+        {
+          "id": "doc_d50_c55_top60",
+          "takes": "chunk top60"
+        }
+      ],
+      "change": "orig → rrf(s_o, s_m)",
+      "status": "pending",
+      "compare": "DOCS_F2 0.2520",
+      "command": "python -m scripts.fuse_submission --methods rrf --doc-pool B --m-doc 80 --m-chunk 55 --out-dir data --chunk-pool top60",
+      "note": "Cảnh báo (mục 26): trên pool B, mọi cách đẩy điểm doc en/zh lên đều thua theo mức đẩy: mix0.3 −0,0096, mix0.5 −0,0188, matched −0,0469 DOCS_F2. T03/T04 đã thua (mục 26): bỏ T02."
+    },
+    {
+      "id": "T03",
+      "label": "T03 · min-max [-1, 1] mỗi ngôn ngữ",
+      "factor": "C",
+      "parents": [
+        {
+          "id": "doc_d80_B",
+          "takes": "pool B, d80"
+        },
+        {
+          "id": "doc_d50_c55_top60",
+          "takes": "chunk top60"
+        }
+      ],
+      "change": "orig → chuẩn hoá min-max riêng từng ngôn ngữ rồi xếp chung",
+      "status": "measured",
+      "file": "res/fuse_d80_c55_B_langmm_ctop60.zip",
+      "note": "CHUNKS_F2 0.1930: bài dựng đúng. DOCS_F2 −0,0282, h_doc 16,97 so với 18,96. Top 80 có en+zh 40% (orig 24%).",
+      "verdict": "lose",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "date": "2026-10-26",
+      "ref": "mục 26",
+      "scores": {
+        "final": 0.2084,
+        "docs_f2": 0.2238,
+        "chunks_f2": 0.193,
+        "docs_p": 0.2121,
+        "docs_r": 0.2688,
+        "chunks_p": 0.2485,
+        "chunks_r": 0.2081
+      }
+    },
+    {
+      "id": "T04",
+      "label": "T04 · z-score logit mỗi ngôn ngữ",
+      "factor": "C",
+      "parents": [
+        {
+          "id": "doc_d80_B",
+          "takes": "pool B, d80"
+        },
+        {
+          "id": "doc_d50_c55_top60",
+          "takes": "chunk top60"
+        }
+      ],
+      "change": "orig → z-score trên logit riêng từng ngôn ngữ",
+      "status": "measured",
+      "file": "res/fuse_d80_c55_B_langz_ctop60.zip",
+      "note": "CHUNKS_F2 0.1930: bài dựng đúng. DOCS_F2 −0,0889, h_doc 11,82 so với 18,96. Top 80 thành hạn ngạch ngôn ngữ (en+zh 63%).",
+      "verdict": "lose",
+      "m_doc": 80,
+      "m_chunk": 55,
+      "date": "2026-10-26",
+      "ref": "mục 26",
+      "scores": {
+        "final": 0.178,
+        "docs_f2": 0.1631,
+        "chunks_f2": 0.193,
+        "docs_p": 0.1477,
+        "docs_r": 0.2001,
+        "chunks_p": 0.2485,
+        "chunks_r": 0.2081
+      }
+    },
+    {
+      "id": "C0",
+      "label": "C0 · chunk pool 3,9M",
+      "factor": "B",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "tìm hybrid trên medical_documents, top 1.000 chunk/câu, rerank từng chunk bằng bge",
+      "status": "pending",
+      "compare": "lượt dữ liệu, không nộp",
+      "note": "Đo offline trước: số doc chỉ C0 thấy mà vượt doc hạng 160; tỉ lệ chunk tốt nhất nằm ngoài 2.700 ký tự đầu. Chưa có code."
+    },
+    {
+      "id": "T17",
+      "label": "T17 · MaxP doc + chunk",
+      "factor": "D",
+      "parents": [
+        {
+          "id": "fuse_d160_c100_cap2700",
+          "takes": "điểm doc"
+        },
+        {
+          "id": "C0",
+          "takes": "điểm chunk tốt nhất"
+        }
+      ],
+      "change": "điểm doc → max(điểm doc, điểm chunk tốt nhất) trên pool hợp",
+      "status": "pending",
+      "compare": "DOCS_F2 0.2849 · CHUNKS_F2 phải ra 0.2275",
+      "note": "Callan SIGIR 1994; Dai & Callan SIGIR 2019 (MaxP)."
+    },
+    {
+      "id": "T18a",
+      "label": "T18a · cửa sổ quanh chunk tốt nhất",
+      "factor": "E",
+      "parents": [
+        {
+          "id": "fuse_d160_c100_cap2700",
+          "takes": "doc list + chunk list"
+        },
+        {
+          "id": "C0",
+          "takes": "vị trí chunk"
+        }
+      ],
+      "change": "cửa sổ đầu bài → 2.700 ký tự quanh chunk tốt nhất",
+      "status": "pending",
+      "compare": "CHUNKS_F2 0.2275 · DOCS_F2 phải ra 0.2849"
+    },
+    {
+      "id": "T18b",
+      "label": "T18b · chunk list theo điểm đoạn",
+      "factor": "E",
+      "parents": [
+        "T18a"
+      ],
+      "change": "thứ tự doc của chunk list → theo điểm chunk tốt nhất",
+      "status": "pending",
+      "compare": "CHUNKS_F2 của bài thắng T18a"
+    },
+    {
+      "id": "T09a",
+      "label": "T09a · c120 · trần 2.250",
+      "factor": "E",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "c100 trần 2.700 → c120 trần 2.250, vẫn đầu bài",
+      "status": "pending",
+      "compare": "CHUNKS_F2 0.2275 (đọc tầng chunk của bài B1)",
+      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods mix0.3 --m-doc 160 --m-chunk 120 --cap 2250 --out-dir data --chunk-pool top60 top300",
+      "batch": "B1"
+    },
+    {
+      "id": "T15",
+      "label": "T15 · nén zip mức 9",
+      "factor": "E",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "compresslevel 6 → 9, phần dư đổi thành thêm chunk",
+      "status": "pending",
+      "compare": "đo dung lượng offline trước",
+      "note": "Chưa có code."
+    },
+    {
+      "id": "T16",
+      "label": "T16 · chunk list theo pool thắng",
+      "factor": "E",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "--chunk-pool → pool thắng của T11/T12/T14",
+      "status": "pending",
+      "compare": "CHUNKS_F2 0.2275",
+      "note": "Đo riêng: ở 55 chunk, pool top300 từng thua pool top60 (12,60 vs 13,67)."
+    }
+  ],
+  "batches": {
+    "B1": {
+      "name": "T19 + T09a",
+      "nodes": [
+        "T19",
+        "T09a"
+      ],
+      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods mix0.3 --m-doc 160 --m-chunk 120 --cap 2250 --out-dir data --chunk-pool top60 top300",
+      "file": "data/fuse_d160_c120_top300_mix0.3_ctop60+top300_cap2250.zip",
+      "read": "DOCS_F2 so với 0.2849 là kết quả T19; CHUNKS_F2 so với 0.2275 là kết quả T09a.",
+      "check": "Trước khi nộp: mỗi câu đúng 160 relevant_docs và 120 relevant_chunks, zip dưới 100 MB."
+    },
+    "B2": {
+      "name": "T20 + T21",
+      "nodes": [
+        "T20",
+        "T21"
+      ],
+      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods vifirst --m-doc 160 --m-chunk 100 --cap 2700 --chunk-order vifirst --out-dir data --chunk-pool top60 top300",
+      "file": "data/fuse_d160_c100_top300_vifirst_ctop60+top300_cap2700_cvi.zip",
+      "read": "DOCS_F2 so với 0.2849 là kết quả T20; CHUNKS_F2 so với 0.2275 là kết quả T21.",
+      "check": "Trước khi nộp: mỗi câu đúng 160 relevant_docs và 100 relevant_chunks, zip dưới 100 MB."
+    }
+  }
+}

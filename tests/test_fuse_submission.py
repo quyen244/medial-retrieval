@@ -88,3 +88,45 @@ def test_chunk_evidence_uses_best_rank_per_branch_then_rrf_across_branches(tmp_p
     order, lang = load_chunk_evidence(str(path))
     assert order[7] == ["A", "B", "123"]
     assert lang[(7, "B")] == "zh"
+
+
+def test_merge_pools_unions_by_doc_id_and_keeps_query_order_of_first_seen():
+    from scripts.fuse_submission import merge_pools
+    a = {1: [cand("d1", "vi", 0.9), cand("d2", "en", 0.2)]}
+    b = {1: [cand("d2", "en", 0.2), cand("d3", "zh", 0.5)], 2: [cand("x", "vi", 0.1)]}
+    merged, mismatch = merge_pools([a, b])
+    assert mismatch == 0
+    assert [c["doc_id"] for c in merged[1]] == ["d1", "d2", "d3"]
+    assert rank_docs(merged[1], {}, 1, "orig") == ["d1", "d3", "d2"]
+    assert [c["doc_id"] for c in merged[2]] == ["x"]
+
+
+def test_merge_pools_counts_docs_scored_differently_across_pools():
+    from scripts.fuse_submission import merge_pools
+    _, mismatch = merge_pools([{1: [cand("d1", "vi", 0.9)]}, {1: [cand("d1", "vi", 0.3)]}])
+    assert mismatch == 1
+
+
+def test_vifirst_puts_every_vi_doc_before_any_other_language():
+    order = rank_docs(CANDS, {}, 1, "vifirst")
+    assert order == ["v1", "v2", "v3", "e1", "e2", "e3"]
+
+
+def test_vifirst_treats_missing_language_as_vi():
+    cands = [cand("e1", "en", 0.99), cand("x", None, 0.01)]
+    assert rank_docs(cands, {}, 1, "vifirst") == ["x", "e1"]
+
+
+def test_merge_pools_extra_lang_filters_only_pools_after_the_first():
+    from scripts.fuse_submission import merge_pools
+    base = {1: [cand("e0", "en", 0.5)]}
+    extra = {1: [cand("v9", "vi", 0.4), cand("z9", "zh", 0.9), cand("e0", "en", 0.5)]}
+    merged, mismatch = merge_pools([base, extra], extra_lang=["vi"])
+    assert mismatch == 0
+    assert [c["doc_id"] for c in merged[1]] == ["e0", "v9"]
+
+
+def test_chunk_order_vifirst_keeps_relative_order_within_each_group():
+    from scripts.fuse_submission import chunk_order_vifirst
+    lang = {"a": "en", "b": "vi", "c": "zh", "d": "vi"}.get
+    assert chunk_order_vifirst(["a", "b", "c", "d"], lang) == ["b", "d", "a", "c"]

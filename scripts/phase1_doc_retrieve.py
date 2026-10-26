@@ -180,9 +180,9 @@ def main():
         return 1
 
     from src.rag.embedding import BgeM3Embedder
-    from src.rag.pipeline.components.reranking import CrossEncoderReranker
+    from src.rag.pipeline.components.reranking import make_reranker
     embedder = BgeM3Embedder()
-    reranker = CrossEncoderReranker(model_name=rr_model, max_length=rr_len)
+    reranker = make_reranker(model_name=rr_model, max_length=rr_len)
     raw_docs = RawDocs(load_index())
     prep = ((lambda x: submission_chunk_text(strip_markdown(x)))
             if do_strip else submission_chunk_text)

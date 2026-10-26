@@ -2,6 +2,7 @@
 
 Sổ các thí nghiệm ĐANG CHỜ đo.
 Kết quả đã đo và phán quyết chuyển sang [phat-hien-tang-diem.md](phat-hien-tang-diem.md), rồi xoá dòng ở đây.
+Nguồn chính để quản lý trạng thái: `docs/experiments.json` (hiển thị dạng cây: https://claude.ai/artifact/QSfyHf8JECHQ8mjbGmFwGP). File này giữ giải thích chi tiết.
 Giải thích kỹ thuật và ví dụ số: báo cáo "Ghép danh sách xếp hạng" (artifact, 2026-10-25).
 
 Quy tắc:
@@ -11,20 +12,103 @@ Quy tắc:
 - Cột kết quả để trống tới khi có `scores.txt`. Không điền số ước tính.
 - File điểm tải về phải đổi tên theo bài ngay (xem mục 22 sổ phát hiện).
 
-## Tổng quan
+## Tổng quan theo yếu tố
 
-| ID | Câu hỏi | Biến đổi | So với | Trạng thái |
+Bài tốt nhất: FINAL 0.2562 = `fuse_d160_c100_top300_orig_ctop60+top300_cap2700` (mục 21), `DOCS_F2` 0.2849, `CHUNKS_F2` 0.2275.
+
+Pipeline có năm chặng, mỗi thí nghiệm đổi một yếu tố ở đúng một chặng.
+"Gộp" (fusion) không phải một yếu tố riêng: nó là cách ráp các nguồn lại ở từng chặng, ghi ở cột "Cách gộp".
+
+```
+câu hỏi ──> (A) chuỗi đem đi tìm ──> (B) truy xuất, ra pool ──> (C) rerank ──> (D) bằng chứng doc + chunk ──> (E) hình dạng bài nộp
+```
+
+### A. Chuỗi đem đi tìm (query dịch, aspects, HyDE)
+
+| ID | Câu hỏi | Thay đổi duy nhất | Cách gộp | So với | Trạng thái |
+|---|---|---|---|---|---|
+| - | Thêm câu sửa chính tả + dịch en/zh | pool top300 -> pool B | RRF 4 danh sách | `DOCS_F2` 0.2574 | **xong: không lợi**, 0.2520 (mục 17) |
+| - | Thêm aspects | pool B -> pool C | RRF | `DOCS_F2` 0.2520 | **xong: thua**, 0.2276 (mục 18) |
+| T11 | Doc HyDE tìm thêm có trúng không | pool top300 -> hợp top300 + Bhyde | hợp theo doc_id, xếp theo điểm rerank | `DOCS_F2` 0.2849 | có code, chưa dựng |
+| T10 | Điểm 0.2327 là của bài nào | tải lại file điểm | - | - | **xong**: mix0.3 d110; HyDE ra 0.2225 (mục 25) |
+
+### B. Truy xuất (pool)
+
+| ID | Câu hỏi | Thay đổi duy nhất | Cách gộp | So với | Trạng thái |
+|---|---|---|---|---|---|
+| T12 | Pool 300 có cắt mất doc tốt không | pool top300 -> top1000 | - | `DOCS_F2` 0.2849 | có lệnh, cần GPU |
+| T13 | Hybrid trên index doc có tăng recall không | dense -> dense + sparse, cùng độ sâu với T12 | RRF dense/sparse trong Qdrant | `DOCS_F2` của T12 | chờ T12 |
+| C0 | (lượt dữ liệu, không nộp) dùng index chunk 3,9M | tìm hybrid trên `medical_documents`, top 1.000 chunk/câu, rerank từng chunk bằng bge | - | - | chưa có code, cần GPU |
+
+### C. Rerank (model mới, query dịch để chấm, chuẩn hoá theo ngôn ngữ)
+
+| ID | Câu hỏi | Thay đổi duy nhất | Cách gộp | So với | Trạng thái |
+|---|---|---|---|---|---|
+| T14 | Reranker mạnh hơn có xếp top 160 tốt hơn không | bge-reranker-v2-m3 -> Qwen3-Reranker-4B | - | `DOCS_F2` 0.2849 | có code, cần GPU |
+| T05 | Qwen3-4B có xoá hình phạt ngôn ngữ không | đo trung vị điểm vi/en/zh | - | không nộp | chạy cùng T14 |
+| T01 | Chấm doc bằng câu cùng ngôn ngữ | `orig` -> `matched` | thay điểm | `DOCS_F2` 0.2520 | **xong: thua**, 0.2051 (mục 26) |
+| T02 | Như T01 nhưng gộp thứ hạng | `orig` -> `rrf(s_o, s_m)` | RRF hai bảng điểm | `DOCS_F2` 0.2520 | có lệnh |
+| T03 | Chuẩn hoá theo ngôn ngữ, nhẹ | `orig` -> min-max [-1, 1] mỗi ngôn ngữ | chuẩn hoá rồi xếp chung | `DOCS_F2` 0.2520 | **xong: thua**, 0.2238 (mục 26) |
+| T19 | mix0.3 có cộng vào bài SOTA không | `orig` -> `mix0.3` trên pool top300, d160 | trộn điểm | `DOCS_F2` 0.2849 | có lệnh, không cần GPU |
+| T04 | Chuẩn hoá theo ngôn ngữ, mạnh | `orig` -> z-score logit mỗi ngôn ngữ | chuẩn hoá rồi xếp chung | `DOCS_F2` 0.2520 | **xong: thua**, 0.1631 (mục 26) |
+
+Mục 26: trên pool B, mọi cách đẩy doc en/zh lên đều thua theo mức đẩy (mix0.3, mix0.5, matched), nên T02-T04 nhiều khả năng thua.
+T01-T04 đo trên cấu hình cũ (pool B, d80). Thắng thì phải dựng lại trên cấu hình d160 mới biết có cộng vào 0.2562 không.
+
+### D. Bằng chứng từ nhánh chunk cho tầng doc
+
+| ID | Câu hỏi | Thay đổi duy nhất | Cách gộp | So với | Trạng thái |
+|---|---|---|---|---|---|
+| T06 | Doc nhánh chunk (dump cũ, top 50) có trúng không | doc list -> RRF(doc list, chunk list) | RRF k=60, nhận mọi doc nhánh chunk | `DOCS_F2` 0.2849 | **xong: thua**, 0.2743 (mục 23) |
+| T17 | Đoạn tốt nhất trong thân bài có kéo doc gold vào top 160 không | điểm doc -> max(điểm doc, điểm chunk tốt nhất) trên pool hợp top300 + doc của C0 | MaxP, cùng một reranker | `DOCS_F2` 0.2849 | chờ C0 |
+
+### E. Hình dạng bài nộp
+
+| ID | Câu hỏi | Thay đổi duy nhất | Cách gộp | So với | Trạng thái |
+|---|---|---|---|---|---|
+| T08 | Đỉnh `m_doc` | 160 -> 220 | - | `DOCS_F2` 0.2849 | **xong: thua**, 0.2810 (mục 24) |
+| T09a | Thêm chunk ngắn hơn theo luật kích thước | c100 trần 2.700 -> c120 trần 2.250, vẫn đầu bài | - | `CHUNKS_F2` 0.2275 | có lệnh |
+| T15 | Nén zip mạnh hơn có nhét thêm chunk không | `compresslevel` 6 -> 9 | - | đo dung lượng offline trước | chưa có code |
+| T18a | Cửa sổ đặt quanh đoạn liên quan | cửa sổ đầu bài -> 2.700 ký tự quanh chunk tốt nhất của C0 | - | `CHUNKS_F2` 0.2275 | chờ C0 |
+| T18b | Chọn doc cho chunk list theo bằng chứng đoạn | thứ tự doc của chunk list -> theo điểm chunk tốt nhất | - | `CHUNKS_F2` của bài thắng T18a | chờ C0 |
+| T16 | Chunk list theo thứ tự doc của bài thắng T11/T12/T14 | `--chunk-pool` -> pool thắng | - | `CHUNKS_F2` 0.2275 | chờ T11/T12/T14 |
+
+T07 (cửa sổ căn theo dump chunk cũ) được thay bằng T18a, vì C0 cho bằng chứng tươi trên 1.000 chunk thay vì 50.
+T09 cũ (c120, trần 2.000, cửa sổ giữa bài) đổi ba biến cùng lúc, thay bằng T09a.
+
+### Ghép hai thí nghiệm vào một bài nộp
+
+Hai tầng chấm độc lập và `scores.txt` ghi riêng `DOCS_F2`, `CHUNKS_F2`, nên một bài nộp đo được hai thí nghiệm:
+một thí nghiệm CHỈ đổi tầng doc ghép với một thí nghiệm CHỈ đổi tầng chunk, đọc mỗi tầng so với đối chứng của riêng nó.
+Không ghép hai thí nghiệm cùng tầng. Cái giá: mất phép kiểm "tầng không đổi phải ra đúng số đối chứng", nên phải kiểm file nộp trước khi nộp.
+Danh sách bài ghép nằm ở khoá `batches` trong `docs/experiments.json`; node thuộc bài ghép có trường `batch`.
+
+| Bài | Ghép | Đọc kết quả | Kiểm trước khi nộp |
+|---|---|---|---|
+| B1 | T19 (doc: mix0.3) + T09a (chunk: c120 trần 2.250) | `DOCS_F2` vs 0.2849 là T19; `CHUNKS_F2` vs 0.2275 là T09a | 160 doc và 120 chunk mỗi câu, zip dưới 100 MB |
+| B2 | T20 (doc: tiếng Việt trước) + T21 (chunk: tiếng Việt trước) | `DOCS_F2` vs 0.2849 là T20; `CHUNKS_F2` vs 0.2275 là T21 | 160 doc và 100 chunk mỗi câu, zip dưới 100 MB |
+
+Lệnh B2: `python -m scripts.fuse_submission --doc-pool top300 --methods vifirst --m-doc 160 --m-chunk 100 --cap 2700 --chunk-order vifirst --out-dir data --chunk-pool top60 top300`
+
+Ba thí nghiệm không cần GPU thêm ngày 2026-10-26 (chi tiết và số offline trong `docs/experiments.json`):
+
+| ID | Câu hỏi | Thay đổi duy nhất | So với | Offline |
 |---|---|---|---|---|
-| T01 | Chấm doc bằng câu cùng ngôn ngữ (cách A) có lợi không | `orig` -> `matched` | `DOCS_F2` 0.2520 | đã dựng, chờ nộp |
-| T02 | Cách A gộp theo thứ hạng thay vì theo điểm | `orig` -> `rrf` (s_o, s_m) | `DOCS_F2` 0.2520 | có lệnh, chưa dựng |
-| T03 | Chuẩn hoá điểm theo ngôn ngữ, mức nhẹ | `orig` -> min-max [-1, 1] mỗi ngôn ngữ | `DOCS_F2` 0.2520 | đã dựng, chờ nộp |
-| T04 | Chuẩn hoá điểm theo ngôn ngữ, mức mạnh | `orig` -> z-score trên logit mỗi ngôn ngữ | `DOCS_F2` 0.2520 | đã dựng, chờ nộp |
-| T05 | Qwen3-Reranker-4B có xoá hình phạt ngôn ngữ không | reranker bge-v2-m3 -> Qwen3-4B | trung vị điểm vi/en/zh | chưa chạy (offline) |
-| T06 | Bằng chứng từ nhánh chunk có thêm doc gold không | doc list -> RRF(doc list, chunk list) | `DOCS_F2` 0.2849 | **thua: 0.2743** |
-| T07 | Căn cửa sổ vào đoạn liên quan có lợi không | cửa sổ `head` -> cửa sổ quanh chunk tốt nhất | `CHUNKS_F2` 0.2275 | chưa có code |
-| T08 | Đỉnh `m_doc` nằm ở đâu | `m_doc` 160 -> 220 | `DOCS_F2` 0.2849 | có lệnh, chưa dựng |
-| T09 | Nhiều cửa sổ ngắn hơn nữa | c100 cap2700 head -> c120 cap2000 middle | `CHUNKS_F2` 0.2275 | có lệnh, NHIỄU BA BIẾN |
-| T10 | Điểm 0.2327 là của bài nào | tải lại file điểm | - | việc dọn dẹp |
+| T20 | Hạ doc en/zh ở tầng doc có lợi không (ngược T03/T04) | `orig` -> `vifirst` | `DOCS_F2` 0.2849 | thay 16,8/160 doc, top 160 thành 91% vi |
+| T21 | Như T20 ở tầng chunk | chunk list: doc vi lên đầu | `CHUNKS_F2` 0.2275 | 17,5/100 chunk hiện là doc en/zh |
+| T22 | Gộp HyDE nhưng chỉ nhận doc vi (bản an toàn của T11) | pool top300 -> hợp top300 + doc vi của Bhyde | `DOCS_F2` 0.2849 | 10,0 doc mới/câu lọt top 160 |
+
+Lệnh T22: `python -m scripts.fuse_submission --doc-pool top300 Bhyde --extra-lang vi --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300`
+
+Lệnh B1: `python -m scripts.fuse_submission --doc-pool top300 --methods mix0.3 --m-doc 160 --m-chunk 120 --cap 2250 --out-dir data --chunk-pool top60 top300`
+File: `data/fuse_d160_c120_top300_mix0.3_ctop60+top300_cap2250.zip`.
+
+### Thứ tự nộp đề xuất
+
+1. T12, T14, T11 - cùng nhắm đổi doc bên trong top 160 (mục 24: thêm đuôi đã hết lợi).
+2. B1 (T19 + T09a) - một bài đo hai thí nghiệm, dựng được ngay không cần GPU.
+3. C0, rồi T17 và T18a. Trước khi nộp, đo offline: số doc chỉ C0 thấy mà điểm vượt doc hạng 160, và tỉ lệ chunk tốt nhất nằm ngoài 2.700 ký tự đầu. Hai số gần 0 thì bỏ, không tốn lượt.
+4. T03, T04, T01, T02 khi còn dư lượt.
 
 ## Nhóm 1 - doc tiếng Anh và Trung bị reranker chấm thấp oan
 
@@ -95,64 +179,138 @@ T04 z(logit)       47,6      37%   33%   30%     <- trùng tỉ lệ pool 36,8 /
 - Kết quả: trung vị vi = ___ , en = ___ , zh = ___
 - Phán quyết: ___
 
-## Nhóm 2 - tận dụng nhánh chunk
+### T14 - đổi reranker sang Qwen3-Reranker-4B trên bài tốt nhất
 
-Đo trên `data/tmp/sub1200/D_ft_top50.jsonl` (top 50 chunk mỗi câu, index chunk `medical_documents`):
-nhánh chunk cho 44,4 doc mỗi câu, trong đó 20,3 doc NẰM NGOÀI pool doc top300.
-Điểm `rerank_score` trong file đó do `models/medical-reranker` chấm, model đã bị loại; chỉ dùng `retrieval_rank`.
-
-### T06 - RRF doc + chunk ở tầng doc
-
-- Giả thuyết: doc được cả hai nhánh tìm thấy, hoặc chỉ nhánh chunk tìm thấy, trúng nhiều hơn doc ở đuôi danh sách doc.
-- Cách xếp: danh sách 1 = pool top300 theo điểm rerank; danh sách 2 = doc theo bằng chứng chunk;
-  điểm doc = `Σ 1/(60 + hạng)` trên hai danh sách; nộp 160 doc đầu.
-- Danh sách 2 dựng thế nào: `retrieval_rank` trong dump được đánh RIÊNG theo từng branch (vi ~26, en ~16, zh ~8 chunk mỗi câu),
-  nên không so thẳng được giữa các branch.
-  Mỗi doc lấy hạng chunk tốt nhất trong từng branch (MaxP), rồi gộp các branch bằng RRF (`load_chunk_evidence()`).
-- Code: `--methods chunkrrf` trong `scripts/fuse_submission.py`, bằng chứng chunk qua `--chunk-evidence`.
-- File: `data/fuse_d160_c100_top300_chunkrrf_ctop60+top300_cap2700.zip` (98,9 MB).
-  Đã kiểm offline: bản `orig` dựng cùng lệnh trùng nguyên 1200/1200 entry với bài 0.2562 đã chấm,
-  và `relevant_chunks` của T06 trùng 1200/1200 câu với bài đó; mỗi câu khác 26,5 doc.
-- Biến duy nhất: cách chọn 160 doc. `relevant_chunks` giữ đúng chunk list của mục 21 (`fuse_d160_c100_top300_orig_ctop60+top300_cap2700`).
-- Đối chứng: `DOCS_F2` 0.2849 (mục 20 và 21 có doc list giống hệt nhau).
-- Kiểm tra bài dựng đúng: `CHUNKS_F2` phải ra đúng 0.2275.
-- Chẩn đoán (offline): 26,5/160 doc bị thay; 20,3 trong đó là doc chỉ nhánh chunk thấy, còn lại là doc hạng doc >160 được nhánh chunk kéo lên.
-  Doc bị đẩy ra là đuôi hạng ~135-160, nơi biên trúng đo được khoảng 10% mỗi doc (mục 20).
-- Lưu ý trọng số: nhánh chunk chỉ dài ~44 doc nên doc tệ nhất của nó (`1/104`) vẫn thắng hạng 160 của nhánh doc (`1/220`).
-  Mọi doc nhánh chunk đều lọt vào; nếu T06 thua, thử RRF có trọng số trước khi kết luận nhánh chunk vô ích.
-- Kết quả (`res/fuse_d160_c100_top300_chunkrrf_ctop60+top300_cap2700.zip`): FINAL 0.2509, `DOCS_F2` 0.2743, `CHUNKS_F2` 0.2275 (khớp, bài dựng đúng).
-  `DOCS_P` 0.1646 -> `h_doc` = 26,34 so với 27,84 của đối chứng; `DOCS_R` 0.4105 so với 0.4168.
-- Phán quyết: **KHÔNG được.** 26,5 doc thay vào mỗi câu trúng ít hơn 26,5 doc bị đẩy ra tổng cộng 1,50 doc.
-  RRF k=60 không trọng số đưa toàn bộ doc nhánh chunk vào danh sách, và tập đó kém đuôi hạng 135-160 của nhánh doc.
-  Chưa loại nhánh chunk hẳn: chưa thử bản chỉ dùng nhánh chunk để xếp lại doc ĐÃ có trong pool (không nhận doc ngoài pool), hay RRF có trọng số.
-
-### T07 - cửa sổ căn theo chunk tốt nhất
-
-- Giả thuyết: ở trần ngắn, cửa sổ đặt quanh đoạn mà nhánh chunk tìm thấy qua ngưỡng LCS nhiều hơn cửa sổ đầu bài.
-- Biến duy nhất: vị trí cửa sổ; giữ c100, trần 2.700 như mục 21.
-- Đối chứng: `CHUNKS_F2` 0.2275 (mục 21). Kiểm tra: `DOCS_F2` phải ra đúng 0.2849.
-- Giới hạn: chỉ doc có trong nhánh chunk mới căn được; doc khác giữ cửa sổ đầu bài.
-- Code: chưa có.
-- Kết quả: `CHUNKS_F2` = ___
-- Phán quyết: ___
-
-## Nhóm 3 - số lượng nộp
-
-### T08 - `m_doc` 220
-
-- Giả thuyết: biên hạng 111-160 là 10,0% mỗi doc, vẫn trên ngưỡng, nên nới tiếp còn lợi.
-- Lệnh: `python -m scripts.fuse_submission --methods orig --doc-pool top300 --m-doc 220 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300`
-- Đối chứng: `DOCS_F2` 0.2849. Kiểm tra: `CHUNKS_F2` phải ra đúng 0.2275.
+- Giả thuyết: reranker mạnh hơn đổi được doc nằm TRONG top 160 (mục 24: thêm đuôi đã hết lợi).
+- Khác T05: T05 chỉ đo phân phối điểm theo ngôn ngữ offline; T14 là bài nộp.
+- Cách làm: chấm lại pool top300 (300 doc/câu, câu gốc) bằng Qwen3-Reranker-4B, xếp lại, nộp 160 doc đầu.
+- Biến duy nhất: reranker. Giữ pool top300, `m_doc` 160, chunk list mục 21. Kiểm tra: `CHUNKS_F2` phải ra 0.2275.
+- Code: lớp `Qwen3Reranker` trong `src/rag/pipeline/components/reranking.py` (LM nhân quả, điểm = P(yes) / (P(yes) + P(no)), template theo model card),
+  `make_reranker()` chọn lớp theo tên model; `scripts/rerank_pool.py` chấm lại một pool, giữ nguyên tập doc.
+- Lệnh chấm (GPU, cần ~9 GB VRAM ở bf16): `python -m scripts.rerank_pool` (mặc định pool top300 -> `data/tmp/phase1/doc_top300_qwen3r4b_pool.jsonl`). Chạy dở thì chạy lại cùng lệnh.
+- Cuối lượt script in trung vị điểm theo ngôn ngữ, tức kết quả T05.
+- Dựng bài: `python -m scripts.fuse_submission --doc-pool top300q4b --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300`
+- Chunk list lấy từ pool top60 và top300 (điểm bge) nên vẫn đúng mục 21.
 - Kết quả: `DOCS_F2` = ___
 - Phán quyết: ___
 
-### T09 - c120, trần 2.000, cửa sổ giữa bài
+## Nhóm 2 - dùng index chunk 3,9M (`medical_documents`)
 
-- Đổi BA biến cùng lúc so với mục 21 (số chunk, trần, vị trí cửa sổ), nên thắng hay thua cũng không quy được cho biến nào.
-- Lệnh: `python -m scripts.fuse_submission --methods orig --doc-pool top300 --m-doc 160 --m-chunk 120 --cap 2000 --window middle --out-dir data --chunk-pool top60 top300`
-- Có thể bị script chặn vì vượt 100 MB; nếu vậy hạ `--cap`.
+Hiện trạng: từ khi chuyển sang index doc, cả hai tầng lấy từ cùng một danh sách doc đã rerank; tầng chunk là 2.700 ký tự đầu bài.
+Index chunk chưa được dùng thật: T06 chỉ dùng dump Phase 0 (`data/tmp/sub1200/D_ft_top50.jsonl`, top 50 chunk, chấm bằng `models/medical-reranker` đã loại),
+còn `scripts/phase1_deep_retrieve.py` chưa từng chạy và cũng dùng reranker đã loại.
+
+Vì sao đáng dùng: index doc chỉ thấy 1.500 ký tự đầu mỗi bài; index chunk phủ cả thân bài (~3,9 chunk mỗi doc, 560-1.000 ký tự mỗi chunk, có dense và sparse).
+Doc gold có phần liên quan nằm sâu thì index doc không thấy, và cửa sổ đầu bài trượt ngưỡng LCS.
+Cơ sở: Callan, SIGIR 1994 (bằng chứng cấp đoạn cho xếp hạng doc); Dai & Callan, SIGIR 2019 (MaxP: điểm doc = điểm đoạn tốt nhất).
+
+### C0 - lượt dữ liệu: chunk pool
+
+- Tìm hybrid dense + sparse trên `medical_documents` bằng câu gốc, top 1.000 chunk/câu, rerank từng chunk bằng bge-reranker-v2-m3.
+- Ra một chunk pool: mỗi chunk có `doc_id`, điểm rerank, và vị trí của chunk trong markdown gốc (để căn cửa sổ).
+- Chẩn đoán offline trước khi nộp gì:
+  - số doc chỉ C0 thấy mà điểm chunk tốt nhất vượt điểm doc hạng 160;
+  - tỉ lệ doc trong chunk list có chunk tốt nhất nằm ngoài 2.700 ký tự đầu (trần dư địa của T18a).
+  Hai số gần 0 thì bỏ T17/T18, không tốn lượt.
+- Code: chưa có.
+
+### T17 - MaxP cho tầng doc
+
+- Giả thuyết: doc có đoạn trong thân bài khớp mạnh là gold mà index doc bỏ sót hoặc chấm thấp vì chỉ thấy phần đầu.
+- Cách xếp: pool hợp top300 + doc của C0; điểm doc = max(điểm rerank cấp doc, điểm rerank chunk tốt nhất); nộp 160 doc đầu.
+- Khác T06: doc mới phải thắng bằng điểm của cùng reranker, không được nhận chỉ vì nhánh chunk có thấy; bằng chứng chấm bằng bge, 1.000 chunk thay vì 50.
+- Biến duy nhất: điểm doc. Chunk list mục 21. Kiểm tra: `CHUNKS_F2` phải ra 0.2275.
+- Kết quả: `DOCS_F2` = ___
+- Phán quyết: ___
+
+### T18a - cửa sổ quanh chunk tốt nhất
+
+- Giả thuyết: cửa sổ 2.700 ký tự đặt quanh chunk có điểm cao nhất qua ngưỡng LCS nhiều hơn cửa sổ đầu bài.
+- Biến duy nhất: vị trí cửa sổ; giữ danh sách doc của chunk list và trần 2.700 như mục 21. Doc không có chunk trong C0 giữ cửa sổ đầu bài.
+- Đối chứng: `CHUNKS_F2` 0.2275. Kiểm tra: `DOCS_F2` phải ra đúng 0.2849.
 - Kết quả: `CHUNKS_F2` = ___
 - Phán quyết: ___
+
+### T18b - chunk list chọn doc theo bằng chứng đoạn
+
+- Thứ tự doc của chunk list theo điểm chunk tốt nhất thay vì điểm doc; cửa sổ như bài thắng T18a.
+- Đối chứng: `CHUNKS_F2` của bài thắng T18a (hoặc 0.2275 nếu T18a thua).
+- Kết quả: `CHUNKS_F2` = ___
+- Phán quyết: ___
+
+## Nhóm 3 - hình dạng bài nộp
+
+Ở trần 100 MB, số chunk và trần ký tự gắn với nhau qua luật kích thước (`m_chunk` x ký tự TB ≈ 215.000, mục 21), nên chúng là MỘT núm vặn.
+
+### T09a - c120, trần 2.250, cửa sổ đầu bài
+
+- Giả thuyết: biên 12,2% mỗi chunk ở hạng 56-100 (mục 21) còn đủ cao ở hạng 101-120, và cửa sổ 2.250 ký tự chưa trượt ngưỡng LCS nhiều.
+- Rủi ro: cửa sổ càng ngắn càng dễ trượt (chunk 877 ký tự từng ra 0.0317), nên chỉ bước nhỏ.
+- Lệnh: `python -m scripts.fuse_submission --doc-pool top300 --methods orig --m-doc 160 --m-chunk 120 --cap 2250 --out-dir data --chunk-pool top60 top300`
+  Vượt 100 MB thì hạ `--cap` 2.200.
+- Đối chứng: `CHUNKS_F2` 0.2275. Kiểm tra: `DOCS_F2` phải ra đúng 0.2849.
+- Kết quả: `CHUNKS_F2` = ___
+- Phán quyết: ___
+
+### T15 - nén zip mức 9
+
+- `zip_submission()` dùng `ZIP_DEFLATED` mức mặc định (6). Mức 9 cho zip nhỏ hơn với cùng nội dung, phần dư đổi thành thêm chunk.
+- Đo dung lượng offline trước; chênh không đáng kể thì bỏ, không tốn lượt.
+- Code: chưa có.
+
+### T16 - chunk list theo bài doc thắng
+
+- Sau khi T11, T12 hoặc T14 thắng, lấy chunk list theo thứ tự doc của pool thắng.
+- Phải đo riêng: ở cùng 55 chunk, pool top300 từng ra ít trúng hơn pool top60 (12,60 so với 13,67, mục 15).
+
+## Nhóm 4 - chiều sâu và độ phủ của pool doc
+
+Sau T08 (mục 24 sổ phát hiện): nới `m_doc` 160 -> 220 làm tụt `DOCS_F2`, nên thêm doc vào ĐUÔI danh sách không còn lợi.
+Đòn bẩy còn lại là đổi doc NÀO nằm trong top 160, tức pool phải chứa nhiều doc tốt hơn.
+
+Bằng chứng pool 300 bị cắt (đo offline trên `doc_top300_bge_pool.jsonl`, hạng retrieval suy từ `rrf_score` = 1/(60+hạng)):
+số doc mỗi câu lọt top 160 sau rerank, chia theo hạng retrieval trước rerank:
+
+```
+hạng   1-50 : 42,3      151-200 : 22,0
+      51-100 : 32,7      201-250 : 19,3
+     101-150 : 26,7      251-300 : 17,0   <- vẫn 17 doc/câu ngay chỗ cắt
+```
+
+Đường giảm chậm, nên doc hạng >300 nhiều khả năng còn vào được top 160.
+Doc đó có trúng gold không thì chưa biết, chỉ leaderboard trả lời.
+
+Điểm rerank của cùng một doc giống hệt nhau ở mọi pool (218.663 cặp khớp, 0 lệch), vì rerank luôn dùng câu gốc.
+Nên gộp nhiều pool rồi xếp theo điểm rerank là hợp lệ, không phải chấm lại.
+
+### T11 - gộp pool top300 + HyDE
+
+- Giả thuyết: doc HyDE tìm thêm mà reranker xếp cao hơn đuôi top 160 hiện tại thì trúng nhiều hơn đuôi đó.
+- Khác T06: doc mới thắng bằng chính điểm rerank, không phải được nhận vì nhánh khác có thấy.
+- Chẩn đoán offline: pool hợp 418 doc/câu; 19,7 doc mới lọt top 160 (vi 9,1 / zh 5,6 / en 5,0).
+  Gộp cả top300 + B + C + HyDE: 559 doc/câu, 27,9 doc mới.
+- Rủi ro: một nửa doc mới là en/zh, đúng nhóm mà pool B từng thua (0.2520 so với 0.2574 ở d80). Kết quả T03/T04 trả lời một phần rủi ro này.
+- Biến duy nhất: pool doc. `m_doc` 160, chunk list mục 21. Kiểm tra: `CHUNKS_F2` phải ra 0.2275.
+- Code: `--doc-pool` nhận nhiều pool, hợp theo `doc_id` (`merge_pools()`); doc lệch điểm giữa các pool thì dừng.
+- Lệnh: `python -m scripts.fuse_submission --doc-pool top300 Bhyde --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300`
+- File (sau khi chạy lệnh): `data/fuse_d160_c100_top300+Bhyde_orig_ctop60+top300_cap2700.zip`.
+- Kết quả: `DOCS_F2` = ___
+- Phán quyết: ___
+
+### T12 - pool top1000
+
+- Giả thuyết: bảng hạng retrieval ở trên; doc hạng 301-1000 lọt top 160 và trúng nhiều hơn doc chúng đẩy ra.
+- Lệnh truy xuất + rerank (GPU), dùng lại điểm 300 doc đã chấm: `python scripts/phase1_doc_retrieve.py --name doc_top1000_bge --set retrieval.doc.top_docs=1000 --set "retrieval.doc.rerank_cache=[data/tmp/phase1/doc_top300_bge_pool.jsonl]"`
+- Dựng bài: `python -m scripts.fuse_submission --doc-pool top1000 --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300`
+- Biến duy nhất: độ sâu pool (cùng câu gốc, cùng reranker). Kiểm tra: `CHUNKS_F2` phải ra 0.2275.
+- Kết quả: `DOCS_F2` = ___
+- Phán quyết: ___
+
+### T13 - tìm hybrid dense + sparse
+
+- Giả thuyết: index `medical_docs` hiện chỉ tìm dense; BGE-M3 (Chen et al., Findings ACL 2024) cho dense + sparse cao hơn dense riêng trên MIRACL.
+- Audit ngày nạp index ghi `medical_docs` có vector `sparse` (`docs/audit-dich-query-va-retrieval.md` mục 5.1); kiểm lại trên Qdrant trước khi chạy.
+- So cùng độ sâu pool với T12 để chỉ đổi một biến.
 
 ## Việc dọn dẹp
 

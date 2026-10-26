@@ -463,12 +463,9 @@ Thư mục `res/` có 7 zip cho 5 phép đo: hai cặp trùng từng byte (cùng
 | `fuse_d160_c100_..._ctop60t.zip` | đúng tên, mục 21 |
 | `scoring_result.zip` | **bản sao của trên**, chưa đổi tên sau khi tải |
 | `fuse_d110_c55_top300_mix0.3_ctop300.zip` | FINAL 0.2327, nhưng chủ của điểm này còn SUY LUẬN |
-| `doc_top300_bge_vcorr_enzh_hyde.zip` | **bản sao của trên** |
+| `doc_top300_bge_vcorr_enzh_hyde.zip` | **bản sao của trên**; điểm thật của HyDE là 0.2225 (mục 25) |
 
-Cặp cuối chưa chốt được: điểm 0.2327 có `DOCS_P` = 0.2093, cho `h_doc` = 23,02 nếu `m` = 110 (bản mix0.3)
-hoặc 16,74 nếu `m` = 80 (bản HyDE).
-23,02 khớp liền mạch với 22,83 của d110 thuần (mục 19), còn 16,74 đòi HyDE phải kém d80 thuần (18,95) mà `DOCS_R` lại cao hơn hẳn - khó xảy ra.
-Nên khả năng cao là của mix0.3, nhưng CHƯA đo. Phải tải lại một trong hai bài để chốt, vì vậy chưa cấp mục số cho nó.
+Cặp cuối ĐÃ CHỐT (2026-10-25): bài HyDE được chấm lại ra 0.2225 (mục 25), nên 0.2327 là của `fuse_d110_c55_top300_mix0.3_ctop300`.
 | `doc_d80_c55_top300_bge_vcorr_enzh_a.zip` | đúng tên, mục 18 (`a` = aspects) |
 
 Hai bài `fuse_d160_*` có `relevant_docs` giống hệt nhau cả 1200 câu, nên tầng doc của chúng chấm ra số y hệt.
@@ -494,6 +491,68 @@ Tập thay vào trúng ít hơn tập bị đẩy ra 1,50 doc mỗi câu.
 
 **Phán quyết: RRF không trọng số với nhánh chunk làm tụt tầng doc. Không dùng.**
 Còn để ngỏ: dùng nhánh chunk chỉ để xếp lại doc đã có trong pool, chưa đo.
+
+## 24. Nới m_doc 160 -> 220: FINAL 0.2562 -> 0.2542 (thua)
+
+Bài `fuse_d220_c100_top300_orig_ctop60+top300_cap2700` (T08).
+Đã kiểm file nộp: 220 doc mỗi câu, 160 doc đầu và `relevant_chunks` trùng 1200/1200 câu với mục 21; `CHUNKS_F2` ra đúng 0.2275.
+
+| | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | FINAL |
+|---|---:|---:|---:|---:|---:|
+| m_doc 160 (mục 21) | 0.1740 | 0.4168 | 27,84 | 0.2849 | 0.2562 |
+| m_doc 220 | 0.1450 | 0.4601 | 31,90 | 0.2810 | 0.2542 |
+
+60 doc hạng 161-220 trúng thêm 4,06 doc mỗi câu, tức biên 6,8% mỗi doc.
+Biên theo hạng đã đo: 81-110 là 12,9%, 111-160 là 10,0%, 161-220 là 6,8%.
+
+**Phán quyết: 6,8% đã dưới ngưỡng, F2 tụt. Giữ m_doc 160.**
+Recall 0.46 ở 220 doc không phải trần của pool: muốn tăng điểm phải đổi doc nằm TRONG top 160, không phải nộp thêm đuôi.
+
+## 25. HyDE và mix0.3: HyDE gỡ lại phần doc mà pool B mất, mix0.3 thắng nhẹ trên pool top300
+
+Hai bài, cùng ngày, đã chốt danh tính điểm 0.2327 (mục 22).
+
+**HyDE** (`doc_top300_bge_vcorr_enzh_hyde`, 80 doc / 55 chunk, pool Bhyde = RRF 5 lượt tìm: câu gốc, câu sửa, en, zh, đoạn HyDE):
+
+| | pool | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | `CHUNKS_F2` | FINAL |
+|---|---|---:|---:|---:|---:|---:|---:|
+| d80 top300 (mục 15) | chỉ câu gốc | 0.2369 | 0.3117 | 18,95 | **0.2574** | 0.1887 | **0.2230** |
+| d80 B (mục 17) | + câu sửa + en + zh | 0.2370 | 0.3029 | 18,96 | 0.2520 | 0.1913 | 0.2216 |
+| d80 Bhyde | + HyDE | 0.2364 | 0.3121 | 18,91 | 0.2563 | 0.1888 | 0.2225 |
+
+**Phán quyết: trung tính.** HyDE kéo `DOCS_F2` của pool B lên +0,0043 nhưng vẫn dưới pool chỉ câu gốc; `h_doc` gần như không đổi.
+
+**mix0.3 trên pool top300** (`fuse_d110_c55_top300_mix0.3_ctop300`, 110 doc / 55 chunk, chunk list top300 như mục 19):
+
+| | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | FINAL |
+|---|---:|---:|---:|---:|---:|
+| d110 orig (mục 19) | 0.2075 | - | 22,83 | 0.2745 | 0.2316 |
+| d110 mix0.3 | 0.2093 | 0.3636 | 23,02 | **0.2766** | **0.2327** |
+
+**Phán quyết: thắng nhẹ, +0,0021 `DOCS_F2`.** Pool top300 khoảng 80% doc vi nên điểm câu cùng ngôn ngữ ít khi khác điểm câu gốc; hiệu ứng nhỏ.
+Chưa thử trên bài SOTA d160 (T19 trong `docs/experiments.json`).
+
+## 26. Cách A trên pool B: đẩy điểm doc en/zh lên càng mạnh càng thua
+
+Cùng pool B, 80 doc, cùng chunk list top60 (`CHUNKS_F2` ra đúng 0.1930 ở cả ba bài, nên bài dựng đúng). Chỉ đổi trọng số λ của điểm câu cùng ngôn ngữ (`s_m`) trong `λ·s_m + (1-λ)·s_o`.
+
+| λ | bài | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | Δ so với orig |
+|---:|---|---:|---:|---:|---:|---:|
+| 0 | orig (mục 17) | 0.2370 | 0.3029 | 18,96 | 0.2520 | - |
+| 0,3 | `fuse_d80_c55_B_mix0.3_ctop60` | 0.2288 | 0.2928 | 18,30 | 0.2424 | −0,0096 |
+| 0,5 | `fuse_d80_c55_B_mix0.5_ctop60` | 0.2205 | 0.2809 | 17,64 | 0.2332 | −0,0188 |
+| 1 | `fuse_d80_c55_B_matched_ctop60` (T01) | 0.1890 | 0.2509 | 15,12 | 0.2051 | −0,0469 |
+
+Chuẩn hoá điểm theo từng ngôn ngữ (T03, T04, nộp 2026-10-26, cùng pool B, cùng chunk list, `CHUNKS_F2` 0.1930 ở cả hai):
+
+| cách | bài | en+zh trong top 80 | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | Δ so với orig |
+|---|---|---:|---:|---:|---:|---:|---:|
+| orig | (mục 17) | 24% | 0.2370 | 0.3029 | 18,96 | 0.2520 | - |
+| min-max [-1, 1] (T03) | `fuse_d80_c55_B_langmm_ctop60` | 40% | 0.2121 | 0.2688 | 16,97 | 0.2238 | −0,0282 |
+| z-score logit (T04) | `fuse_d80_c55_B_langz_ctop60` | 63% | 0.1477 | 0.2001 | 11,82 | 0.1631 | −0,0889 |
+
+**Phán quyết: thua, đơn điệu theo λ.** Trên pool B (63% doc en/zh), chấm bằng câu cùng ngôn ngữ đưa doc en/zh lên, và chúng trúng ít hơn doc vi bị đẩy ra.
+Suy luận, chưa đo: hoặc gold chủ yếu là doc vi, hoặc điểm của reranker với câu dịch thổi phồng doc en/zh. T03 và T04 đã xác nhận: chuẩn hoá theo ngôn ngữ càng đẩy en/zh lên càng thua (T04 thua nặng nhất). T02 và phần en/zh của T11 cùng hướng rủi ro này.
 
 ## Nguyên tắc rút ra về cách thí nghiệm
 
