@@ -36,6 +36,8 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(kj, "DATASET_DIR", str(tmp_path / "kaggle" / "dataset"))
     monkeypatch.setattr(kj, "WORK", str(tmp_path / "kaggle" / "work"))
     monkeypatch.setattr(kj, "OUT", str(tmp_path / "kaggle" / "out"))
+    monkeypatch.setattr(kj, "fetch_texts", lambda need: {      # thay Qdrant: text lấy từ doc_texts nhỏ dưới đây
+        str(r["doc_id"]): r["text"] for r in kj.jsonl(tmp_path / "doc_texts.jsonl") if str(r["doc_id"]) in need})
     pool = tmp_path / "pool.jsonl"
     write_jsonl(pool, [
         {"id": 1, "query": "đau dạ dày", "rr_model": kj.BGE, "rr_len": 1024, "candidates": [
@@ -169,7 +171,7 @@ def test_t14_job_roundtrip_rescore_merge(env, monkeypatch):
         docs = [json.loads(line)["doc_id"] for line in z.read("docs.jsonl").decode().splitlines()]
     assert meta["kind"] == "qwen3" and meta["name"] == "t14_qwen3r4b"
     assert sorted(docs) == ["10", "11", "20"]                     # doc 99 không được đưa lên
-    assert os.path.exists(os.path.join(kj.DATASET_DIR, "rerank_job.py"))
+    assert not os.path.exists(os.path.join(kj.DATASET_DIR, "rerank_job.py"))  # nhúng trong kernel
     ds = json.load(open(os.path.join(kj.DATASET_DIR, "dataset-metadata.json")))
     assert ds["id"] == "me/vibiomir-rerank-jobs"
     km = json.load(open(os.path.join(kj.ROOT, "kernel_t14_qwen3r4b", "kernel-metadata.json")))
@@ -177,6 +179,7 @@ def test_t14_job_roundtrip_rescore_merge(env, monkeypatch):
     run_py = open(os.path.join(kj.ROOT, "kernel_t14_qwen3r4b", "run.py"), encoding="utf-8").read()
     assert 'JOB = "t14_qwen3r4b"' in run_py and "NEED_QWEN = True" in run_py
     compile(run_py, "run.py", "exec")
+    assert '"--dtype", "fp16"' in run_py and repr(open(kj.RERANK_JOB, encoding="utf-8").read()) in run_py
 
     # Kaggle chấm (giả) -> tải về out/<job>/run1 -> gộp
     out = os.path.join(kj.OUT, "t14_qwen3r4b", "run1", "scores_t14_qwen3r4b.s0of1.jsonl")
@@ -236,3 +239,28 @@ def test_smoke_kernel_limits_queries_and_has_its_own_slug(env):
     run_py = open(os.path.join(smoke, "run.py"), encoding="utf-8").read()
     assert '"--limit-queries", "20"' in run_py
     compile(run_py, "run.py", "exec")
+
+
+def test_owner_overrides_stale_dataset_metadata(env):
+    old = kj.ensure_dataset_meta("me", "vibiomir-rerank-jobs")
+    assert old == "me/vibiomir-rerank-jobs"
+    assert kj.ensure_dataset_meta("quyen", "vibiomir-rerank-jobs") == "quyen/vibiomir-rerank-jobs"
+    assert kj.ensure_dataset_meta(None, "vibiomir-rerank-jobs") == "quyen/vibiomir-rerank-jobs"
+
+
+def test_refuses_partial_qdrant_index():
+    with pytest.raises(SystemExit):
+        kj.check_full_index(256, "medical_docs")
+    kj.check_full_index(1_003_391, "medical_docs")
+
+
+def test_half_dtype_is_fp16_like_local_cache_even_if_bf16_reported():
+    class FakeTorch:
+        float16, float32, bfloat16 = "fp16", "fp32", "bf16"
+
+        class cuda:
+            @staticmethod
+            def is_bf16_supported():
+                return True
+    assert rj.half_dtype(FakeTorch, "cuda:0") == "fp16"
+    assert rj.half_dtype(FakeTorch, "cpu") == "fp32"

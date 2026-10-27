@@ -108,6 +108,20 @@ Không thể tìm 51 tài liệu đúng khi chỉ nhìn 65 ứng viên, nên m�
 - `data/labeling/dev_set.jsonl` CHƯA được gán nhãn (`human_score` toàn None), không dùng để đo được.
 - Không có ground truth tại chỗ. Leaderboard là công cụ đo duy nhất.
 
+## Câu hỏi dùng cho truy xuất và rerank (quyết định 2026-10-27)
+
+Từ sau T12, mọi thí nghiệm mới dùng `corrected_query` cho CẢ truy xuất LẪN rerank, thay cho câu gốc.
+Nguồn: `data/spelling/corrected_queries.jsonl`, trường `corrected_query`; 224/1.200 câu khác câu gốc.
+Bài nộp và mọi pool đến hết T12 (kể cả T12) dùng câu gốc từ `data/queries/real_queries.jsonl`.
+
+Hệ quả cần nhớ:
+
+- KHÔNG dùng lại điểm rerank cache của các pool cũ (chấm theo câu gốc): thí nghiệm dùng câu sửa chấm lại toàn bộ cặp từ đầu.
+- Text doc đưa vào reranker phải là payload `text` của Qdrant `medical_docs`, không phải `data/doc_texts.jsonl` (khác dấu ` | `, điểm lệch tới 0,24).
+- Đổi sang câu sửa là một biến số riêng: đo nó một mình so với SOTA trước khi gộp với thay đổi khác.
+- Bằng chứng tới nay: câu sửa mới chỉ được dùng như MỘT trong các lượt tìm của pool B (gộp RRF), chưa từng được đo khi làm câu duy nhất cho cả tìm lẫn rerank.
+- Pool hay bài nộp dùng câu sửa phải ghi rõ trong tên, ví dụ hậu tố `_qcorr`.
+
 ## Đặt tên bài nộp
 
 Mọi mã viết tắt (`E1`, `N3`, `S2`, `D_ft`...) tra ở `docs/ky-hieu-bai-nop.md`.

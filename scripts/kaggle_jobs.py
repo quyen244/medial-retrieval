@@ -1,10 +1,10 @@
 """Dựng job rerank cho Kaggle và gộp điểm về thành pool (T12, T14).
 
-Chia việc: phần nhẹ chạy ở máy local (tìm Qdrant, lấy text doc, lắp bài nộp), phần nặng GPU
+Chia việc: phần nhẹ chạy ở máy local (tìm Qdrant, lấy text doc từ payload Qdrant, lắp bài nộp), phần nặng GPU
 (rerank) chạy trên Kaggle bằng kaggle/rerank_job.py. Kaggle không cần Qdrant, không cần
 snapshot index, không cần data/raw_documents: chỉ cần file job (câu hỏi + text doc + cặp cần chấm).
 
-    # T14: chấm lại pool top300 bằng Qwen3-Reranker-4B (không cần Qdrant)
+    # T14: chấm lại pool top300 bằng Qwen3-Reranker-4B (cần Qdrant để lấy text doc)
     python -m scripts.kaggle_jobs t14 --owner <kaggle-user>
     # T12: tìm top1000 trên Qdrant local, chỉ đưa lên Kaggle các cặp CHƯA có điểm bge trong các pool cũ
     python -m scripts.kaggle_jobs t12 --owner <kaggle-user>
@@ -13,7 +13,7 @@ snapshot index, không cần data/raw_documents: chỉ cần file job (câu hỏ
     python -m scripts.kaggle_jobs merge --name t12_top1000_bge
 
 Ra:
-  data/kaggle/dataset/            thư mục upload dataset: dataset-metadata.json, rerank_job.py, <job>.zip
+  data/kaggle/dataset/            thư mục upload dataset: dataset-metadata.json, <job>.zip
   data/kaggle/kernel_<job>/       thư mục push kernel: kernel-metadata.json, run.py
   data/kaggle/work/<job>.*        file local để gộp: mô tả job, ứng viên (T12)
   data/tmp/phase1/<pool>.jsonl    pool sau khi gộp, cùng định dạng phase1_doc_retrieve
@@ -23,7 +23,6 @@ import glob
 import json
 import os
 import random
-import shutil
 import sys
 import tempfile
 import zipfile
@@ -52,16 +51,30 @@ def jsonl(path):
                 yield json.loads(line)
 
 
-def load_texts(path, need):
-    """doc_id (str) -> text, chỉ cho các doc cần. data/doc_texts.jsonl là đúng text đã index và rerank."""
-    out = {}
-    for r in jsonl(path):
-        d = str(r["doc_id"])
-        if d in need:
-            out[d] = r["text"]
-    missing = need - out.keys()
+def fetch_texts(need, batch=500):
+    """doc_id (str) -> text từ payload `text` của Qdrant medical_docs: đúng chuỗi phase1_doc_retrieve đã đưa
+    vào reranker khi chấm các pool cache. data/doc_texts.jsonl KHÔNG dùng được: cùng nội dung nhưng nối các
+    phần bằng " | ", điểm bge lệch tới 0,24 so với cache."""
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import FieldCondition, Filter, MatchAny
+
+    from src.rag.config import load_config
+    cfg = load_config(None, [])
+    client = QdrantClient(url=cfg.get("qdrant.url", "http://localhost:6333"), timeout=cfg.get("qdrant.timeout", 600))
+    coll = cfg.get("qdrant.collection_docs", "medical_docs")
+    check_full_index(client.count(coll, exact=True).count, coll)
+    ids, out = sorted(need, key=int), {}
+    for i in range(0, len(ids), batch):
+        part = [int(d) for d in ids[i: i + batch]]
+        pts, _ = client.scroll(coll, scroll_filter=Filter(must=[FieldCondition(key="doc_id", match=MatchAny(any=part))]),
+                               limit=len(part) * 2, with_payload=["doc_id", "text"], with_vectors=False)
+        for pt in pts:
+            out[str(pt.payload["doc_id"])] = (pt.payload or {}).get("text") or ""
+        print(f"[text] {min(i + batch, len(ids)):,}/{len(ids):,} doc", end="\r", flush=True)
+    print()
+    missing = sorted(d for d in need if not out.get(d))
     if missing:
-        raise SystemExit(f"{len(missing)} doc không có trong {path}, vd {sorted(missing)[:5]}")
+        raise SystemExit(f"{len(missing)} doc không có text trong payload {coll}, vd {missing[:5]}")
     return out
 
 
@@ -95,29 +108,31 @@ def write_job(name, meta, queries, pairs, texts, check=None, dataset_dir=None):
         if check:
             z.writestr("check.jsonl", "".join(json.dumps(r) + "\n" for r in check))
     os.replace(tmp, zpath)
-    shutil.copy(RERANK_JOB, os.path.join(dataset_dir, "rerank_job.py"))
     return zpath
 
 
 def ensure_dataset_meta(owner, slug, dataset_dir=None):
     dataset_dir = dataset_dir or DATASET_DIR
     path = os.path.join(dataset_dir, "dataset-metadata.json")
-    if not os.path.exists(path):
-        if not owner:
-            raise SystemExit("lần đầu cần --owner <kaggle-username> để ghi dataset-metadata.json")
+    if owner:
+        # --owner luôn thắng file cũ, để id dataset khớp với id kernel (kernel cũng lấy theo --owner).
         os.makedirs(dataset_dir, exist_ok=True)
         json.dump({"title": "ViBioMIR rerank jobs", "id": f"{owner}/{slug}", "licenses": [{"name": "CC0-1.0"}]},
                   open(path, "w", encoding="utf-8"), indent=2)
+    elif not os.path.exists(path):
+        raise SystemExit("lần đầu cần --owner <kaggle-username> để ghi dataset-metadata.json")
     return json.load(open(path, encoding="utf-8"))["id"]
 
 
-KERNEL_RUN = r'''"""Kaggle kernel: chấm job __JOB__ trên mọi GPU (mỗi GPU một shard), gộp điểm vào /kaggle/working.
-Sinh bởi scripts/kaggle_jobs.py; đừng sửa tay, sinh lại thì sửa template trong đó."""
-import glob, os, shutil, subprocess, sys, time
+KERNEL_RUN = r'''"""Kaggle kernel: chấm job __JOB__ trên 1 GPU, ghi điểm và log vào /kaggle/working.
+Sinh bởi scripts/kaggle_jobs.py; đừng sửa tay, sinh lại thì sửa template trong đó.
+rerank_job.py được nhúng ngay trong file này: dataset chỉ chứa dữ liệu job, nên sửa code chỉ cần push lại kernel."""
+import glob, os, subprocess, sys, threading, time
 
 JOB = "__JOB__"
 NEED_QWEN = __NEED_QWEN__
 EXTRA = __EXTRA__          # tham số thêm cho rerank_job.py
+RERANK_JOB_SRC = __RERANK_SRC__
 
 def sh(cmd):
     print("$", cmd, flush=True)
@@ -132,48 +147,50 @@ if NEED_QWEN:
     if not ok:
         sh(f"{sys.executable} -m pip install -q 'transformers>=4.51.0'")
 
-script = sorted(glob.glob("/kaggle/input/**/rerank_job.py", recursive=True), key=len)
-if not script:
-    sys.exit("không thấy rerank_job.py trong /kaggle/input: đã gắn dataset chưa?")
-script = script[0]
+W = "/kaggle/working"
+script = f"{W}/rerank_job.py"
+open(script, "w", encoding="utf-8").write(RERANK_JOB_SRC)
 
 import torch
-n = max(torch.cuda.device_count(), 1)
-print(f"GPU: {n} x {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}", flush=True)
-W = "/kaggle/working"
+print(f"GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'} (dùng 1 GPU)", flush=True)
 # Điểm của lượt chạy trước (nếu gắn làm input) -> bỏ qua câu đã chấm
 prev = f"/kaggle/input/**/scores_{JOB}*.jsonl"
-procs = []
-for k in range(n):
-    env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(k))
-    out = f"{W}/scores_{JOB}.s{k}of{n}.jsonl"
-    log = open(f"{W}/log_{JOB}.s{k}.txt", "w")
-    cmd = [sys.executable, script, "--job", JOB, "--out", out, "--shard", f"{k}/{n}", "--device", "cuda:0",
-           "--skip-done", prev] + EXTRA
-    print(" ".join(cmd), flush=True)
-    procs.append((subprocess.Popen(cmd, env=env, stdout=log, stderr=subprocess.STDOUT), log, k))
-    time.sleep(20)          # nạp model lệch nhau cho đỡ tranh RAM
-while any(p.poll() is None for p, _, _ in procs):
-    time.sleep(60)
-    for _, _, k in procs:
-        lines = open(f"{W}/log_{JOB}.s{k}.txt", encoding="utf-8", errors="replace").read().splitlines()
-        if lines:
-            print(f"[s{k}] {lines[-1]}", flush=True)
-for p, log, k in procs:
-    log.close()
-    print(f"--- log s{k} (exit {p.returncode}) ---")
-    print("\n".join(open(f"{W}/log_{JOB}.s{k}.txt", encoding="utf-8", errors="replace").read().splitlines()[-15:]))
-with open(f"{W}/scores_{JOB}.jsonl", "w", encoding="utf-8") as fh:
-    for path in sorted(glob.glob(f"{W}/scores_{JOB}.s*.jsonl")) + sorted(glob.glob(prev, recursive=True)):
-        fh.write(open(path, encoding="utf-8").read())
-print("xong:", os.path.getsize(f"{W}/scores_{JOB}.jsonl"), "byte")
-if any(p.returncode for p, _, _ in procs):
-    sys.exit("có shard lỗi, xem log ở trên")
+out = f"{W}/scores_{JOB}.jsonl"
+log = f"{W}/log_{JOB}.txt"
+# fp16 như cache local; T4 báo hỗ trợ bf16 (giả lập) nhưng bf16 lệch tới 0,24 so với fp16.
+cmd = [sys.executable, script, "--job", JOB, "--out", out, "--device", "cuda:0", "--dtype", "fp16",
+       "--skip-done", prev] + EXTRA
+print(" ".join(cmd), flush=True)
+p = subprocess.Popen(cmd, env=dict(os.environ, PYTHONUNBUFFERED="1"), stdout=subprocess.PIPE,
+                     stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", bufsize=1)
+
+# --max-hours chỉ được xét trong vòng chấm; hạn chót này chặn cả lúc treo ở bước nạp model / check.
+max_hours = float(EXTRA[EXTRA.index("--max-hours") + 1]) if "--max-hours" in EXTRA else 11.0
+def kill_at_deadline():
+    print(f"dừng: quá hạn chót {max_hours + 0.25:.2f} giờ", flush=True)
+    p.kill()
+timer = threading.Timer(3600 * (max_hours + 0.25), kill_at_deadline)
+timer.daemon = True
+timer.start()
+
+# Mỗi dòng -> vừa in ra log kernel (xem trực tiếp trên Kaggle), vừa ghi log_<job>.txt.
+with open(log, "w", encoding="utf-8") as fh:
+    for line in p.stdout:
+        line = f"{time.strftime('%H:%M:%S')} {line.rstrip()}"
+        fh.write(line + "\n")
+        fh.flush()
+        print(line, flush=True)
+p.wait()
+timer.cancel()
+print(f"--- exit {p.returncode}; điểm: {out} ({os.path.getsize(out) if os.path.exists(out) else 0} byte); log: {log}",
+      flush=True)
+if p.returncode:
+    sys.exit("rerank_job lỗi, xem log ở trên")
 '''
 
 
 def write_kernels(name, owner, dataset_id, need_qwen):
-    """Hai kernel: bản chạy thử (20 câu mỗi GPU, đo tốc độ) và bản chạy thật."""
+    """Hai kernel: bản chạy thử (20 câu, đo tốc độ) và bản chạy thật."""
     write_kernel(name, owner, dataset_id, need_qwen, ["--limit-queries", "20", "--max-hours", "0.5"], suffix="_smoke")
     return write_kernel(name, owner, dataset_id, need_qwen)
 
@@ -182,7 +199,8 @@ def write_kernel(name, owner, dataset_id, need_qwen, extra=None, accelerator="Nv
     kdir = f"{ROOT}/kernel_{name}{suffix}"
     os.makedirs(kdir, exist_ok=True)
     code = (KERNEL_RUN.replace("__JOB__", name).replace("__NEED_QWEN__", repr(bool(need_qwen)))
-            .replace("__EXTRA__", json.dumps(extra or [])))
+            .replace("__EXTRA__", json.dumps(extra or []))
+            .replace("__RERANK_SRC__", repr(open(RERANK_JOB, encoding="utf-8").read())))
     open(f"{kdir}/run.py", "w", encoding="utf-8").write(code)
     slug = f"vibiomir-rerank-{name.replace('_', '-')}{suffix.replace('_', '-')}"
     json.dump({"id": f"{owner}/{slug}", "title": slug, "code_file": "run.py", "language": "python",
@@ -222,7 +240,7 @@ def build_rescore(args):
             cs = cs[: args.top_k]
         pairs[int(r["id"])] = [str(c["doc_id"]) for c in cs]
     need = {d for ds in pairs.values() for d in ds}
-    texts = load_texts(args.doc_texts, need)
+    texts = fetch_texts(need)
     meta = {"model": args.model, "kind": "qwen3" if "qwen3-reranker" in args.model.lower() else "cross-encoder",
             "max_length": args.max_length, "source_pool": args.pool, "top_k": args.top_k}
     zpath = write_job(args.name, meta, queries, pairs, texts)
@@ -234,6 +252,16 @@ def build_rescore(args):
 
 
 # ------------------------------------------------------------------ T12
+MIN_INDEX_POINTS = 1_000_000  # medical_docs đủ có 1.003.391 điểm
+
+
+def check_full_index(n, coll):
+    """Cổng 6333 có thể là Qdrant của project khác mang cùng tên collection: tìm trên đó vẫn chạy, chỉ ra rác."""
+    if n < MIN_INDEX_POINTS:
+        raise SystemExit(f"{coll} chỉ có {n:,} điểm (cần >= {MIN_INDEX_POINTS:,}): đang nối nhầm Qdrant? "
+                         f"Xem `docker ps`, bật container của r2ai rồi chạy lại.")
+
+
 def search_qdrant(top_k, ef, limit=0, batch=16):
     """Câu gốc -> [(qid, query, [doc_id theo hạng])], dense BGE-M3 trên medical_docs như pool top300."""
     from qdrant_client import QdrantClient
@@ -247,13 +275,16 @@ def search_qdrant(top_k, ef, limit=0, batch=16):
     coll = cfg.get("qdrant.collection_docs", "medical_docs")
     if not client.collection_exists(coll):
         raise SystemExit(f"Qdrant chưa có collection {coll}: bật Docker và restore (scripts/restore_medical_docs.sh)")
+    check_full_index(client.count(coll, exact=True).count, coll)
     vecs = BgeM3Embedder().encode([q["query"] for q in qs], batch_size=cfg.get("retrieval.doc.encode_batch", 8))
     out = []
     for i in range(0, len(qs), batch):
         part = qs[i: i + batch]
         res = client.query_batch_points(collection_name=coll, requests=[
             request(v.tolist() if hasattr(v, "tolist") else list(v), None, top_k, False, ef)
-            for v in vecs[i: i + batch]])
+            for v in vecs[i: i + batch]],
+            # hạn phía server mặc định 60s; ngay sau restore/khởi động, vector còn nằm trên đĩa nên lô đầu có thể vượt
+            timeout=cfg.get("qdrant.timeout", 600))
         for q, r in zip(part, res):
             out.append((int(q["id"]), q["query"], [str((p.payload or {}).get("doc_id")) for p in r.points]))
         print(f"[t12] tìm {min(i + batch, len(qs))}/{len(qs)}", end="\r", flush=True)
@@ -283,7 +314,7 @@ def build_deep(args):
         for qid, query, ids in hits:
             fh.write(json.dumps({"id": qid, "query": query, "doc_ids": ids}, ensure_ascii=False) + "\n")
     need = {d for ds in pairs.values() for d in ds} | {r["doc_id"] for r in check}
-    texts = load_texts(args.doc_texts, need)
+    texts = fetch_texts(need)
     queries = {qid: query for qid, query, _ in hits}
     meta = {"model": BGE, "kind": "cross-encoder", "max_length": 1024, "top_docs": args.top_docs,
             "hnsw_ef": args.hnsw_ef}
@@ -358,7 +389,7 @@ def merge_rows(info, scores, cache=None, meta_of=None):
 
 def merge(args):
     info = json.load(open(f"{WORK}/{args.name}.local.json", encoding="utf-8"))
-    paths = sorted(glob.glob(args.scores or f"{OUT}/{args.name}/**/scores_{args.name}.s*.jsonl", recursive=True))
+    paths = sorted(glob.glob(args.scores or f"{OUT}/{args.name}/**/scores_{args.name}*.jsonl", recursive=True))
     if not paths:
         raise SystemExit(f"không thấy file điểm shard nào ({args.scores or OUT + '/' + args.name})")
     scores, nulls = read_scores(paths)

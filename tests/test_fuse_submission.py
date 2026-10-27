@@ -130,3 +130,31 @@ def test_chunk_order_vifirst_keeps_relative_order_within_each_group():
     from scripts.fuse_submission import chunk_order_vifirst
     lang = {"a": "en", "b": "vi", "c": "zh", "d": "vi"}.get
     assert chunk_order_vifirst(["a", "b", "c", "d"], lang) == ["b", "d", "a", "c"]
+
+
+def rcand(doc_id, score, rank):
+    return {"doc_id": doc_id, "language": "vi", "rerank_score": score, "rrf_score": 1.0 / (60 + rank)}
+
+
+# d1 gần câu hỏi nhưng rerank vừa; d9 ở hạng tìm 900, rerank nhỉnh hơn d1; d8 hạng 800, rerank rất cao.
+DEEP = [rcand("d1", 0.60, 1), rcand("d2", 0.30, 2), rcand("d9", 0.65, 900), rcand("d8", 0.97, 800)]
+
+
+def test_retrieval_rank_from_rrf_score():
+    from scripts.fuse_submission import retrieval_rank
+    assert retrieval_rank(DEEP) == {"d1": 1, "d2": 2, "d8": 3, "d9": 4}
+
+
+def test_gate_keeps_confident_deep_docs_and_sinks_the_rest():
+    assert rank_docs(DEEP, {}, 1, "orig") == ["d8", "d9", "d1", "d2"]
+    assert rank_docs(DEEP, {}, 1, "gate2_0.9") == ["d8", "d1", "d2", "d9"]
+
+
+def test_rlog_zero_equals_orig_and_penalty_demotes_deep_docs():
+    assert rank_docs(DEEP, {}, 1, "rlog0") == rank_docs(DEEP, {}, 1, "orig")
+    assert rank_docs(DEEP, {}, 1, "rlog1")[:2] == ["d8", "d1"]       # d9 (0.65) tụt dưới d1 (0.60, hạng 1)
+
+
+def test_rrfrr_rewards_agreement_of_both_orders():
+    order = rank_docs(DEEP, {}, 1, "rrfrr")
+    assert order.index("d1") < order.index("d9")

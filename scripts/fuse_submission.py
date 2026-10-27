@@ -142,6 +142,13 @@ def rrf(orders):
     return key
 
 
+def retrieval_rank(cands):
+    """doc_id -> hạng truy xuất (1 = gần câu hỏi nhất), suy từ rrf_score = 1/(60 + hạng).
+    Pool gộp RRF nhiều lượt tìm (B, C, Bhyde) thì là hạng sau khi gộp."""
+    order = sorted(cands, key=lambda c: -c.get("rrf_score", 0.0))
+    return {c["doc_id"]: i for i, c in enumerate(order, 1)}
+
+
 def rank_docs(cands, scores, qid, method, chunk_order=None):
     """cands: [{doc_id, language, rerank_score}] -> doc_id xếp theo method.
     chunk_order: doc_id xếp theo nhánh chunk, chỉ `chunkrrf` dùng; có thể chứa doc
@@ -173,6 +180,21 @@ def rank_docs(cands, scores, qid, method, chunk_order=None):
     elif method == "vifirst":
         # s_o < 1 nên cộng 2 cho doc vi là đủ đặt mọi doc vi trước mọi doc en/zh.
         key = {c["doc_id"]: c["rerank_score"] + (2.0 if lang_of(c) == "vi" else 0.0) for c in cands}
+    # Ba cách giữ thông tin hạng truy xuất (mục 29: pool top1000 có thêm gold nhưng thưa, 1,1% mỗi doc,
+    # và reranker kéo nhầm doc sâu lên). Doc hạng sâu phải thắng điểm rerank rõ hơn mới được vào.
+    elif method == "rrfrr":
+        rr = retrieval_rank(cands)
+        key = rrf([sorted(s_o, key=lambda d: -s_o[d]), sorted(rr, key=rr.get)])
+    elif method.startswith("rlog"):
+        # logit(điểm rerank) − β·ln(hạng truy xuất): hạng 10 -> 100 trừ thêm β·2,3 logit.
+        beta, rr = float(method[4:]), retrieval_rank(cands)
+        key = {d: logit(s) - beta * math.log(rr[d]) for d, s in s_o.items()}
+    elif method.startswith("gate"):
+        # gate<R>_<t>: doc hạng truy xuất > R chỉ được xếp theo điểm thật nếu điểm rerank >= t,
+        # không thì xuống dưới mọi doc khác (s − 1 < 0 <= mọi điểm thật).
+        r_max, t = method[4:].split("_")
+        r_max, t, rr = int(r_max), float(t), retrieval_rank(cands)
+        key = {d: s if rr[d] <= r_max or s >= t else s - 1.0 for d, s in s_o.items()}
     elif method == "maxall":
         key = {d: max([s] + [scores[(qid, k)][d] for k in ("corrected", "en", "zh") if d in scores[(qid, k)]])
                for d, s in s_o.items()}
@@ -199,6 +221,8 @@ def main():
                     help="chunk_text lấy cap ký tự đầu bài hay ở giữa bài")
     ap.add_argument("--chunk-evidence", default=CHUNK_EVIDENCE, help="dump chunk cho method chunkrrf")
     ap.add_argument("--dry", action="store_true", help="chỉ in chẩn đoán, không ghi bài nộp")
+    ap.add_argument("--base-pool", default=None, choices=sorted(POOLS),
+                    help="cột 'trùng orig' so với orig của pool này (vd top300 = bài SOTA) thay vì pool doc đầu")
     ap.add_argument("--out-dir", default=D)
     args = ap.parse_args()
 
@@ -224,9 +248,13 @@ def main():
               f"{statistics.mean(map(len, chunk_order.values())):.1f} doc/câu, {outside:.1f} doc ngoài doc pool")
 
     # "trùng orig" so với orig trên pool ĐẦU TIÊN, tức bài đối chứng khi gộp nhiều pool.
-    first = load_pool(POOLS[args.doc_pool[0]]) if len(args.doc_pool) > 1 else doc_pool
+    if args.base_pool:
+        first = load_pool(POOLS[args.base_pool])
+    else:
+        first = load_pool(POOLS[args.doc_pool[0]]) if len(args.doc_pool) > 1 else doc_pool
     base = {q: rank_docs(cs, scores, q, "orig")[: args.m_doc] for q, cs in first.items()}
-    print(f"{'cách':10}{'trùng orig':>12}{'vi':>7}{'en':>7}{'zh':>7}   (top {args.m_doc} doc)")
+    rr = {q: retrieval_rank(cs) for q, cs in doc_pool.items()}
+    print(f"{'cách':14}{'trùng orig':>12}{'vi':>7}{'en':>7}{'zh':>7}{'hạng tìm>300':>14}   (top {args.m_doc} doc)")
     ranked = {}
     for method in args.methods:
         ranked[method] = {q: rank_docs(cs, scores, q, method, chunk_order.get(q, [])) for q, cs in doc_pool.items()}
@@ -234,7 +262,8 @@ def main():
         ov = statistics.mean(len(set(top[q]) & set(base[q])) for q in top)
         lg = Counter(lang[(q, d)] for q in top for d in top[q])
         n = sum(lg.values())
-        print(f"{method:10}{ov:12.1f}{lg['vi'] / n:7.0%}{lg['en'] / n:7.0%}{lg['zh'] / n:7.0%}")
+        deep = statistics.mean(sum(rr[q].get(d, 0) > 300 for d in top[q]) for q in top)
+        print(f"{method:14}{ov:12.1f}{lg['vi'] / n:7.0%}{lg['en'] / n:7.0%}{lg['zh'] / n:7.0%}{deep:14.1f}")
     if args.dry:
         return
 

@@ -92,11 +92,11 @@ Lệnh B2: `python -m scripts.fuse_submission --doc-pool top300 --methods vifirs
 
 Ba thí nghiệm không cần GPU thêm ngày 2026-10-26 (chi tiết và số offline trong `docs/experiments.json`):
 
-| ID | Câu hỏi | Thay đổi duy nhất | So với | Offline |
-|---|---|---|---|---|
-| T20 | Hạ doc en/zh ở tầng doc có lợi không (ngược T03/T04) | `orig` -> `vifirst` | `DOCS_F2` 0.2849 | thay 16,8/160 doc, top 160 thành 91% vi |
-| T21 | Như T20 ở tầng chunk | chunk list: doc vi lên đầu | `CHUNKS_F2` 0.2275 | 17,5/100 chunk hiện là doc en/zh |
-| T22 | Gộp HyDE nhưng chỉ nhận doc vi (bản an toàn của T11) | pool top300 -> hợp top300 + doc vi của Bhyde | `DOCS_F2` 0.2849 | 10,0 doc mới/câu lọt top 160 |
+| ID | Câu hỏi | Thay đổi duy nhất | So với | Offline | Kết quả (2026-10-27, mục 27) |
+|---|---|---|---|---|---|
+| T20 | Hạ doc en/zh ở tầng doc có lợi không (ngược T03/T04) | `orig` -> `vifirst` | `DOCS_F2` 0.2849 | thay 16,8/160 doc, top 160 thành 91% vi | **thua**: 0.2813 (−0,0036) |
+| T21 | Như T20 ở tầng chunk | chunk list: doc vi lên đầu | `CHUNKS_F2` 0.2275 | 17,5/100 chunk hiện là doc en/zh | **thua**: 0.2262 (−0,0013) |
+| T22 | Gộp HyDE nhưng chỉ nhận doc vi (bản an toàn của T11) | pool top300 -> hợp top300 + doc vi của Bhyde | `DOCS_F2` 0.2849 | 10,0 doc mới/câu lọt top 160 | **hoà**: 0.2850 (+0,0001), FINAL 0.2562 |
 
 Lệnh T22: `python -m scripts.fuse_submission --doc-pool top300 Bhyde --extra-lang vi --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300`
 

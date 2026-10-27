@@ -606,10 +606,22 @@
       ],
       "batch": "B2",
       "change": "orig → vifirst: mọi doc vi (theo điểm rerank) đứng trước mọi doc en/zh",
-      "status": "pending",
+      "status": "measured",
       "compare": "DOCS_F2 0.2849 (đọc tầng doc của bài B2)",
-      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods vifirst --m-doc 160 --m-chunk 100 --cap 2700 --chunk-order vifirst --out-dir data --chunk-pool top60 top300",
-      "note": "Đi ngược T03/T04: 5 bài đã đo cho thấy đẩy en/zh lên càng mạnh càng thua (mục 26). Offline: thay 16,8/160 doc mỗi câu, top 160 thành 91% vi (từ 80%). 276/1200 câu không đủ 160 doc vi trong pool nên vẫn giữ một phần en/zh."
+      "note": "Tầng doc của B2: DOCS_F2 0.2813 vs 0.2849 (−0,0036), h_doc 27,46 vs 27,84. Hạ en/zh cũng thua như đẩy en/zh lên (mục 26): thứ tự rerank câu gốc đang đúng chỗ theo cả hai chiều.",
+      "date": "2026-10-27",
+      "ref": "mục 27",
+      "verdict": "lose",
+      "file": "data/fuse_d160_c100_top300_vifirst_ctop60+top300_cap2700_cvi.zip",
+      "scores": {
+        "final": 0.2538,
+        "docs_f2": 0.2813,
+        "chunks_f2": 0.2262,
+        "docs_p": 0.1716,
+        "docs_r": 0.4117,
+        "chunks_p": 0.1896,
+        "chunks_r": 0.2823
+      }
     },
     {
       "id": "T21",
@@ -620,10 +632,22 @@
       ],
       "batch": "B2",
       "change": "chunk list: doc vi lên đầu, giữ thứ tự trong mỗi nhóm",
-      "status": "pending",
+      "status": "measured",
       "compare": "CHUNKS_F2 0.2275 (đọc tầng chunk của bài B2)",
-      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods vifirst --m-doc 160 --m-chunk 100 --cap 2700 --chunk-order vifirst --out-dir data --chunk-pool top60 top300",
-      "note": "Offline: chunk list 100 hiện có 17,5 doc en/zh mỗi câu. Chưa có số đo nào về ngôn ngữ ở tầng chunk; đi chung bài với T20 nên không tốn thêm lượt."
+      "note": "Tầng chunk của B2: CHUNKS_F2 0.2262 vs 0.2275 (−0,0013), h_chunk 18,96 vs 19,16.",
+      "date": "2026-10-27",
+      "ref": "mục 27",
+      "verdict": "lose",
+      "file": "data/fuse_d160_c100_top300_vifirst_ctop60+top300_cap2700_cvi.zip",
+      "scores": {
+        "final": 0.2538,
+        "docs_f2": 0.2813,
+        "chunks_f2": 0.2262,
+        "docs_p": 0.1716,
+        "docs_r": 0.4117,
+        "chunks_p": 0.1896,
+        "chunks_r": 0.2823
+      }
     },
     {
       "id": "T22",
@@ -640,10 +664,22 @@
         }
       ],
       "change": "pool top300 → hợp top300 + doc TIẾNG VIỆT của Bhyde, xếp theo điểm rerank",
-      "status": "pending",
+      "status": "measured",
       "compare": "DOCS_F2 0.2849 · CHUNKS_F2 phải ra 0.2275",
-      "command": "python -m scripts.fuse_submission --doc-pool top300 Bhyde --extra-lang vi --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300",
-      "note": "Bản an toàn của T11: bỏ phần en/zh mà mục 26 cho thấy là rủi ro. Offline: 10,0 doc mới/câu lọt top 160 (T11 đủ ngôn ngữ: 19,7)."
+      "note": "DOCS_F2 0.2850 vs 0.2849 (+0,0001), FINAL bằng SOTA 0.2562. Recall 0.4209 vs 0.4168 nhưng P×m 27,70 vs 27,84: hoà. CHUNKS_F2 ra đúng 0.2275 nên bài dựng đúng.",
+      "date": "2026-10-27",
+      "ref": "mục 27",
+      "verdict": "neutral",
+      "file": "data/fuse_d160_c100_top300+Bhyde_xvi_orig_ctop60+top300_cap2700.zip",
+      "scores": {
+        "final": 0.2562,
+        "docs_f2": 0.285,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.1731,
+        "docs_r": 0.4209,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      }
     },
     {
       "id": "T11",
@@ -666,10 +702,22 @@
         "fuse_d160_c100_cap2700"
       ],
       "change": "pool top300 → top1000 (cùng câu gốc, cùng reranker)",
-      "status": "pending",
+      "status": "measured",
       "compare": "DOCS_F2 0.2849 · CHUNKS_F2 phải ra 0.2275",
-      "command": "python scripts/phase1_doc_retrieve.py --name doc_top1000_bge --set retrieval.doc.top_docs=1000 --set \"retrieval.doc.rerank_cache=[data/tmp/phase1/doc_top300_bge_pool.jsonl]\"",
-      "note": "Hạng retrieval 251-300 vẫn đưa 17 doc/câu vào top 160 sau rerank: chỗ cắt 300 đang chặn."
+      "note": "DOCS_F2 0.2606 vs 0.2849 (−0,0243), h_doc 25,01 vs 27,84. 55,5 doc/câu từ hạng truy xuất 301-1000 vào top 160 nhưng trúng kém doc bị đẩy ra ~5 điểm %: bge-reranker không phân biệt được gold trong pool sâu.",
+      "date": "2026-10-27",
+      "ref": "mục 29",
+      "verdict": "lose",
+      "file": "data/fuse_d160_c100_top1000_orig_ctop60+top300_cap2700.zip",
+      "scores": {
+        "final": 0.2441,
+        "docs_f2": 0.2606,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.1563,
+        "docs_r": 0.3919,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      }
     },
     {
       "id": "T13",
@@ -989,6 +1037,81 @@
       "status": "pending",
       "compare": "CHUNKS_F2 0.2275",
       "note": "Đo riêng: ở 55 chunk, pool top300 từng thua pool top60 (12,60 vs 13,67)."
+    },
+    {
+      "id": "R300_top300",
+      "label": "R@300 · pool top300",
+      "factor": "B",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "m_doc 160 → 300 = nộp CẢ pool top300 (bài chẩn đoán, không nhằm thắng)",
+      "status": "measured",
+      "compare": "DOCS_RECALL = trần recall của pool top300 (thứ hạng không còn ảnh hưởng) · CHUNKS_F2 phải ra 0.2275",
+      "file": "data/fuse_d300_c100_top300_orig_ctop60+top300_cap2700.zip",
+      "note": "Chẩn đoán: pool top300 chứa 48,9% gold (h 34,89). Ở 160 doc đã lấy được 0.4168/0.489 = 85% số gold có trong pool; hạng 161-300 trúng 5,0% mỗi doc. Nghẽn chính là PHỦ: 51% gold không vào pool.",
+      "date": "2026-10-27",
+      "ref": "mục 28",
+      "verdict": "neutral",
+      "scores": {
+        "final": 0.2451,
+        "docs_f2": 0.2627,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.1163,
+        "docs_r": 0.489,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      }
+    },
+    {
+      "id": "R300_B",
+      "label": "R@300 · pool B (dịch en/zh)",
+      "factor": "A",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "nộp CẢ pool B (RRF câu gốc + câu sửa + en + zh, 300 doc) (bài chẩn đoán)",
+      "status": "measured",
+      "compare": "DOCS_RECALL so với R300_top300 · CHUNKS_F2 phải ra 0.2275",
+      "file": "data/fuse_d300_c100_B_orig_ctop60+top300_cap2700.zip",
+      "note": "Chẩn đoán: pool B (RRF câu gốc + sửa + en + zh) chứa 38,9% gold (h 26,49), ÍT hơn pool top300 (48,9%). Lượt tìm bằng bản dịch chiếm chỗ của doc gold, không mở rộng phủ.",
+      "date": "2026-10-27",
+      "ref": "mục 28",
+      "verdict": "lose",
+      "scores": {
+        "final": 0.2151,
+        "docs_f2": 0.2028,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.0883,
+        "docs_r": 0.3891,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      }
+    },
+    {
+      "id": "R1000_top1000",
+      "label": "R@1000 · pool top1000",
+      "factor": "B",
+      "parents": [
+        "T12"
+      ],
+      "change": "nộp CẢ pool top1000 (bài chẩn đoán)",
+      "status": "measured",
+      "compare": "DOCS_RECALL so với R@300 0.489 (mục 28)",
+      "note": "R@1000 0.5914 (h 42,8) vs R@300 0.489 (h 34,89): hạng 301-1000 thêm 7,9 gold/câu trên 700 doc = 1,1%/doc. 41% gold vẫn ngoài top1000 của bge-m3. Phụ: 90 chunk cho h_chunk 18,12 vs 19,16 ở 100, tức chunk 91-100 trúng 10,4%/chunk.",
+      "date": "2026-10-27",
+      "ref": "mục 29",
+      "verdict": "neutral",
+      "file": "data/fuse_d1000_c90_top1000_orig_ctop60+top300_cap2700.zip",
+      "scores": {
+        "final": 0.188,
+        "docs_f2": 0.1531,
+        "chunks_f2": 0.2228,
+        "docs_p": 0.0428,
+        "docs_r": 0.5914,
+        "chunks_p": 0.2013,
+        "chunks_r": 0.2706
+      }
     }
   ],
   "batches": {

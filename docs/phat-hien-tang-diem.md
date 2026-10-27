@@ -554,6 +554,70 @@ Chuẩn hoá điểm theo từng ngôn ngữ (T03, T04, nộp 2026-10-26, cùng 
 **Phán quyết: thua, đơn điệu theo λ.** Trên pool B (63% doc en/zh), chấm bằng câu cùng ngôn ngữ đưa doc en/zh lên, và chúng trúng ít hơn doc vi bị đẩy ra.
 Suy luận, chưa đo: hoặc gold chủ yếu là doc vi, hoặc điểm của reranker với câu dịch thổi phồng doc en/zh. T03 và T04 đã xác nhận: chuẩn hoá theo ngôn ngữ càng đẩy en/zh lên càng thua (T04 thua nặng nhất). T02 và phần en/zh của T11 cùng hướng rủi ro này.
 
+## 27. Hạ doc en/zh cũng thua; gộp doc vi của HyDE hoà (T20, T21, T22, nộp 2026-10-27)
+
+Đối chứng là SOTA `fuse_d160_c100_cap2700` (160 doc, 100 chunk, trần 2.700): `DOCS_F2` 0.2849, `CHUNKS_F2` 0.2275.
+`h = P × m`, với m = 160 doc và 100 chunk.
+
+T20 và T21 đi chung bài B2 (`fuse_d160_c100_top300_vifirst_ctop60+top300_cap2700_cvi`): T20 đọc tầng doc, T21 đọc tầng chunk.
+
+| thí nghiệm | tầng | `P` | `R` | `h` | `F2` | Δ |
+|---|---|---:|---:|---:|---:|---:|
+| SOTA | doc | 0.1740 | 0.4168 | 27,84 | 0.2849 | - |
+| T20 (doc vi trước) | doc | 0.1716 | 0.4117 | 27,46 | 0.2813 | −0,0036 |
+| T22 (+ doc vi của Bhyde) | doc | 0.1731 | 0.4209 | 27,70 | 0.2850 | +0,0001 |
+| SOTA | chunk | 0.1916 | 0.2835 | 19,16 | 0.2275 | - |
+| T21 (chunk doc vi trước) | chunk | 0.1896 | 0.2823 | 18,96 | 0.2262 | −0,0013 |
+
+T22 ra đúng `CHUNKS_F2` 0.2275 ở tầng không đổi, nên bài dựng đúng.
+
+**Phán quyết:**
+
+- T20 thua, T21 thua. Cùng với mục 26, thứ tự của reranker (câu gốc) đã đúng chỗ theo cả hai chiều: đẩy doc en/zh lên thua, hạ xuống cũng thua. Ngôn ngữ của doc không phải đòn bẩy để sắp lại.
+- T22 hoà. `R` tăng 0.0041 nhưng `P × m` giảm 0,14; khác biệt nằm trong nhiễu. Doc vi mà HyDE tìm thêm không thắng doc hạng thấp của pool top300.
+
+## 28. Nộp cả pool: top300 chỉ chứa 48,9% gold, pool B còn ít hơn (chẩn đoán, 2026-10-27)
+
+Nộp toàn bộ 300 doc của pool thì thứ hạng không còn ảnh hưởng, nên `DOCS_RECALL` là trần recall của pool.
+Tầng chunk giữ như SOTA và ra đúng 0.2275 ở cả hai bài, nên bài dựng đúng.
+
+| pool | `DOCS_P` | `DOCS_R` (= phủ) | `h` (P × 300) |
+|---|---:|---:|---:|
+| top300 (chỉ câu gốc) | 0.1163 | **0.4890** | 34,89 |
+| B (RRF câu gốc + câu sửa + en + zh) | 0.0883 | 0.3891 | 26,49 |
+
+Đối chiếu với SOTA trên cùng pool top300 (R@160 = 0.4168, h 27,84):
+
+- Ở 160 doc, reranker đã lấy được 0.4168 / 0.4890 = **85%** số gold có trong pool. Hạng 161-300 chỉ trúng (34,89 − 27,84) / 140 = 5,0% mỗi doc.
+- **51% gold không có trong pool top300.** Không reranker hay cách xếp lại nào với tới phần này.
+- Pool B phủ ÍT hơn top300 (0.3891 so với 0.4890): các lượt tìm bằng bản dịch en/zh chiếm chỗ của doc gold chứ không mở rộng phủ. Đây là lý do thật của mục 17, không phải do xếp hạng doc en/zh.
+
+**Phán quyết:** nghẽn chính là PHỦ, không phải xếp hạng.
+Ưu tiên những gì đưa thêm gold vào pool: pool sâu hơn (T12), embedding mới với text dài (`scripts/embed_q3e.py`), PRF theo cụm (T24).
+Những gì chỉ xếp lại trong pool (reranker mới, T23, cắt theo từng câu) chỉ còn tranh phần 15% gold đã có trong pool mà nằm dưới hạng 160.
+Lưu ý: corpus đã crawl được 82,2% (vi 88,7%), nên một phần gold có thể không bao giờ tìm được dù pool sâu tới đâu.
+
+## 29. Pool top1000 (T12): có thêm gold nhưng reranker kéo nhầm doc sâu lên, thua (2026-10-27)
+
+Pool top1000: câu gốc, dense bge-m3, `hnsw_ef` 1000, rerank bge-reranker-v2-m3 (740.429 cặp chấm trên Kaggle, 459.571 cặp dùng lại cache).
+
+| bài | m_doc | `DOCS_P` | `DOCS_R` | `h` | `DOCS_F2` |
+|---|---:|---:|---:|---:|---:|
+| SOTA (pool top300) | 160 | 0.1740 | 0.4168 | 27,84 | 0.2849 |
+| **T12** (pool top1000) | 160 | 0.1563 | 0.3919 | 25,01 | 0.2606 |
+| chẩn đoán R@300 (mục 28) | 300 | 0.1163 | 0.4890 | 34,89 | - |
+| chẩn đoán R@1000 | 1.000 | 0.0428 | 0.5914 | 42,80 | - |
+
+- Hạng truy xuất 301-1000 có thêm 42,80 − 34,89 = 7,9 gold mỗi câu, trên 700 doc: 1,1% mỗi doc.
+- Reranker đưa trung bình 55,5 doc mới (đo offline) vào top 160, và nhóm này trúng kém nhóm bị đẩy ra khoảng 5 điểm % (h giảm 2,83).
+- Ở 160 doc, T12 chỉ lấy được 0.3919 / 0.5914 = 66% số gold có trong pool, so với 85% của pool top300.
+- 41% gold vẫn nằm ngoài top 1.000 của bge-m3.
+
+**Phán quyết: T12 thua.** Đào sâu bằng cùng retriever và cùng reranker làm loãng: pool sâu có thêm gold nhưng thưa (1,1%), và bge-reranker không lọc được.
+Hai hướng còn lại: (1) giữ thông tin thứ hạng truy xuất khi xếp (doc hạng sâu phải có điểm rerank rất cao mới được vào), làm offline được trên pool top1000; (2) đổi tầng đầu (embedding mới) để gold lên hạng cao ngay từ khi tìm.
+
+Phụ: bài R@1000 nộp 90 chunk, `h_chunk` 0.2013 × 90 = 18,12 so với 19,16 ở 100 chunk: chunk hạng 91-100 vẫn trúng 10,4% mỗi chunk.
+
 ## Nguyên tắc rút ra về cách thí nghiệm
 
 Vòng 1 và 2 có 21 bài nộp đổi nhiều thứ cùng lúc và không rút ra được gì.

@@ -142,7 +142,9 @@ def read_done(out):
 def half_dtype(torch, device):
     if not device.startswith("cuda"):
         return torch.float32
-    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    # fp16 như local (CrossEncoderReranker, config fp16: true), để điểm cùng thang với cache.
+    # Không chọn bf16 theo is_bf16_supported(): T4 báo True (giả lập) nhưng bf16 lệch fp16 quá ngưỡng check.
+    return torch.float16
 
 
 def dtype_kw(dtype):
@@ -231,6 +233,7 @@ def check_scale(job, scorer, tol):
     need = {str(r["doc_id"]) for r in rows}
     docs = {str(r["doc_id"]): r["text"] for r in job.jsonl("docs.jsonl") if str(r["doc_id"]) in need}
     rows = [r for r in rows if str(r["doc_id"]) in docs and int(r["id"]) in queries]
+    print(f"[check] chấm lại {len(rows)} cặp đã chấm ở local...", flush=True)
     got = scorer.score([(queries[int(r["id"])], docs[str(r["doc_id"])]) for r in rows])
     diffs = [abs(g - r["expected"]) for g, r in zip(got, rows)]
     worst = max(diffs) if diffs else 0.0
@@ -261,7 +264,7 @@ def run(args):
           f"| {args.device}", flush=True)
     if not done and shard[0] == 0:
         check_scale(job, scorer, args.check_tol)
-    t0, scored, nan = time.time(), 0, 0
+    t0, scored, nan, last_print = time.time(), 0, 0, 0.0
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "a", encoding="utf-8") as fh:
         for i, (q, ds) in enumerate(work, 1):
@@ -277,7 +280,9 @@ def run(args):
             fh.flush()
             scored += len(ds)
             el = time.time() - t0
-            if i % 10 == 0 or i == len(work):
+            # câu đầu, rồi mỗi 60 giây hoặc mỗi 10 câu: im lặng lâu thì không biết đang chấm hay đang treo
+            if i == 1 or i % 10 == 0 or i == len(work) or el - last_print >= 60:
+                last_print = el
                 rate = scored / max(el, 1e-9)
                 print(f"[job] {i}/{len(work)} câu | {rate:.1f} cặp/s | còn ~{(n_pairs - scored) / max(rate, 1e-9) / 3600:.2f} giờ"
                       + (f" | {nan} điểm NaN" if nan else ""), flush=True)
