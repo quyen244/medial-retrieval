@@ -149,7 +149,14 @@ class Encoder:
         order = sorted(range(len(ids)), key=lambda i: -len(ids[i]))      # dài trước: OOM lộ ra ngay lô đầu
         out = np.zeros((len(ids), self.dim), dtype=np.float16)
         i = 0
+        total_tok, done_tok = sum(len(x) for x in ids), 0
+        t0 = t_log = time.time()
         while i < len(order):
+            if time.time() - t_log >= 60:      # tiến độ trong shard, mỗi phút một dòng
+                t_log = time.time()
+                rate = done_tok / max(t_log - t0, 1e-9)
+                print(f"[embed]   {i}/{len(order)} doc, {done_tok / total_tok:.0%} token, {rate:,.0f} token/s, "
+                      f"còn ~{(total_tok - done_tok) / max(rate, 1e-9) / 60:.0f} phút", flush=True)
             n = max(1, self.batch_tokens // len(ids[order[i]]))
             idx = order[i: i + n]
             try:
@@ -158,6 +165,7 @@ class Encoder:
                     h = self.model(**batch).last_hidden_state[:, -1, :]
                 out[idx] = h.float().cpu().numpy().astype(np.float16)
                 i += len(idx)
+                done_tok += sum(len(ids[j]) for j in idx)
             except torch.cuda.OutOfMemoryError:
                 torch.cuda.empty_cache()
                 if self.batch_tokens <= len(ids[order[i]]):

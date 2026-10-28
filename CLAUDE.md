@@ -138,3 +138,10 @@ số lượng nộp, hay cách xếp hạng - phần lớn đã thử rồi.
 
 - `scripts/phase0_assemble.py` lắp lại bài nộp từ dump top-50, không cần GPU.
 - `scripts/phase0_readout.py` suy ngược `h`, `g`, độ dốc `b` của `h(m)`, và `m*` từ một dòng leaderboard.
+
+## Chạy script: smoke trước, tối ưu bằng số đo thật
+
+- Mọi script nặng (embed, rerank, tìm trên toàn corpus...) phải chạy smoke trước: vài phút hoặc vài trăm mẫu (`--max-hours 0.1`, `--limit-*`).
+- Từ smoke, đọc số đo thật (doc/s, cặp/s, VRAM, thời gian còn lại) rồi mới chỉnh tham số (batch, số GPU, cách chia part) và chạy thật.
+- Tối ưu ở mức vừa đủ: chỉ đổi những gì số đo cho thấy là nút thắt rõ ràng, không thử nghiệm vòng vo hay ước lượng lý thuyết khi đã có số thật.
+- Mọi script chạy lâu phải in log tiến độ định kỳ (khoảng mỗi phút): đã làm bao nhiêu, tốc độ, thời gian còn lại. Không được im lặng tới khi xong một khối lớn.

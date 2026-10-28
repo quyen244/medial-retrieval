@@ -51,3 +51,4 @@ res/*_x/
 
 # Phase 1: doc text sinh lai bang scripts/build_doc_texts.py (~1.4 GB)
 data/doc_texts.jsonl
+.venv-vllm/
