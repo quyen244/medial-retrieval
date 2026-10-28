@@ -243,3 +243,46 @@ def test_local_runner_starts_one_worker_per_gpu_with_done_dirs(tmp_path, monkeyp
     assert len(cmds) == 2 and cmds[1][cmds[1].index("--worker") + 1] == "1/2"
     assert cmds[0][cmds[0].index("--done-dirs") + 1:] == [os.path.join("a", "q3e4b"), os.path.join("b", "q3e4b")]
     assert cmds[0][cmds[0].index("--model") + 1] == "Qwen/Qwen3-Embedding-4B"
+
+
+def test_local_runner_supports_vllm_backend_and_custom_python(tmp_path, monkeypatch):
+    import subprocess
+    cmds = []
+
+    class P:
+        stdout = iter(["ok\n"])
+
+        def __init__(self, cmd, **kw):
+            cmds.append(cmd)
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(subprocess, "Popen", P)
+    codes = ke.main(["local", "--job", "j.zip", "--out", str(tmp_path / "o"), "--backend", "vllm",
+                     "--python", "/opt/venv/bin/python", "--gpus", "1", "--gpu-memory-utilization", "0.85"])
+    assert cmds[0][0] == "/opt/venv/bin/python"
+    assert "--backend" in cmds[0] and cmds[0][cmds[0].index("--backend") + 1] == "vllm"
+    assert "--gpu-memory-utilization" in cmds[0] and cmds[0][cmds[0].index("--gpu-memory-utilization") + 1] == "0.85"
+
+
+def test_vllm_encoder_mock_pooling():
+    enc = ej.VLLMEncoder.__new__(ej.VLLMEncoder)
+    enc.TokensPrompt = None
+    enc.vllm_batch_size = 2
+    enc.dim = 3
+
+    class MockOutput:
+        def __init__(self, vec):
+            self.outputs = type("Out", (), {"embedding": vec})()
+
+    class MockLLM:
+        def embed(self, prompts, use_tqdm=False):
+            return [MockOutput([float(len(p["prompt_token_ids"])), 1.0, 0.0]) for p in prompts]
+
+    enc.llm = MockLLM()
+    ids = [[1, 2], [1, 2, 3], [1], [1, 2, 3, 4]]
+    v = enc.encode_ids(ids)
+    assert v.shape == (4, 3)
+    assert v.dtype == np.float16
+    assert v[:, 0].tolist() == [2.0, 3.0, 1.0, 4.0]

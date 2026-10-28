@@ -167,6 +167,100 @@ class Encoder:
         return out
 
 
+class VLLMEncoder:
+    """Qwen3-Embedding qua vLLM runner='pooling'.
+    Tokenize bằng AutoTokenizer (cùng logic với HF Encoder để đảm bảo exact match token sequence + <|endoftext|>),
+    sau đó truyền prompt_token_ids vào llm.embed().
+    Batch theo sub-batch để kiểm soát bộ nhớ trên 16GB VRAM."""
+
+    def __init__(self, model, device, dtype, max_tokens, batch_tokens, gpu_memory_utilization=0.9, vllm_batch_size=500):
+        import os
+        if device.startswith("cuda:"):
+            os.environ["CUDA_VISIBLE_DEVICES"] = device.split(":")[1]
+        elif device == "cuda":
+            os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+        os.environ.setdefault("VLLM_USE_FLASHINFER_SAMPLER", "0")
+
+        from transformers import AutoConfig, AutoTokenizer
+        self.tok = AutoTokenizer.from_pretrained(model, padding_side="left")
+        try:
+            cfg = AutoConfig.from_pretrained(model)
+            self.dim = getattr(cfg, "hidden_size", 2048)
+        except Exception:
+            self.dim = 2048
+
+        self.eod = self.tok.convert_tokens_to_ids("<|endoftext|>")
+        probe = self.tok("a", add_special_tokens=True)["input_ids"]
+        self.auto_eod = bool(probe) and probe[-1] == self.eod
+        self.device = device
+        self.max_tokens = max_tokens
+        self.batch_tokens = batch_tokens
+        self.vllm_batch_size = vllm_batch_size
+
+        from vllm import LLM
+        try:
+            from vllm.inputs import TokensPrompt
+            self.TokensPrompt = TokensPrompt
+        except ImportError:
+            try:
+                from vllm import TokensPrompt
+                self.TokensPrompt = TokensPrompt
+            except ImportError:
+                self.TokensPrompt = None
+
+        dt_map = {"fp16": "float16", "bf16": "bfloat16", "fp32": "float32"}
+        vllm_dtype = dt_map.get(dtype, dtype)
+
+        self.llm = LLM(
+            model=model,
+            runner="pooling",
+            dtype=vllm_dtype,
+            max_model_len=max_tokens,
+            gpu_memory_utilization=gpu_memory_utilization,
+            trust_remote_code=True,
+            tensor_parallel_size=1,
+        )
+
+    def ids(self, texts):
+        """Cắt còn max_tokens-1 rồi chắc chắn token cuối là <|endoftext|> (như HF Encoder)."""
+        out, cut = [], 0
+        for x in self.tok(texts, add_special_tokens=True)["input_ids"]:
+            if self.auto_eod and x and x[-1] == self.eod:
+                x = x[:-1]
+            cut += len(x) > self.max_tokens - 1
+            out.append(x[: self.max_tokens - 1] + [self.eod])
+        return out, cut
+
+    def encode_ids(self, ids):
+        """-> (np.float16 [n, dim] chưa chuẩn hoá, theo đúng thứ tự ids)."""
+        import numpy as np
+        out = []
+        for i in range(0, len(ids), self.vllm_batch_size):
+            chunk = ids[i : i + self.vllm_batch_size]
+            if self.TokensPrompt:
+                prompts = [self.TokensPrompt(prompt_token_ids=x) for x in chunk]
+            else:
+                prompts = [{"prompt_token_ids": x} for x in chunk]
+            outputs = self.llm.embed(prompts, use_tqdm=False)
+            for res in outputs:
+                emb = getattr(res, "outputs", res)
+                if isinstance(emb, list) and emb:
+                    emb = emb[0]
+                if hasattr(emb, "embedding"):
+                    vec = emb.embedding
+                elif isinstance(emb, dict) and "embedding" in emb:
+                    vec = emb["embedding"]
+                else:
+                    vec = emb
+                if hasattr(vec, "cpu"):
+                    vec = vec.cpu().numpy()
+                out.append(vec)
+        res_arr = np.array(out, dtype=np.float16)
+        if len(res_arr) > 0 and res_arr.ndim == 2:
+            self.dim = res_arr.shape[1]
+        return res_arr
+
+
 def format_query(query, instruction):
     return f"Instruct: {instruction}\nQuery: {query}"
 
@@ -190,7 +284,20 @@ def embed(args, enc=None):
     if not todo and not need_q:
         return
     t0 = time.time()
-    enc = enc or Encoder(args.model, args.device, args.dtype, args.max_tokens, args.batch_tokens)
+    if enc is None:
+        backend = getattr(args, "backend", "hf")
+        if backend == "vllm":
+            enc = VLLMEncoder(
+                args.model,
+                args.device,
+                args.dtype,
+                args.max_tokens,
+                args.batch_tokens,
+                gpu_memory_utilization=getattr(args, "gpu_memory_utilization", 0.9),
+                vllm_batch_size=getattr(args, "vllm_batch_size", 500),
+            )
+        else:
+            enc = Encoder(args.model, args.device, args.dtype, args.max_tokens, args.batch_tokens)
     load_s = time.time() - t0
     print(f"[embed] nạp model {load_s:.0f}s | {enc.dim} chiều | tokenizer tự thêm <|endoftext|>: {enc.auto_eod}", flush=True)
     deadline = time.time() + 3600 * args.max_hours
@@ -241,7 +348,8 @@ def embed(args, enc=None):
             d = by_lang.setdefault(r.get("language") or "?", [0, 0])
             d[0] += 1
             d[1] += n
-        stats = {"shard": s, "model": args.model, "device": args.device, "dtype": args.dtype, "n": len(rs),
+        stats = {"shard": s, "model": args.model, "backend": getattr(args, "backend", "hf"),
+                 "device": args.device, "dtype": args.dtype, "n": len(rs),
                  "tokens": sum(lens), "max_tokens": args.max_tokens, "truncated": cut, "nan": nan,
                  "tokenize_s": round(t_tok, 2), "encode_s": round(t_enc, 2), "load_model_s": round(load_s, 1),
                  "batch_tokens_end": enc.batch_tokens, "chars": sum(len(r["text"]) for r in rs),
@@ -324,6 +432,9 @@ def main(argv=None):
     p.add_argument("--reverse", action="store_true", help="làm shard từ cuối lên")
     p.add_argument("--done-dirs", nargs="*", default=[], help="thư mục output của các phiên khác: shard có ở đó thì bỏ qua")
     p.add_argument("--max-hours", type=float, default=11.0)
+    p.add_argument("--backend", choices=["hf", "vllm"], default="hf", help="backend sinh embedding: hf hoặc vllm")
+    p.add_argument("--gpu-memory-utilization", type=float, default=0.9, help="vLLM: tỉ lệ VRAM (mặc định 0.9)")
+    p.add_argument("--vllm-batch-size", type=int, default=500, help="vLLM: số prompt mỗi sub-batch")
     p.set_defaults(fn=embed)
     p = sub.add_parser("search")
     p.add_argument("--vecs", nargs="+", required=True, help="thư mục chứa docs_*.npy (nhiều phiên thì nhiều thư mục)")

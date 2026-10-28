@@ -280,12 +280,16 @@ def run_local(args):
     model, batch_tokens = MODELS[args.model]
     out = os.path.join(args.out, args.model)
     procs = []
+    py_exec = getattr(args, "python", None) or sys.executable
     for w in range(n_gpu):
-        cmd = [sys.executable, EMBED_JOB, "embed", "--job", args.job, "--model", model, "--out", out,
+        cmd = [py_exec, EMBED_JOB, "embed", "--job", args.job, "--model", model, "--out", out,
                "--part", args.part, "--worker", f"{w}/{n_gpu}", "--device", f"cuda:{w}", "--dtype", args.dtype,
                "--batch-tokens", str(args.batch_tokens or batch_tokens), "--max-tokens", str(args.max_tokens),
                "--max-hours", str(args.max_hours),
                *(["--reverse"] if args.reverse else []),
+               *(["--backend", args.backend] if getattr(args, "backend", None) else []),
+               *(["--gpu-memory-utilization", str(args.gpu_memory_utilization)] if getattr(args, "gpu_memory_utilization", None) else []),
+               *(["--vllm-batch-size", str(args.vllm_batch_size)] if getattr(args, "vllm_batch_size", None) else []),
                "--done-dirs", *[os.path.join(d, args.model) for d in args.done_dirs]]
         print(" ".join(cmd), flush=True)
         procs.append(subprocess.Popen(cmd, env=dict(os.environ, PYTHONUNBUFFERED="1"), stdout=subprocess.PIPE,
@@ -348,6 +352,10 @@ def main(argv=None):
     p.add_argument("--max-tokens", type=int, default=4096)
     p.add_argument("--max-hours", type=float, default=1000.0)
     p.add_argument("--reverse", action="store_true", help="làm từ shard cuối lên trong lúc Kaggle làm từ đầu xuống")
+    p.add_argument("--backend", choices=["hf", "vllm"], default="hf", help="backend: hf (mặc định) hoặc vllm")
+    p.add_argument("--python", default=None, help="đường dẫn python binary (vd. .venv-vllm/bin/python)")
+    p.add_argument("--gpu-memory-utilization", type=float, default=0.9, help="vLLM: tỉ lệ VRAM (mặc định 0.9)")
+    p.add_argument("--vllm-batch-size", type=int, default=500, help="vLLM: số prompt mỗi sub-batch")
     p.set_defaults(fn=run_local)
 
     p = sub.add_parser("report", help="tốc độ đo được + thời gian suy ra cho 1.003.391 doc")
