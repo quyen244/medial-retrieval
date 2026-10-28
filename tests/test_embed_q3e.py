@@ -68,3 +68,62 @@ def test_embed_upserts_truncated_vectors_with_stable_ids_and_resumes(tmp_path):
     vc, qc = c.colls["c"]
     assert vc["dense"].size == 2 and vc["dense"].on_disk and qc is not None
     assert c.opt == [0, 20000]                                                 # tắt index lúc nạp, bật lại cuối
+
+
+class P:
+    def __init__(self, d, s):
+        self.payload, self.score = {"doc_id": d}, s
+
+
+class SearchClient:
+    def __init__(self, n=5):
+        self.n, self.reqs = n, []
+
+    def count(self, coll, exact):
+        return type("C", (), {"count": self.n})()
+
+    def get_collection(self, coll):
+        vec = type("V", (), {"size": 2})()
+        return type("G", (), {"config": type("X", (), {"params": type("Y", (), {"vectors": {"dense": vec}})()})()})()
+
+    def query_batch_points(self, collection_name, requests, timeout):
+        self.reqs += requests
+        return [type("R", (), {"points": [P(7, 0.91), P(3, 0.5)]})() for _ in requests]
+
+
+def test_search_writes_corrected_candidates_with_instruction_queries(tmp_path, monkeypatch):
+    import scripts.kaggle_jobs as kj
+    c = tmp_path / "c.jsonl"
+    c.write_text(json.dumps({"id": 4, "query": "dau", "corrected_query": "đau"}) + "\n", encoding="utf-8")
+    monkeypatch.setattr(kj, "CORRECTED", str(c))
+    seen = []
+
+    class M(FakeModel):
+        def encode(self, texts, **kw):
+            seen.extend(texts)
+            return super().encode(texts)
+
+    out = tmp_path / "cands.jsonl"
+    ins = tmp_path / "q3e_instruct_p7.txt"
+    ins.write_text("X\n  y\n", encoding="utf-8")
+    args = eq.main.__globals__["argparse"].Namespace(
+        collection="c", qdrant_url="u", query_source="corrected", instruction_file=str(ins), top_k=2, hnsw_ef=8,
+        min_points=5, tag=None, out=str(out), limit=0, batch_size=4)
+    client = SearchClient()
+    eq.search(args, model=M(), client=client)
+    assert seen == ["Instruct: X y\nQuery: đau"]
+    assert len(client.reqs[0].query) == 2 and client.reqs[0].limit == 2
+    row = json.loads(out.read_text(encoding="utf-8"))
+    assert row == {"id": 4, "query": "đau", "retriever": "q3e4b_p7", "query_source": "corrected",
+                   "doc_ids": ["7", "3"], "scores": [0.91, 0.5]}
+    args.min_points = 6
+    import pytest
+    with pytest.raises(SystemExit):
+        eq.search(args, model=M(), client=client)
+
+
+def test_repo_instruction_files_load_and_tag():
+    for n in ("p1", "p2"):
+        path = f"prompts/q3e_instruct_{n}.txt"
+        assert eq.instruction_tag(path) == n and "\n" not in eq.load_instruction(path)
+    assert eq.load_instruction(eq.INSTRUCTION_FILE).startswith("Given a Vietnamese medical question, retrieve medically")

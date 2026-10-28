@@ -264,3 +264,66 @@ def test_half_dtype_is_fp16_like_local_cache_even_if_bf16_reported():
                 return True
     assert rj.half_dtype(FakeTorch, "cuda:0") == "fp16"
     assert rj.half_dtype(FakeTorch, "cpu") == "fp32"
+
+
+# ------------------------------------------------------------------ câu sửa (qcorr, retr-pool)
+def test_load_queries_corrected_falls_back_to_original_when_empty(tmp_path, monkeypatch):
+    q, c = tmp_path / "q.jsonl", tmp_path / "c.jsonl"
+    write_jsonl(q, [{"id": 1, "query": "dau dau"}, {"id": 2, "query": "sốt"}])
+    write_jsonl(c, [{"id": 1, "query": "dau dau", "corrected_query": "đau đầu"}, {"id": 2, "query": "sốt", "corrected_query": ""}])
+    monkeypatch.setattr(kj, "QUERIES", str(q))
+    monkeypatch.setattr(kj, "CORRECTED", str(c))
+    assert kj.load_queries("orig") == [(1, "dau dau"), (2, "sốt")]
+    assert kj.load_queries("corrected") == [(1, "đau đầu"), (2, "sốt")]
+    assert kj.load_queries("corrected", limit=1) == [(1, "đau đầu")]
+
+
+def write_cands(tmp, source="corrected"):
+    path = str(tmp / "cands.jsonl")
+    kj.write_candidates(path, [(1, "đau dạ dày sửa", ["30", "10", "11"], [0.8, 0.7, 0.6]),
+                               (2, "sốt cao sửa", ["20"], [0.5])], "q3e4b", source)
+    return path
+
+
+def test_qcorr_job_scores_every_pair_with_corrected_query_and_merges(env, monkeypatch):
+    tmp, _, texts = env
+    monkeypatch.setattr(kj, "PHASE1", str(tmp))
+    kj.main(["qcorr", "--owner", "me", "--candidates", write_cands(tmp), "--model", kj.QWEN4B, "--doc-texts", texts])
+    name = "top300_q3e4b_qwen3r4b_qcorr"
+    zpath = os.path.join(kj.DATASET_DIR, f"{name}.zip")
+    with zipfile.ZipFile(zpath) as z:
+        assert "check.jsonl" not in z.namelist()                              # không cache thì không có gì để kiểm
+        meta = json.loads(z.read("meta.json"))
+        qs = [json.loads(line) for line in z.read("queries.jsonl").decode().splitlines()]
+        pairs = [json.loads(line) for line in z.read("pairs.jsonl").decode().splitlines()]
+    assert meta["kind"] == "qwen3" and meta["query_source"] == "corrected"
+    assert [q["query"] for q in qs] == ["đau dạ dày sửa", "sốt cao sửa"]
+    assert pairs == [{"id": 1, "doc_ids": ["30", "10", "11"]}, {"id": 2, "doc_ids": ["20"]}]
+    assert "NEED_QWEN = True" in open(os.path.join(kj.ROOT, f"kernel_{name}", "run.py"), encoding="utf-8").read()
+
+    run_fake(monkeypatch, ["--job", zpath, "--out", os.path.join(kj.OUT, name, f"scores_{name}.s0of1.jsonl")])
+    kj.main(["merge", "--name", name, "--doc-texts", texts])
+    rows = [json.loads(line) for line in open(tmp / f"doc_{name}_pool.jsonl", encoding="utf-8")]
+    cs = rows[0]["candidates"]
+    assert rows[0]["query"] == "đau dạ dày sửa" and rows[0]["rr_model"] == kj.QWEN4B
+    assert [c["doc_id"] for c in cs] == ["30", "11", "10"]                    # điểm giả = độ dài text
+    assert cs[0]["found_by"] == ["q3e4b_qcorr"] and cs[0]["rrf_score"] == round(1 / 61, 5)
+
+
+def test_qcorr_refuses_candidates_searched_with_original_query(env):
+    tmp, _, texts = env
+    with pytest.raises(SystemExit, match="corrected"):
+        kj.main(["qcorr", "--owner", "me", "--candidates", write_cands(tmp, "orig"), "--doc-texts", texts])
+
+
+def test_retr_pool_keeps_retrieval_order_and_scores(env, monkeypatch):
+    tmp, _, texts = env
+    monkeypatch.setattr(kj, "PHASE1", str(tmp))
+    kj.main(["retr-pool", "--candidates", write_cands(tmp), "--doc-texts", texts])
+    rows = [json.loads(line) for line in open(tmp / "doc_top3_q3e4b_retr_qcorr_pool.jsonl", encoding="utf-8")]
+    assert rows[0]["rr_model"] == "retrieval:q3e4b"
+    assert [(c["doc_id"], c["rerank_score"], c["language"]) for c in rows[0]["candidates"]] == [
+        ("30", 0.8, "vi"), ("10", 0.7, "vi"), ("11", 0.6, "en")]
+    kj.main(["retr-pool", "--candidates", write_cands(tmp), "--doc-texts", texts, "--top-k", "2"])
+    rows = [json.loads(line) for line in open(tmp / "doc_top2_q3e4b_retr_qcorr_pool.jsonl", encoding="utf-8")]
+    assert [c["doc_id"] for c in rows[0]["candidates"]] == ["30", "10"]

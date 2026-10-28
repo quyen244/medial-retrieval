@@ -27,7 +27,22 @@ pip install kaggle
 
 Tài khoản phải xác minh số điện thoại thì kernel mới bật được GPU và internet (cần internet để tải model từ HuggingFace).
 
-## T14: Qwen3-Reranker-4B chấm lại pool top300
+## Thí nghiệm sau T12: câu sửa (`qcorr`)
+
+Từ sau T12, câu SỬA (`corrected_query`) dùng cho cả tìm lẫn rerank, chấm mọi cặp từ đầu, không cache (CLAUDE.md).
+Lệnh `qcorr` tìm top300 bằng bge-m3 với câu sửa, ghi file ứng viên `data/tmp/phase1/cands_top300_bgem3_qcorr.jsonl`, rồi dựng job.
+Truyền `--candidates` để dùng lại đúng tập ứng viên đó (T14 bằng Qwen) hoặc ứng viên từ `embed_q3e search`.
+
+```bash
+python -m scripts.kaggle_jobs qcorr --owner <kaggle-user>
+python -m scripts.kaggle_jobs qcorr --owner <kaggle-user> --model Qwen/Qwen3-Reranker-4B --candidates data/tmp/phase1/cands_top300_bgem3_qcorr.jsonl
+python -m scripts.kaggle_jobs retr-pool --candidates data/tmp/phase1/cands_top300_bgem3_qcorr.jsonl
+```
+
+Tên job và pool tự sinh: `top300_<bộ tìm>_<reranker>_qcorr` -> `data/tmp/phase1/doc_top300_<bộ tìm>_<reranker>_qcorr_pool.jsonl`.
+`retr-pool` cho pool chỉ có điểm tìm, dùng cho cổng R@300 (nộp `m_doc = 300`, thứ tự không ảnh hưởng recall).
+
+## T14 cũ: Qwen3-Reranker-4B chấm lại pool top300 (câu gốc, chỉ để tái lập)
 
 ```bash
 python -m scripts.kaggle_jobs t14 --owner <kaggle-user>

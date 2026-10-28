@@ -47,7 +47,19 @@ POOLS = {"top60": f"{D}/doc_d35_c44_top60_bge_pool.jsonl", "top300": f"{D}/doc_t
          "B": f"{D}/doc_top300_bge_vcorr_enzh_pool.jsonl", "C": f"{D}/doc_top300_bge_vcorr_enzh_asp_pool.jsonl",
          "Bhyde": f"{D}/doc_top300_bge_vcorr_enzh_hyde_pool.jsonl",
          "top1000": f"{D}/doc_top1000_bge_pool.jsonl",                 # T12
-         "top300q4b": f"{D}/doc_top300_qwen3r4b_pool.jsonl"}           # T14, scripts/rerank_pool.py
+         "top300q4b": f"{D}/doc_top300_qwen3r4b_pool.jsonl",           # T14, scripts/rerank_pool.py
+         # câu SỬA cho tìm + rerank (CLAUDE.md 2026-10-27), scripts/kaggle_jobs.py qcorr / retr-pool.
+         # *_retr: chỉ có điểm tìm, chỉ dùng cho cổng R@300 (nộp m_doc = 300).
+         "qc_retr": f"{D}/doc_top300_bgem3_retr_qcorr_pool.jsonl",
+         "qc": f"{D}/doc_top300_bgem3_bge_qcorr_pool.jsonl",
+         "qc_q4b": f"{D}/doc_top300_bgem3_qwen3r4b_qcorr_pool.jsonl",
+         # q3e_p1 / q3e_p2: Qwen3-Embedding-4B, instruction prompts/q3e_instruct_p1.txt / _p2.txt
+         "q3e06b_p1_retr": f"{D}/doc_top300_q3e06b_p1_retr_qcorr_pool.jsonl",   # Qwen3-Embedding-0.6B
+         "q3e06b_p2_retr": f"{D}/doc_top300_q3e06b_p2_retr_qcorr_pool.jsonl",
+         "q3e_p1_retr": f"{D}/doc_top300_q3e4b_p1_retr_qcorr_pool.jsonl",
+         "q3e_p2_retr": f"{D}/doc_top300_q3e4b_p2_retr_qcorr_pool.jsonl",
+         "q3e_p1": f"{D}/doc_top300_q3e4b_p1_bge_qcorr_pool.jsonl",
+         "q3e_p1_q4b": f"{D}/doc_top300_q3e4b_p1_qwen3r4b_qcorr_pool.jsonl"}
 # Dump top-50 chunk mỗi câu từ index chunk `medical_documents` (Phase 0).
 CHUNK_EVIDENCE = "data/tmp/sub1200/D_ft_top50.jsonl"
 RRF_K = 60

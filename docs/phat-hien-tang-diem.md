@@ -618,6 +618,23 @@ Hai hướng còn lại: (1) giữ thông tin thứ hạng truy xuất khi xếp
 
 Phụ: bài R@1000 nộp 90 chunk, `h_chunk` 0.2013 × 90 = 18,12 so với 19,16 ở 100 chunk: chunk hạng 91-100 vẫn trúng 10,4% mỗi chunk.
 
+## 30. Cổng hạng truy xuất trên pool top1000 (T25a): hơn T12, vẫn thua SOTA (2026-10-27)
+
+`gate300_0.6`: doc có hạng truy xuất > 300 chỉ được giữ điểm bge khi điểm >= 0,6, còn lại bị trừ 1.
+
+| bài | m_doc | `DOCS_P` | `DOCS_R` | `h` | `DOCS_F2` |
+|---|---:|---:|---:|---:|---:|
+| SOTA (pool top300) | 160 | 0.1740 | 0.4168 | 27,84 | 0.2849 |
+| T12 (pool top1000, xếp thẳng theo bge) | 160 | 0.1563 | 0.3919 | 25,01 | 0.2606 |
+| **T25a** (pool top1000, gate300_0.6) | 160 | 0.1688 | 0.4128 | 27,01 | 0.2796 |
+
+- Đo offline: top 160 của T25a trùng SOTA 149,0 doc/câu; 11 doc khác, trong đó 10,0 doc từ hạng truy xuất > 300.
+- 11 doc đổi vào mang về ít hơn 0,83 hit so với 11 doc bị đẩy ra.
+- Doc bị đẩy ra là đuôi top 160 của SOTA; kể cả doc sâu có điểm bge >= 0,6 cũng trúng kém nhóm đó.
+
+**Phán quyết: T25a thua SOTA (−0,0053 DOCS_F2).** Cổng chặt hơn chỉ tiến dần về SOTA (gate300_0.9 còn 1,6 doc sâu), không có lợi để nộp.
+Cùng kết luận với mục 29: bge-reranker không tách được gold trong phần pool hạng 301-1000; muốn dùng pool sâu phải đổi reranker (T14) hoặc đổi tầng tìm.
+
 ## Nguyên tắc rút ra về cách thí nghiệm
 
 Vòng 1 và 2 có 21 bài nộp đổi nhiều thứ cùng lúc và không rút ra được gì.

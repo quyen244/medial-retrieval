@@ -8,6 +8,12 @@ snapshot index, không cần data/raw_documents: chỉ cần file job (câu hỏ
     python -m scripts.kaggle_jobs t14 --owner <kaggle-user>
     # T12: tìm top1000 trên Qdrant local, chỉ đưa lên Kaggle các cặp CHƯA có điểm bge trong các pool cũ
     python -m scripts.kaggle_jobs t12 --owner <kaggle-user>
+    # Sau T12 (CLAUDE.md, 2026-10-27): câu SỬA cho cả tìm lẫn rerank, chấm mọi cặp từ đầu, không cache
+    python -m scripts.kaggle_jobs qcorr --owner <kaggle-user>                     # tìm bge-m3 top300 + bge rerank
+    python -m scripts.kaggle_jobs qcorr --owner <kaggle-user> --model Qwen/Qwen3-Reranker-4B \
+        --candidates data/tmp/phase1/cands_top300_bgem3_qcorr.jsonl              # T14 trên cùng pool
+    python -m scripts.kaggle_jobs retr-pool --candidates data/tmp/phase1/cands_top300_bgem3_qcorr.jsonl
+                                                                                  # pool chỉ có điểm tìm, cho cổng R@300
     # sau khi tải điểm Kaggle về data/kaggle/out/<job>/
     python -m scripts.kaggle_jobs merge --name t14_qwen3r4b
     python -m scripts.kaggle_jobs merge --name t12_top1000_bge
@@ -36,6 +42,7 @@ OUT = f"{ROOT}/out"
 PHASE1 = "data/tmp/phase1"
 DOC_TEXTS = "data/doc_texts.jsonl"
 QUERIES = "data/queries/real_queries.jsonl"
+CORRECTED = "data/spelling/corrected_queries.jsonl"
 BGE = "BAAI/bge-reranker-v2-m3"
 QWEN4B = "Qwen/Qwen3-Reranker-4B"
 # Pool phase1 chấm bằng bge-reranker-v2-m3, len 1024, câu GỐC: điểm dùng lại được làm cache.
@@ -49,6 +56,26 @@ def jsonl(path):
         for line in fh:
             if line.strip():
                 yield json.loads(line)
+
+
+def load_queries(source, limit=0):
+    """[(qid, text)]: source "orig" = câu gốc, "corrected" = corrected_query (rỗng thì lấy câu gốc)."""
+    if source == "orig":
+        rows = [(int(r["id"]), r["query"]) for r in jsonl(QUERIES)]
+    elif source == "corrected":
+        rows = [(int(r["id"]), r.get("corrected_query") or r["query"]) for r in jsonl(CORRECTED)]
+    else:
+        raise ValueError(source)
+    return rows[: limit or None]
+
+
+def write_candidates(path, hits, retriever, query_source):
+    """hits [(qid, query, [doc_id], [điểm tìm])] -> jsonl, định dạng chung cho mọi bộ tìm (bge-m3, q3e4b)."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        for qid, query, ids, scores in hits:
+            fh.write(json.dumps({"id": qid, "query": query, "retriever": retriever, "query_source": query_source,
+                                 "doc_ids": ids, "scores": scores}, ensure_ascii=False) + "\n")
 
 
 def fetch_texts(need, batch=500):
@@ -220,11 +247,13 @@ def report(name, zpath, kdir, kernel_id, n_q, n_pairs, n_docs):
     mb = os.path.getsize(zpath) / 1e6
     print(f"\n[{name}] {n_q} câu, {n_pairs:,} cặp, {n_docs:,} doc -> {zpath} ({mb:.0f} MB)")
     print("Bước tiếp (chạy ở máy có kaggle CLI):")
-    print(f"  kaggle datasets create -p {DATASET_DIR}        # lần đầu; lần sau: kaggle datasets version -p {DATASET_DIR} -m \"{name}\"")
-    print(f"  kaggle kernels push -p {kdir}_smoke      # chạy thử 20 câu/GPU, đọc tốc độ trong log trước khi chạy thật")
-    print(f"  kaggle kernels push -p {kdir}")
+    # kaggle CLI trên Windows hỏng với "/" trong -p (đường dẫn tạm .kaggle-uploads), nên in theo dấu của hệ điều hành
+    ds, kd, od = (os.path.normpath(p) for p in (DATASET_DIR, kdir, f"{OUT}/{name}"))
+    print(f"  kaggle datasets create -p {ds}        # lần đầu; lần sau: kaggle datasets version -p {ds} -m \"{name}\"")
+    print(f"  kaggle kernels push -p {kd}_smoke      # chạy thử 20 câu/GPU, đọc tốc độ trong log trước khi chạy thật")
+    print(f"  kaggle kernels push -p {kd}")
     print(f"  kaggle kernels status {kernel_id}")
-    print(f"  kaggle kernels output {kernel_id} -p {OUT}/{name} --file-pattern \"scores_.*jsonl|log_.*txt\"")
+    print(f"  kaggle kernels output {kernel_id} -p {od} --file-pattern \"scores_.*jsonl|log_.*txt\"")
     print(f"  python -m scripts.kaggle_jobs merge --name {name}")
 
 
@@ -262,21 +291,21 @@ def check_full_index(n, coll):
                          f"Xem `docker ps`, bật container của r2ai rồi chạy lại.")
 
 
-def search_qdrant(top_k, ef, limit=0, batch=16):
-    """Câu gốc -> [(qid, query, [doc_id theo hạng])], dense BGE-M3 trên medical_docs như pool top300."""
+def search_qdrant(top_k, ef, limit=0, batch=16, source="orig"):
+    """-> [(qid, query, [doc_id theo hạng], [điểm])], dense BGE-M3 trên medical_docs như pool top300."""
     from qdrant_client import QdrantClient
 
     from scripts.phase1_doc_retrieve import request
     from src.rag.config import load_config
     from src.rag.embedding import BgeM3Embedder
     cfg = load_config(None, [])
-    qs = list(jsonl(QUERIES))[: limit or None]
+    qs = load_queries(source, limit)
     client = QdrantClient(url=cfg.get("qdrant.url", "http://localhost:6333"), timeout=cfg.get("qdrant.timeout", 600))
     coll = cfg.get("qdrant.collection_docs", "medical_docs")
     if not client.collection_exists(coll):
         raise SystemExit(f"Qdrant chưa có collection {coll}: bật Docker và restore (scripts/restore_medical_docs.sh)")
     check_full_index(client.count(coll, exact=True).count, coll)
-    vecs = BgeM3Embedder().encode([q["query"] for q in qs], batch_size=cfg.get("retrieval.doc.encode_batch", 8))
+    vecs = BgeM3Embedder().encode([t for _, t in qs], batch_size=cfg.get("retrieval.doc.encode_batch", 8))
     out = []
     for i in range(0, len(qs), batch):
         part = qs[i: i + batch]
@@ -285,9 +314,10 @@ def search_qdrant(top_k, ef, limit=0, batch=16):
             for v in vecs[i: i + batch]],
             # hạn phía server mặc định 60s; ngay sau restore/khởi động, vector còn nằm trên đĩa nên lô đầu có thể vượt
             timeout=cfg.get("qdrant.timeout", 600))
-        for q, r in zip(part, res):
-            out.append((int(q["id"]), q["query"], [str((p.payload or {}).get("doc_id")) for p in r.points]))
-        print(f"[t12] tìm {min(i + batch, len(qs))}/{len(qs)}", end="\r", flush=True)
+        for (qid, text), r in zip(part, res):
+            out.append((qid, text, [str((p.payload or {}).get("doc_id")) for p in r.points],
+                        [round(float(p.score), 6) for p in r.points]))
+        print(f"[tìm] {min(i + batch, len(qs))}/{len(qs)}", end="\r", flush=True)
     print()
     return out
 
@@ -295,9 +325,9 @@ def search_qdrant(top_k, ef, limit=0, batch=16):
 def plan_deep(hits, cache, n_check, seed=7):
     """Ứng viên + cặp cần chấm + mẫu kiểm thang điểm. Tách khỏi Qdrant để test được."""
     pairs, check = {}, []
-    for qid, _, ids in hits:
+    for qid, _, ids, *_ in hits:
         pairs[qid] = [d for d in ids if (qid, d) not in cache]
-    cached = [(qid, d) for qid, _, ids in hits for d in ids if (qid, d) in cache]
+    cached = [(qid, d) for qid, _, ids, *_ in hits for d in ids if (qid, d) in cache]
     rnd = random.Random(seed)
     for qid, d in rnd.sample(cached, min(n_check, len(cached))):
         check.append({"id": qid, "doc_id": d, "expected": cache[(qid, d)]})
@@ -311,21 +341,88 @@ def build_deep(args):
     os.makedirs(WORK, exist_ok=True)
     cand_path = f"{WORK}/{args.name}.candidates.jsonl"
     with open(cand_path, "w", encoding="utf-8") as fh:
-        for qid, query, ids in hits:
+        for qid, query, ids, *_ in hits:
             fh.write(json.dumps({"id": qid, "query": query, "doc_ids": ids}, ensure_ascii=False) + "\n")
     need = {d for ds in pairs.values() for d in ds} | {r["doc_id"] for r in check}
     texts = fetch_texts(need)
-    queries = {qid: query for qid, query, _ in hits}
+    queries = {qid: query for qid, query, *_ in hits}
     meta = {"model": BGE, "kind": "cross-encoder", "max_length": 1024, "top_docs": args.top_docs,
             "hnsw_ef": args.hnsw_ef}
     zpath = write_job(args.name, meta, queries, pairs, texts, check)
     save_local(args.name, {"mode": "deep", "candidates": cand_path, "cache": args.cache, "rr_model": BGE,
                            "rr_len": 1024, "out_pool": args.out_pool})
-    n_cached = sum(len(ids) for _, _, ids in hits) - sum(map(len, pairs.values()))
+    n_cached = sum(len(ids) for _, _, ids, *_ in hits) - sum(map(len, pairs.values()))
     print(f"[t12] {n_cached:,} cặp đã có điểm bge trong pool cũ, không chấm lại")
     dataset_id = ensure_dataset_meta(args.owner, args.dataset_slug)
     kdir, kid = write_kernels(args.name, args.owner or dataset_id.split("/")[0], dataset_id, False)
     report(args.name, zpath, kdir, kid, len(queries), sum(map(len, pairs.values())), len(texts))
+
+
+# ------------------------------------------------------------------ câu sửa (sau T12)
+def rr_tag(model):
+    return {BGE: "bge", QWEN4B: "qwen3r4b"}.get(model) or model.split("/")[-1].lower()
+
+
+def read_candidates(path, top_k=0):
+    """File của write_candidates -> (hits, retriever). Từ chối file tìm bằng câu gốc: trộn hai biến số."""
+    rows = list(jsonl(path))
+    src = {r.get("query_source") for r in rows}
+    if src != {"corrected"}:
+        raise SystemExit(f"{path}: query_source {src}, cần 'corrected' (CLAUDE.md, quyết định 2026-10-27)")
+    retr = {r.get("retriever") for r in rows}
+    if len(retr) != 1:
+        raise SystemExit(f"{path}: nhiều bộ tìm trong một file {retr}")
+    hits = [(int(r["id"]), r["query"], r["doc_ids"][: top_k or None], r["scores"][: top_k or None]) for r in rows]
+    return hits, retr.pop()
+
+
+def build_qcorr(args):
+    """Câu SỬA cho cả tìm lẫn rerank; chấm MỌI cặp từ đầu, không cache, không check (CLAUDE.md 2026-10-27).
+
+    Không có --candidates: tìm dense bge-m3 trên medical_docs bằng câu sửa và ghi file ứng viên để dùng lại
+    (T14 trên cùng pool, cổng R@300 qua retr-pool). Có --candidates (vd. từ `embed_q3e search`): dùng nguyên."""
+    if args.candidates:
+        hits, retriever = read_candidates(args.candidates, args.top_docs)
+    else:
+        hits, retriever = search_qdrant(args.top_docs, args.hnsw_ef, args.limit, source="corrected"), "bgem3"
+        cands = args.cands_out or f"{PHASE1}/cands_top{args.top_docs}_bgem3_qcorr.jsonl"
+        write_candidates(cands, hits, retriever, "corrected")
+        print(f"[qcorr] ứng viên -> {cands}")
+    stem = f"top{args.top_docs}_{retriever}_{rr_tag(args.model)}_qcorr"
+    name, out_pool = args.name or stem, args.out_pool or f"{PHASE1}/doc_{stem}_pool.jsonl"
+    os.makedirs(WORK, exist_ok=True)
+    cand_path = f"{WORK}/{name}.candidates.jsonl"
+    with open(cand_path, "w", encoding="utf-8") as fh:
+        for qid, query, ids, _ in hits:
+            fh.write(json.dumps({"id": qid, "query": query, "doc_ids": ids}, ensure_ascii=False) + "\n")
+    pairs = {qid: list(ids) for qid, _, ids, _ in hits}
+    texts = fetch_texts({d for ds in pairs.values() for d in ds})
+    kind = "qwen3" if "qwen3-reranker" in args.model.lower() else "cross-encoder"
+    meta = {"model": args.model, "kind": kind, "max_length": args.max_length, "query_source": "corrected",
+            "retriever": retriever, "top_docs": args.top_docs}
+    zpath = write_job(name, meta, {qid: q for qid, q, *_ in hits}, pairs, texts)
+    save_local(name, {"mode": "deep", "candidates": cand_path, "cache": [], "found_by": [f"{retriever}_qcorr"],
+                      "rr_model": args.model, "rr_len": args.max_length, "out_pool": out_pool})
+    dataset_id = ensure_dataset_meta(args.owner, args.dataset_slug)
+    kdir, kid = write_kernels(name, args.owner or dataset_id.split("/")[0], dataset_id, kind == "qwen3")
+    report(name, zpath, kdir, kid, len(hits), sum(map(len, pairs.values())), len(texts))
+
+
+def retr_pool(args):
+    """Pool chỉ có điểm TÌM (rerank_score = điểm cosine), cho cổng R@K: nộp m_doc = cả pool thì thứ tự
+    không ảnh hưởng DOCS_RECALL, nên không cần reranker. Đừng dùng pool này cho cách xếp dựa trên logit."""
+    hits, retriever = read_candidates(args.candidates, args.top_k)    # file 3.000 + --top-k 300 = pool top300
+    k = max(len(ids) for _, _, ids, _ in hits)
+    out = args.out or f"{PHASE1}/doc_top{k}_{retriever}_retr_qcorr_pool.jsonl"
+    meta_of = doc_meta(args.doc_texts, {d for _, _, ids, _ in hits for d in ids})
+    with open(out, "w", encoding="utf-8") as fh:
+        for qid, query, ids, scores in hits:
+            cs = [{"doc_id": d, "language": meta_of.get(d, {}).get("language"), "title": meta_of.get(d, {}).get("title"),
+                   "rrf_score": round(1.0 / (60 + rank), 5), "found_by": [f"{retriever}_qcorr"], "rerank_score": s}
+                  for rank, (d, s) in enumerate(zip(ids, scores), 1)]
+            fh.write(json.dumps({"id": qid, "query": query, "rr_model": f"retrieval:{retriever}", "rr_len": 0,
+                                 "candidates": cs}, ensure_ascii=False) + "\n")
+    print(f"[retr-pool] {len(hits)} câu, top {k} -> {out}")
 
 
 # ------------------------------------------------------------------ gộp
@@ -380,7 +477,8 @@ def merge_rows(info, scores, cache=None, meta_of=None):
                     continue
                 m = meta_of.get(d, {})
                 new.append({"doc_id": d, "language": m.get("language"), "title": m.get("title"),
-                            "rrf_score": round(1.0 / (60 + rank), 5), "found_by": ["orig"], "rerank_score": float(s)})
+                            "rrf_score": round(1.0 / (60 + rank), 5),
+                            "found_by": info.get("found_by", ["orig"]), "rerank_score": float(s)})
             new.sort(key=lambda c: -c["rerank_score"])
             rows.append({"id": q, "query": r["query"], "rr_model": info["rr_model"], "rr_len": info["rr_len"],
                          "candidates": new})
@@ -417,7 +515,7 @@ def main(argv=None):
     common.add_argument("--dataset-slug", default="vibiomir-rerank-jobs")
     common.add_argument("--doc-texts", default=DOC_TEXTS)
 
-    p = sub.add_parser("t14", parents=[common], help="chấm lại một pool bằng reranker khác")
+    p = sub.add_parser("t14", parents=[common], help="chấm lại một pool bằng reranker khác (câu GỐC; thí nghiệm mới dùng qcorr)")
     p.add_argument("--pool", default=f"{PHASE1}/doc_top300_bge_pool.jsonl")
     p.add_argument("--model", default=QWEN4B)
     p.add_argument("--max-length", type=int, default=1024)
@@ -435,6 +533,24 @@ def main(argv=None):
     p.add_argument("--name", default="t12_top1000_bge")
     p.add_argument("--out-pool", default=f"{PHASE1}/doc_top1000_bge_pool.jsonl")
     p.set_defaults(fn=build_deep)
+
+    p = sub.add_parser("qcorr", parents=[common], help="câu sửa cho tìm + rerank, chấm mọi cặp từ đầu (sau T12)")
+    p.add_argument("--candidates", default=None, help="file ứng viên có sẵn (embed_q3e search, hoặc lần qcorr trước)")
+    p.add_argument("--model", default=BGE)
+    p.add_argument("--max-length", type=int, default=1024)
+    p.add_argument("--top-docs", type=int, default=300)
+    p.add_argument("--hnsw-ef", type=int, default=512, help=">= top-docs")
+    p.add_argument("--limit", type=int, default=0, help="chỉ N câu đầu, để thử (chỉ khi tự tìm)")
+    p.add_argument("--cands-out", default=None)
+    p.add_argument("--name", default=None, help="mặc định top<K>_<bộ tìm>_<reranker>_qcorr")
+    p.add_argument("--out-pool", default=None)
+    p.set_defaults(fn=build_qcorr)
+
+    p = sub.add_parser("retr-pool", parents=[common], help="pool chỉ có điểm tìm, cho chẩn đoán R@K")
+    p.add_argument("--candidates", required=True)
+    p.add_argument("--top-k", type=int, default=0, help="chỉ giữ K doc đầu mỗi câu (0 = cả file)")
+    p.add_argument("--out", default=None)
+    p.set_defaults(fn=retr_pool)
 
     p = sub.add_parser("merge", parents=[common], help="gộp điểm Kaggle thành pool")
     p.add_argument("--name", required=True)

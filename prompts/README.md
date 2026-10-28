@@ -68,3 +68,11 @@ Xem lịch sử:
 ```bash
 mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
+
+---
+
+## `q3e_instruct_p1.txt`, `q3e_instruct_p2.txt`
+
+Instruction cho câu hỏi khi tìm bằng Qwen3-Embedding-4B (`scripts/embed_q3e.py search --instruction-file`).
+Không có biến; code gộp xuống dòng thành dấu cách và ghép thành `Instruct: <file>\nQuery: <câu sửa>`.
+Hậu tố tên file (`p1`, `p2`) đi vào tên file ứng viên và tên pool, nên mỗi bản instruction một file riêng, đừng sửa đè.

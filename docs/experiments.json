@@ -1112,6 +1112,43 @@
         "chunks_p": 0.2013,
         "chunks_r": 0.2706
       }
+    },
+    {
+      "id": "T25a",
+      "label": "T25a · gate300_0.6 trên top1000",
+      "factor": "B",
+      "parents": [
+        "T12"
+      ],
+      "change": "pool top1000, doc hạng truy xuất >300 chỉ được vào khi điểm bge >= 0,6 (gate300_0.6)",
+      "status": "measured",
+      "compare": "DOCS_F2 0.2849 (SOTA) · CHUNKS_F2 phải ra 0.2275",
+      "note": "DOCS_F2 0.2796 vs 0.2849 (−0,0053), h_doc 27,01 vs 27,84; hơn T12 (0.2606) nhưng vẫn dưới SOTA. Chỉ 11 doc/câu khác SOTA (trùng 149,0/160), 10,0 trong đó từ hạng truy xuất >300, và nhóm này mang về ít hơn 0,83 hit so với nhóm bị đẩy ra: kể cả doc sâu có điểm bge >= 0,6 cũng trúng kém đuôi top 160 của SOTA.",
+      "date": "2026-10-27",
+      "ref": "mục 30",
+      "verdict": "lose",
+      "file": "data/fuse_d160_c100_top1000_gate300_0.6_ctop60+top300_cap2700.zip",
+      "scores": {
+        "final": 0.2535,
+        "docs_f2": 0.2796,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.1688,
+        "docs_r": 0.4128,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      }
+    },
+    {
+      "id": "T25b",
+      "label": "T25b · rlog1 trên top300",
+      "factor": "B",
+      "parents": [
+        "fuse_d160_c100_cap2700"
+      ],
+      "change": "pool top300, khoá xếp = logit(điểm bge) − 1·log(hạng truy xuất)",
+      "status": "planned",
+      "compare": "DOCS_F2 0.2849 (SOTA) · CHUNKS_F2 phải ra 0.2275",
+      "command": "python -m scripts.fuse_submission --doc-pool top300 --methods rlog1 --m-doc 160 --m-chunk 100 --cap 2700 --out-dir data --chunk-pool top60 top300"
     }
   ],
   "batches": {

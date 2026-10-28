@@ -1,0 +1,1 @@
+Given a Vietnamese medical question, retrieve medically relevant documents in Vietnamese, English, or Chinese that provide information needed to answer the question. Match the underlying medical meaning, including diseases, symptoms, medications, diagnostic findings, and clinical conditions, regardless of language or wording

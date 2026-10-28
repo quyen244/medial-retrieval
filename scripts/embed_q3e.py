@@ -21,6 +21,8 @@ Payload chỉ có doc_id, language, domain, title, char_count. Text đưa vào r
     python -m scripts.embed_q3e embed --input data/doc_texts_8k_sample.jsonl --limit 10000 --collection medical_docs_q3e4b_smoke --recreate
     python -m scripts.embed_q3e texts --out data/doc_texts_8k.jsonl
     python -m scripts.embed_q3e embed --input data/doc_texts_8k.jsonl --recreate
+    python -m scripts.embed_q3e search                      # câu sửa + P1 -> cands_top300_q3e4b_p1_qcorr.jsonl
+    python -m scripts.embed_q3e search --instruction-file prompts/q3e_instruct_p2.txt    # -> ..._q3e4b_p2_qcorr.jsonl
 """
 import argparse
 import json
@@ -34,11 +36,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 MODEL = "Qwen/Qwen3-Embedding-4B"
 COLLECTION = "medical_docs_q3e4b"
-QUERY_INSTRUCTION = ("Given a Vietnamese medical question, retrieve medical documents in Vietnamese, English or "
-                     "Chinese that are relevant to the question")
+# Instruction cho câu hỏi nằm ở file txt, mỗi bản một file; hậu tố tên file (p1, p2) đi vào tên pool.
+INSTRUCTION_FILE = "prompts/q3e_instruct_p1.txt"
 
 
-def format_query(query, instruction=QUERY_INSTRUCTION):
+def load_instruction(path):
+    """File txt -> một dòng instruction (gộp xuống dòng thành dấu cách)."""
+    text = " ".join(open(path, encoding="utf-8").read().split())
+    if not text:
+        raise SystemExit(f"{path} rỗng")
+    return text
+
+
+def instruction_tag(path):
+    """prompts/q3e_instruct_p1.txt -> p1."""
+    return os.path.splitext(os.path.basename(path))[0].rsplit("_", 1)[-1].lower()
+
+
+def format_query(query, instruction):
     """Định dạng câu hỏi theo model card Qwen3-Embedding. Doc encode nguyên văn, không instruction."""
     return f"Instruct: {instruction}\nQuery: {query}"
 
@@ -202,6 +217,48 @@ def embed(args, model=None, client=None):
     return done
 
 
+# ------------------------------------------------------------------ bước 3: tìm
+def search(args, model=None, client=None):
+    """Câu hỏi (mặc định câu sửa) + instruction -> top K trên collection q3e -> file ứng viên cho
+    `kaggle_jobs retr-pool` (cổng R@K) và `kaggle_jobs qcorr --candidates` (rerank trên Kaggle)."""
+    from qdrant_client import QdrantClient, models
+
+    from scripts.kaggle_jobs import load_queries, write_candidates
+    client = client or QdrantClient(url=args.qdrant_url, timeout=600)
+    n = client.count(args.collection, exact=True).count
+    if n < args.min_points:
+        raise SystemExit(f"{args.collection} chỉ có {n:,} điểm (cần >= {args.min_points:,}); "
+                         f"collection thử thì thêm --min-points 0")
+    dim = client.get_collection(args.collection).config.params.vectors["dense"].size
+    qs = load_queries(args.query_source, args.limit)
+    instruction = load_instruction(args.instruction_file)
+    tag = args.tag or f"q3e4b_{instruction_tag(args.instruction_file)}"
+    print(f"[search] instruction ({args.instruction_file}): {instruction}", flush=True)
+    model = model or load_encoder(args)
+    t = time.time()
+    vecs = truncate_normalize(model.encode([format_query(q, instruction) for _, q in qs], batch_size=args.batch_size,
+                                           normalize_embeddings=False, convert_to_numpy=True, show_progress_bar=False), dim)
+    print(f"[search] encode {len(qs)} câu ({args.query_source}) trong {time.time() - t:.0f}s, {dim} chiều", flush=True)
+    # int8: tìm trên bản lượng tử rồi chấm lại top bằng vector gốc (oversampling x2) cho thứ tự đúng.
+    # ef < top_k thì đuôi danh sách kém chính xác; ef >= top_k thì top 300 của lượt tìm 3.000 cũng là top 300 đúng.
+    params = models.SearchParams(hnsw_ef=max(args.hnsw_ef or 0, args.top_k), quantization=models.QuantizationSearchParams(
+        rescore=True, oversampling=2.0))
+    hits = []
+    for i in range(0, len(qs), 16):
+        part = qs[i: i + 16]
+        res = client.query_batch_points(collection_name=args.collection, timeout=600, requests=[
+            models.QueryRequest(query=v.tolist(), using="dense", limit=args.top_k, params=params, with_payload=["doc_id"])
+            for v in vecs[i: i + 16]])
+        for (qid, q), r in zip(part, res):
+            hits.append((qid, q, [str(p.payload["doc_id"]) for p in r.points], [round(float(p.score), 6) for p in r.points]))
+        print(f"[search] {min(i + 16, len(qs))}/{len(qs)}", end="\r", flush=True)
+    qtag = "qcorr" if args.query_source == "corrected" else "orig"
+    out = args.out or f"data/tmp/phase1/cands_top{args.top_k}_{tag}_{qtag}.jsonl"
+    write_candidates(out, hits, tag, args.query_source)
+    print(f"\n[search] {len(hits)} câu, top {args.top_k} -> {out}")
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -233,6 +290,26 @@ def main(argv=None):
     p.add_argument("--recreate", action="store_true")
     p.add_argument("--full-ram", action="store_true", help="giữ vector float32 trong RAM, không lượng tử hoá int8")
     p.set_defaults(fn=embed)
+
+    p = sub.add_parser("search", help="tìm top K cho 1.200 câu hỏi, ghi file ứng viên (cần GPU)")
+    p.add_argument("--collection", default=COLLECTION)
+    p.add_argument("--qdrant-url", default="http://localhost:6333")
+    p.add_argument("--model", default=MODEL)
+    p.add_argument("--query-source", choices=["corrected", "orig"], default="corrected",
+                   help="corrected theo quyết định 2026-10-27 (CLAUDE.md)")
+    p.add_argument("--instruction-file", default=INSTRUCTION_FILE, help="prompts/q3e_instruct_p1.txt, ..._p2.txt")
+    p.add_argument("--top-k", type=int, default=300)
+    p.add_argument("--hnsw-ef", type=int, default=512, help="tự nâng lên bằng top-k nếu nhỏ hơn")
+    p.add_argument("--min-points", type=int, default=1_000_000, help="chặn tìm nhầm collection thử hay nạp dở")
+    p.add_argument("--tag", default=None, help="tên bộ tìm ghi vào file và tên pool (mặc định q3e4b_<p1|p2>)")
+    p.add_argument("--out", default=None)
+    p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--max-tokens", type=int, default=512, help="câu hỏi ngắn; 512 token là dư")
+    p.add_argument("--dtype", choices=["bf16", "fp16", "fp32"], default="bf16")
+    p.add_argument("--device", default="cuda")
+    p.add_argument("--flash-attn", action="store_true")
+    p.add_argument("--batch-size", type=int, default=16)
+    p.set_defaults(fn=search)
 
     args = ap.parse_args(argv)
     args.fn(args)
