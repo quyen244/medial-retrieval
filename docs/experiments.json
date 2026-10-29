@@ -1374,11 +1374,12 @@
         "T29"
       ],
       "change": "pool top1000 bge (câu sửa) → top3000 bge exact (numpy) rồi RRF w0,6 với q3e, en/zh x0,4; rerank bge (dùng lại điểm T29)",
-      "compare": "DOCS_F2 của T29 0.2866",
-      "command": "python -m scripts.t31_pool_expand t32 && python -m scripts.rerank_pool --pool data/T31_pool_expand/T32a_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --reuse data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl --out data/T31_pool_expand/T32a_bge_pool.jsonl",
-      "note": "37,3 doc/câu từ hạng bge >1000 vào top300 (chặn dưới). Hạng 1001-3000 mới 84% có vector q3e: cần embed 170k doc (~9,9 giờ) mới công bằng. Rerank bge đã chạy 2026-10-29 để cache.",
+      "compare": "DOCS_F2 của T29 0.2866 · chunk SOTA đầu bài 2.700 (CHUNKS_F2 phải ra 0.2275)",
+      "command": "python -m scripts.t31_pool_expand t32 && python -m scripts.rerank_pool --pool data/T31_pool_expand/T32a_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --reuse data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl --out data/T31_pool_expand/T32a_bge_pool.jsonl && python -m scripts.fuse_submission --doc-pool data/T31_pool_expand/T32a_bge_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --chunk-pool top60 top300 --out-dir data/T31_pool_expand --window head --name d_T32a_c_head2700",
+      "note": "37,3 doc/câu từ hạng bge >1000 vào top300 (chặn dưới). Hạng 1001-3000 mới 84% có vector q3e: cần embed 170k doc (~9,9 giờ) mới công bằng. Rerank bge đã chạy 2026-10-29 để cache. Rerank xong: 14,8 doc/câu khác top160 T29 (12,8 ở hạng bge >1000). Zip sẵn sàng nộp. Lưu ý: q3e thiếu vector cho 16% doc hạng 1001-3000 -> chặn dưới, nên nộp sau khi embed đủ.",
       "status": "pending",
-      "factor": "B"
+      "factor": "B",
+      "file": "data/T31_pool_expand/d_T32a_c_head2700.zip"
     },
     {
       "id": "T32b",
@@ -1387,11 +1388,40 @@
         "T32a"
       ],
       "change": "union dense3000 + sparse1000 + C0, RRF q0,5/d0,35/s0,15 với q3e; rerank bge (reuse T29 + T32a)",
-      "compare": "DOCS_F2 của T32a",
-      "command": "python -m scripts.rerank_pool --pool data/T31_pool_expand/T32b_q0.5_d0.35_s0.15_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --reuse data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl data/T31_pool_expand/T32a_bge_pool.jsonl --out data/T31_pool_expand/T32b_bge_pool.jsonl",
-      "note": "993 doc/câu ngoài dense top1000; union chỉ 66% có vector q3e -> chặn dưới.",
+      "compare": "DOCS_F2 của T32a · CHUNKS_F2 phải ra 0.2275",
+      "command": "python -m scripts.rerank_pool --pool data/T31_pool_expand/T32b_q0.5_d0.35_s0.15_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --reuse data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl data/T31_pool_expand/T32a_bge_pool.jsonl --out data/T31_pool_expand/T32b_bge_pool.jsonl && python -m scripts.fuse_submission --doc-pool data/T31_pool_expand/T32b_bge_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --chunk-pool top60 top300 --out-dir data/T31_pool_expand --window head --name d_T32b_c_head2700",
+      "note": "993 doc/câu ngoài dense top1000; union chỉ 66% có vector q3e -> chặn dưới. Rerank xong: 21,9 doc/câu khác top160 T29 (16,6 ở hạng bge >1000). Zip sẵn sàng nộp. Lưu ý: union chỉ 66% có vector q3e -> chặn dưới, nên nộp sau khi embed đủ.",
       "status": "pending",
-      "factor": "B"
+      "factor": "B",
+      "file": "data/T31_pool_expand/d_T32b_c_head2700.zip"
+    },
+    {
+      "id": "T33a",
+      "label": "T33a · mở rộng cụm A (tâm 20 seed)",
+      "factor": "B",
+      "parents": [
+        "T29"
+      ],
+      "status": "pending",
+      "change": "pool T29 + 50 doc/câu gần TÂM CỤM (trung bình vector bge-m3 của top20 sau rerank), en/zh x0,4; bge rerank chỉ doc mới",
+      "compare": "DOCS_F2 của T29 0.2866 · CHUNKS_F2 phải ra 0.2275",
+      "command": "python -m scripts.cluster_expand a --k 20 --add 50 && python -m scripts.rerank_pool --pool data/T31_pool_expand/cluster_a_k20_add50_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --reuse data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl --out data/T31_pool_expand/cluster_a_k20_add50_bge_pool.jsonl && python -m scripts.fuse_submission --doc-pool data/T31_pool_expand/cluster_a_k20_add50_bge_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --chunk-pool top60 top300 --out-dir data/T31_pool_expand --window head --name d_clusterA_k20_c_head2700",
+      "file": "data/T31_pool_expand/d_clusterA_k20_c_head2700.zip",
+      "note": "Không cần q3e: vector bge-m3 đủ 1M doc (docs_dense_f16.npy), 10s CPU. 50 doc mới/câu (26,7 ngoài bge top1000), cosine với tâm median 0,81; sau rerank 16,1 doc mới/câu vào top160 (9,0 ngoài bge top1000), vi 92%."
+    },
+    {
+      "id": "T33b",
+      "label": "T33b · mở rộng cụm B (kNN từng seed, bỏ phiếu)",
+      "factor": "B",
+      "parents": [
+        "T33a"
+      ],
+      "status": "pending",
+      "change": "như T33a nhưng mỗi seed lấy 100 hàng xóm, doc được nhiều seed chọn xếp trên (số phiếu x trọng số ngôn ngữ)",
+      "compare": "DOCS_F2 của T33a",
+      "command": "python -m scripts.cluster_expand b --k 20 --knn 100 --add 50 && python -m scripts.rerank_pool --pool data/T31_pool_expand/cluster_b_k20_knn100_add50_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --engine vllm --reuse data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl data/T31_pool_expand/cluster_a_k20_add50_bge_pool.jsonl --out data/T31_pool_expand/cluster_b_k20_knn100_add50_bge_pool.jsonl && python -m scripts.fuse_submission --doc-pool data/T31_pool_expand/cluster_b_k20_knn100_add50_bge_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --chunk-pool top60 top300 --out-dir data/T31_pool_expand --window head --name d_clusterB_k20_c_head2700",
+      "file": "data/T31_pool_expand/d_clusterB_k20_c_head2700.zip",
+      "note": "24.000 seed, 248s CPU (lô 1.200 seed). 49,8 doc mới/câu, 30,7 ngoài bge top1000, vi 96%, số phiếu median 5/20. Rerank bge vLLM 24.408 cặp mới (71 cặp/s): 16,5 doc/câu khác top160 T29 (10,0 ngoài bge top1000); trùng top160 T33a 153,6/160. Zip sẵn sàng nộp."
     }
   ],
   "batches": {

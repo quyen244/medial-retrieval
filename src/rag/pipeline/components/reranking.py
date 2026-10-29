@@ -28,11 +28,13 @@ QWEN3_INSTRUCTION = ("Given a medical question written in Vietnamese, judge whet
 def make_reranker(model_name: str = DEFAULT_RERANKER_MODEL, max_length: int = 1024, fp16: bool = True,
                   engine: str = "hf"):
     """Chọn lớp theo tên model: họ Qwen3-Reranker là LM nhân quả, còn lại là cross-encoder.
-    engine="vllm" chỉ áp cho Qwen3-Reranker (0.6B/4B/8B): cùng template, cùng điểm P(yes), chạy bằng vLLM."""
+    engine="vllm": Qwen3-Reranker (cùng template, cùng điểm P(yes)) hoặc cross-encoder (cùng token như HF)."""
     if "qwen3-reranker" in model_name.lower() and engine == "vllm":
         return VLLMQwen3Reranker(model_name=model_name, max_length=max_length)
     if "qwen3-reranker" in model_name.lower():
         return Qwen3Reranker(model_name=model_name, max_length=max_length, fp16=fp16)
+    if engine == "vllm":
+        return VLLMCrossEncoderReranker(model_name=model_name, max_length=max_length)
     return CrossEncoderReranker(model_name=model_name, max_length=max_length, fp16=fp16)
 
 
@@ -83,6 +85,38 @@ class CrossEncoderReranker(Reranker):
     def get_params(self) -> Dict[str, Any]:
         return {"type": "cross-encoder", "model_name": self.model_name, "max_length": self.max_length,
                 "fp16": self.fp16}
+
+
+class VLLMCrossEncoderReranker(CrossEncoderReranker):
+    """Cross-encoder (bge-reranker-v2-m3) chạy trên vLLM runner pooling. Token hoá cặp bằng chính tokenizer HF
+    (truncation=True, max_length) như CrossEncoder.predict, rồi đưa id vào classify, nên điểm phải khớp lớp HF
+    tới sai số fp. vLLM không độn lô và gom lô liên tục: lợi khi độ dài cặp lệch nhau nhiều."""
+
+    def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, max_length: int = 1024, gpu_mem: float = 0.3):
+        import threading
+
+        from transformers import AutoTokenizer
+        from vllm import LLM
+
+        self.model_name, self.max_length, self.fp16 = model_name, max_length, True
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.llm = LLM(model=model_name, runner="pooling", max_model_len=max_length, dtype="float16",
+                       gpu_memory_utilization=gpu_mem)
+        self._lock = threading.Lock()
+
+    def score_pairs(self, pairs: List[tuple]) -> List[float]:
+        if not pairs:
+            return []
+        from vllm.inputs import TokensPrompt
+
+        with self._lock:
+            ids = self.tokenizer([q for q, _ in pairs], [d for _, d in pairs], truncation=True,
+                                 max_length=self.max_length)["input_ids"]
+            outs = self.llm.classify([TokensPrompt(prompt_token_ids=x) for x in ids], use_tqdm=False)
+        return [float(o.outputs.probs[0]) for o in outs]
+
+    def get_params(self) -> Dict[str, Any]:
+        return {"type": "cross-encoder-vllm", "model_name": self.model_name, "max_length": self.max_length}
 
 
 @ComponentRegistry.register("reranker", "qwen3")

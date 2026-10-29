@@ -75,7 +75,7 @@ def main():
                     help="instruction cho Qwen3-Reranker (dòng <Instruct>: ...); mặc định QWEN3_INSTRUCTION")
     ap.add_argument("--doc-text", choices=["payload", "q3e"], default="payload",
                     help="payload: text 1.500 ký tự của medical_docs; q3e: text 8.000 ký tự như bản embed q3e4b")
-    ap.add_argument("--engine", choices=["hf", "vllm"], default="hf", help="vllm: chỉ cho Qwen3-Reranker")
+    ap.add_argument("--engine", choices=["hf", "vllm"], default="hf", help="vllm: Qwen3-Reranker hoặc cross-encoder (bge), cùng token như hf")
     ap.add_argument("--queries", default=None, help="jsonl có corrected_query: chấm bằng câu sửa thay câu trong pool")
     add_config_args(ap)
     args = ap.parse_args(["--set", "rerank.model=Qwen/Qwen3-Reranker-4B"] + sys.argv[1:])
