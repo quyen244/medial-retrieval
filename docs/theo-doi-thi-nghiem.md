@@ -45,7 +45,7 @@ câu hỏi ──> (A) chuỗi đem đi tìm ──> (B) truy xuất, ra pool �
 | T28a | Gộp RRF hạng tìm bge + q3e4b có phủ hơn từng cái không | xếp pool top1000 theo RRF w=0,5 | RRF k=60 | h 34,89 (bge) | **đã đo 2026-10-29**: h 36,48, R@300 0.5285, FINAL 0.2525 |
 | T28b | Hạ điểm doc en/zh trong RRF có lợi không | T28a + en/zh x0,8 | RRF k=60 | h của T28a | **đã đo 2026-10-29**: h 36,57 (+0,09), hoà |
 | T29 | Pool RRF (câu sửa, vi 90%) + bge rerank có thắng SOTA không | pool top300 bge -> top300 RRF w=0,6 trong top1000 bge câu sửa, en/zh x0,4, rerank bge câu sửa, d160 | RRF k=60 | `DOCS_F2` 0.2849 | **đã đo 2026-10-29 (B3)**: `DOCS_F2` 0.2866, h_doc 27,60 vs 27,84: hoà |
-| T30 | Qwen3-Reranker-0.6B thay bge trên cùng pool T29 | bge-reranker -> Qwen3-Reranker-0.6B (vLLM, instruction y khoa đa ngữ) | - | `DOCS_F2` 0.2866 (T29) | đang chạy; nộp chung chunk SOTA đầu bài 2.700 (B4) |
+| T30 | Qwen3-Reranker-0.6B thay bge trên cùng pool T29 | bge-reranker -> Qwen3-Reranker-0.6B (vLLM, instruction y khoa đa ngữ) | - | `DOCS_F2` 0.2866 (T29) | **đã đo 2026-10-29 (B4)**: `DOCS_F2` 0.2768, h_doc 26,62 vs 27,60: thua bge; CHUNKS_F2 0.2275 đúng dự kiến |
 | T27 | Pool q3e4b + bge rerank có thắng SOTA không | pool top300 bge-m3 -> pool top300 q3e4b, rerank câu sửa | - | `DOCS_F2` 0.2849 | chờ T26a/b, cần GPU |
 
 ### C. Rerank (model mới, query dịch để chấm, chuẩn hoá theo ngôn ngữ)

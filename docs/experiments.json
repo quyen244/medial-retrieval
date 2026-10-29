@@ -1328,11 +1328,25 @@
         "T29"
       ],
       "change": "bge-reranker-v2-m3 → Qwen3-Reranker-0.6B (vLLM, câu sửa, instruction y khoa đa ngữ) trên CÙNG pool top300 của T29",
-      "status": "pending",
+      "status": "measured",
       "compare": "DOCS_F2 của T29 (B3) 0.2866 · CHUNKS_F2 phải ra 0.2275 (chunk đầu bài SOTA)",
       "command": "python -m scripts.rerank_pool --pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=Qwen/Qwen3-Reranker-0.6B --engine vllm --instruction \"Rank medical documents by their relevance to the query. Prioritize documents that directly answer the medical question across Vietnamese, English, and Chinese.\" --out data/T28_rrf_bge_q3e/w0.6_qc_vi90_q06_pool.jsonl",
-      "note": "Chốt 0.6B (4B không kịp giờ GPU). vLLM 42-54 cặp/s chung GPU; vLLM khớp HF corr 0,998, lệch TB 0,009. Prompt tự ghép đúng template qwen3_reranker.jinja; cảnh báo --chat-template của vLLM không áp dụng (gọi classify bằng token). Nộp chung chunk SOTA (B4).",
-      "batch": "B4"
+      "note": "Chốt 0.6B (4B không kịp giờ GPU). vLLM 42-54 cặp/s chung GPU; vLLM khớp HF corr 0,998, lệch TB 0,009. Prompt tự ghép đúng template qwen3_reranker.jinja; cảnh báo --chat-template của vLLM không áp dụng (gọi classify bằng token). Nộp chung chunk SOTA (B4). KẾT QUẢ (B4): CHUNKS_F2 0.2275 đúng như dự kiến (chunk trùng SOTA 1200/1200). DOCS_F2 0.2768 vs 0.2866 (T29, bge), h_doc 26,62 vs 27,60 (-0,98): Qwen 0.6B THUA bge. Qwen chấm en/zh cao (median 0,59/0,51 vs vi 0,12), top160 vi 86% vs 90%; thay ~42/160 doc so với T29.",
+      "batch": "B4",
+      "verdict": "lose",
+      "date": "2026-10-29",
+      "file": "data/T28_rrf_bge_q3e/d_w0.6q06_c_head2700.zip",
+      "m_doc": 160,
+      "m_chunk": 100,
+      "scores": {
+        "final": 0.2521,
+        "docs_f2": 0.2768,
+        "chunks_f2": 0.2275,
+        "docs_p": 0.1664,
+        "docs_r": 0.4167,
+        "chunks_p": 0.1916,
+        "chunks_r": 0.2835
+      }
     },
     {
       "id": "T27",
@@ -1421,7 +1435,7 @@
       ],
       "command": "python -m scripts.fuse_submission --doc-pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_q06_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --chunk-pool top60 top300 --out-dir data/T28_rrf_bge_q3e --window head --name d_w0.6q06_c_head2700",
       "file": "data/T28_rrf_bge_q3e/d_w0.6q06_c_head2700.zip",
-      "read": "Chunk giống hệt SOTA (CHUNKS_F2 phải ra 0.2275), nên DOCS_F2 so với 0.2866 (T29/B3) là tác dụng của Qwen 0.6B so với bge.",
+      "read": "Chunk giống hệt SOTA (CHUNKS_F2 phải ra 0.2275), nên DOCS_F2 so với 0.2866 (T29/B3) là tác dụng của Qwen 0.6B so với bge. ĐÃ NỘP 2026-10-29: FINAL 0.2521, DOCS_F2 0.2768 < 0.2866: Qwen 0.6B thua bge.",
       "check": "Như B3, thêm: relevant_chunks trùng bản dựng lại SOTA ở 1200/1200 câu."
     }
   }
