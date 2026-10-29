@@ -44,7 +44,8 @@ câu hỏi ──> (A) chuỗi đem đi tìm ──> (B) truy xuất, ra pool �
 | T26c | Trần recall trên 424k có vượt top1000 của bge không | như T26b, nộp 1.000 doc | - | `DOCS_RECALL` 0.5914 (R@1000) | **đã đo 2026-10-29**: R@1000 0.5744 < 0.5914, FINAL 0.1838 |
 | T28a | Gộp RRF hạng tìm bge + q3e4b có phủ hơn từng cái không | xếp pool top1000 theo RRF w=0,5 | RRF k=60 | h 34,89 (bge) | **đã đo 2026-10-29**: h 36,48, R@300 0.5285, FINAL 0.2525 |
 | T28b | Hạ điểm doc en/zh trong RRF có lợi không | T28a + en/zh x0,8 | RRF k=60 | h của T28a | **đã đo 2026-10-29**: h 36,57 (+0,09), hoà |
-| T29 | Pool RRF có thắng SOTA khi xếp bằng reranker không | pool top300 bge -> top300 RRF w=0,6, điểm bge-reranker cache (câu gốc), d160 | RRF k=60 | `DOCS_F2` 0.2849 | có zip `data/T28_rrf_bge_q3e/w0.6_rr_d160.zip`; nộp chung T18a (B3) |
+| T29 | Pool RRF (câu sửa, vi 90%) + bge rerank có thắng SOTA không | pool top300 bge -> top300 RRF w=0,6 trong top1000 bge câu sửa, en/zh x0,4, rerank bge câu sửa, d160 | RRF k=60 | `DOCS_F2` 0.2849 | **đã đo 2026-10-29 (B3)**: `DOCS_F2` 0.2866, h_doc 27,60 vs 27,84: hoà |
+| T30 | Qwen3-Reranker-0.6B thay bge trên cùng pool T29 | bge-reranker -> Qwen3-Reranker-0.6B (vLLM, instruction y khoa đa ngữ) | - | `DOCS_F2` 0.2866 (T29) | đang chạy; nộp chung chunk SOTA đầu bài 2.700 (B4) |
 | T27 | Pool q3e4b + bge rerank có thắng SOTA không | pool top300 bge-m3 -> pool top300 q3e4b, rerank câu sửa | - | `DOCS_F2` 0.2849 | chờ T26a/b, cần GPU |
 
 ### C. Rerank (model mới, query dịch để chấm, chuẩn hoá theo ngôn ngữ)
@@ -76,8 +77,8 @@ T01-T04 đo trên cấu hình cũ (pool B, d80). Thắng thì phải dựng lạ
 | T08 | Đỉnh `m_doc` | 160 -> 220 | - | `DOCS_F2` 0.2849 | **xong: thua**, 0.2810 (mục 24) |
 | T09a | Thêm chunk ngắn hơn theo luật kích thước | c100 trần 2.700 -> c120 trần 2.250, vẫn đầu bài | - | `CHUNKS_F2` 0.2275 | có lệnh |
 | T15 | Nén zip mạnh hơn có nhét thêm chunk không | `compresslevel` 6 -> 9 | - | đo dung lượng offline trước | chưa có code |
-| T18a | Cửa sổ đặt ở đoạn liên quan nhất | cửa sổ đầu bài -> cửa sổ lai ~2.100 ký tự sạch điểm bge cao nhất trong doc | bước 630 (overlap 70%) | `CHUNKS_F2` 0.2275 | có code, chờ smoke |
-| T18b | Chọn doc cho chunk list theo bằng chứng đoạn | 100 doc đầu chunk list -> 100/200 doc điểm cửa sổ cao nhất | - | `CHUNKS_F2` của bài thắng T18a | có code, dùng chung file cửa sổ T18a |
+| T18a | Cửa sổ đặt ở đoạn liên quan nhất | cửa sổ đầu bài -> cửa sổ lai ~2.100 ký tự sạch điểm bge cao nhất trong doc | bước 630 (overlap 70%) | `CHUNKS_F2` 0.2275 | **đã đo 2026-10-29 (B3)**: 0.2079, h_chunk 17,53 vs 19,16: thua, NHƯNG chunk ngắn hơn SOTA 17% (mean 1.781 vs 2.158) nên chưa kết luận về vị trí |
+| T18b | Chọn doc cho chunk list theo bằng chứng đoạn | 100 doc đầu chunk list -> 100/200 doc điểm cửa sổ cao nhất | - | `CHUNKS_F2` của bài thắng T18a | không nộp: B4 đổi sang chunk SOTA để đo riêng T30 |
 | T16 | Chunk list theo thứ tự doc của bài thắng T11/T12/T14 | `--chunk-pool` -> pool thắng | - | `CHUNKS_F2` 0.2275 | chờ T11/T12/T14 |
 
 T07 (cửa sổ căn theo dump chunk cũ) được thay bằng T18a, vì C0 cho bằng chứng tươi trên 1.000 chunk thay vì 50.
@@ -239,6 +240,9 @@ Cơ sở: Callan, SIGIR 1994 (bằng chứng cấp đoạn cho xếp hạng doc)
   đầu lùi về đầu dòng, cuối lùi về hết câu. Chấm bằng bge-reranker-v2-m3, câu sửa, max_length 1024.
 - Đo trên mẫu 3.000 doc: 3,93 cửa sổ/doc, độ dài median 2.045 (p10 1.911), 100% cửa sổ kết thúc ở hết câu/dòng, phủ 100% bài.
 - Nộp chung T29 ở phía doc (B3). Đối chứng: `CHUNKS_F2` 0.2275.
+- **Kết quả (2026-10-29)**: FINAL 0.2473, `CHUNKS_F2` 0.2079 (P 0,1753, R 0,2597), h_chunk 17,53 vs 19,16. 40,1/100 chunk dời khỏi đầu bài.
+  Nhiễu: chunk SOTA thực đo mean 2.158 / median 2.637 ký tự sạch (zip 98,9 MB), không phải ~2.078; cửa sổ T18a mean 1.781 / median 2.017 (zip 84,2 MB).
+  Thua có thể do vị trí, do ngắn hơn 17%, hoặc cả hai. Đo lại cho công bằng: cap ~2.700 sạch, ~1M cặp bge (~5 giờ GPU).
 - Kết quả: `CHUNKS_F2` = ___
 - Phán quyết: ___
 

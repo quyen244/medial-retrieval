@@ -982,11 +982,26 @@
           "takes": "chunk list (top60 + top300), 100 doc"
         }
       ],
-      "change": "cửa sổ đầu bài (2.700 thô ≈ 2.078 sạch) → cửa sổ ~2.100 ký tự SẠCH có điểm bge-reranker (câu sửa) cao nhất trong doc. Tiền xử lý cả bài rồi mới cắt; cửa sổ lai: bước 630 (overlap 70%), đầu lùi về đầu dòng, cuối lùi về hết câu",
-      "status": "pending",
+      "change": "cửa sổ đầu bài (2.700 thô, thực đo mean 2.158 sạch) → cửa sổ ~2.100 ký tự SẠCH có điểm bge-reranker (câu sửa) cao nhất trong doc. Tiền xử lý cả bài rồi mới cắt; cửa sổ lai: bước 630 (overlap 70%), đầu lùi về đầu dòng, cuối lùi về hết câu",
+      "status": "measured",
       "compare": "CHUNKS_F2 0.2275 · DOCS_F2 là của T29 (B3)",
       "command": "python -m scripts.chunk_windows --scorer bge --n-docs 200 && python -m scripts.fuse_submission --doc-pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2100 --chunk-pool top60 top300 --out-dir data/T18_chunk_window --window best --windows-file data/T18_chunk_window/bge_n200_cap2100_st630_windows.jsonl --name d_w0.6rr_c_t18a",
-      "note": "Không cần C0: chấm thẳng .md gốc của 100 doc. Mẫu 3.000 doc: 3,93 cửa sổ/doc, độ dài median 2.045, 100% cuối câu/dòng, phủ 100% bài; ~940k cặp cho n200."
+      "note": "Không cần C0: chấm thẳng .md gốc của 100 doc. Mẫu 3.000 doc: 3,93 cửa sổ/doc, độ dài median 2.045, 100% cuối câu/dòng, phủ 100% bài; ~940k cặp cho n200. KẾT QUẢ (B3): CHUNKS_F2 0.2079 vs 0.2275, h_chunk 17,53 vs 19,16 (-1,63). 40,1/100 chunk dời khỏi đầu bài. NHIỄU: chunk mean 1.781 vs 2.158 của SOTA (ngắn hơn 17%, zip 84 vs 99 MB) vì ước 2.700 thô ≈ 2.078 sạch là SAI. Chưa tách được vị trí hay độ dài; muốn đo lại phải dùng cap ~2.700 sạch.",
+      "date": "2026-10-29",
+      "file": "data/T18_chunk_window/d_w0.6rr_c_t18a.zip",
+      "m_doc": 160,
+      "m_chunk": 100,
+      "scores": {
+        "final": 0.2473,
+        "docs_f2": 0.2866,
+        "chunks_f2": 0.2079,
+        "docs_p": 0.1725,
+        "docs_r": 0.4287,
+        "chunks_p": 0.1753,
+        "chunks_r": 0.2597
+      },
+      "batch": "B3",
+      "verdict": "lose"
     },
     {
       "id": "T18b",
@@ -999,7 +1014,7 @@
       "status": "pending",
       "compare": "CHUNKS_F2 của T18a · DOCS_F2 là của T30 (B4)",
       "command": "python -m scripts.fuse_submission --doc-pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_q4b_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2100 --chunk-pool top60 top300 --out-dir data/T18_chunk_window --window best --windows-file data/T18_chunk_window/bge_n200_cap2100_st630_windows.jsonl --chunk-order window --name d_w0.6rr_c_t18b",
-      "note": "Dùng chung file cửa sổ n200 với T18a. Nếu MaxP tụt: thử trộn RRF hạng doc + hạng cửa sổ (chưa có code)."
+      "note": "KHÔNG NỘP: T18a thua và bị nhiễu độ dài, B4 đổi sang chunk đầu bài của SOTA để đo riêng T30. Dùng chung file cửa sổ n200 với T18a. Nếu MaxP tụt: thử trộn RRF hạng doc + hạng cửa sổ (chưa có code)."
     },
     {
       "id": "T09a",
@@ -1285,23 +1300,39 @@
         "fuse_d160_c100_cap2700"
       ],
       "change": "pool top300 bge (câu gốc) → top300 RRF w=0,6 của bge-m3 + q3e4b trong pool top1000 bge TÌM BẰNG CÂU SỬA, điểm doc en/zh x0,4 (pool vi 90%), rerank bge-reranker-v2-m3 bằng câu sửa, nộp 160 doc",
-      "status": "pending",
+      "status": "measured",
       "compare": "DOCS_F2 0.2849 (SOTA). Đổi cả pool lẫn câu hỏi: không tách được phần nào do cái nào",
       "command": "python -m scripts.bge_doc_pool && python -m scripts.kaggle_embed search ... --pool data/tmp/phase1/doc_top1000_bge_retr_qcorr_pool.jsonl --out data/tmp/phase1/cands_top1000_q3e4b_p1_own1000bgeqc_qcorr.jsonl && python -m scripts.fuse_retrieval --w-q3e 0.6 --lang-w en=0.4 zh=0.4 --bge-pool data/tmp/phase1/doc_top1000_bge_retr_qcorr_pool.jsonl --q3e-cands data/tmp/phase1/cands_top1000_q3e4b_p1_own1000bgeqc_qcorr.jsonl --out data/T28_rrf_bge_q3e/w0.6_qc_vi90_pool.jsonl && python -m scripts.rerank_pool --pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --out data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
-      "note": "Mọi thứ câu sửa (quyết định 2026-10-29). Pool bge câu sửa: câu không đổi trùng pool cũ 99,7%, câu đã sửa 88,5%. q3e có vector cho 99,1% doc của pool. Pool top300 không trọng số: vi 76%; en/zh x0,4 -> vi 90% en 5% zh 5% (theo yêu cầu). Nộp chung T18a (B3)."
+      "note": "Mọi thứ câu sửa (quyết định 2026-10-29). Pool bge câu sửa: câu không đổi trùng pool cũ 99,7%, câu đã sửa 88,5%. q3e có vector cho 99,1% doc của pool. Pool top300 không trọng số: vi 76%; en/zh x0,4 -> vi 90% en 5% zh 5% (theo yêu cầu). Nộp chung T18a (B3). KẾT QUẢ (B3): DOCS_F2 0.2866 vs 0.2849 (+0,0017), R 0,4287 vs 0,4168, nhưng h_doc 27,60 vs 27,84 (-0,24): hoà.",
+      "date": "2026-10-29",
+      "file": "data/T18_chunk_window/d_w0.6rr_c_t18a.zip",
+      "m_doc": 160,
+      "m_chunk": 100,
+      "scores": {
+        "final": 0.2473,
+        "docs_f2": 0.2866,
+        "chunks_f2": 0.2079,
+        "docs_p": 0.1725,
+        "docs_r": 0.4287,
+        "chunks_p": 0.1753,
+        "chunks_r": 0.2597
+      },
+      "batch": "B3",
+      "verdict": "neutral"
     },
     {
       "id": "T30",
-      "label": "T30 · như T29, rerank Qwen3-Reranker",
+      "label": "T30 · như T29, rerank Qwen3-Reranker-0.6B",
       "factor": "C",
       "parents": [
         "T29"
       ],
-      "change": "bge-reranker-v2-m3 → Qwen3-Reranker (câu sửa) trên CÙNG pool top300 của T29",
+      "change": "bge-reranker-v2-m3 → Qwen3-Reranker-0.6B (vLLM, câu sửa, instruction y khoa đa ngữ) trên CÙNG pool top300 của T29",
       "status": "pending",
-      "compare": "DOCS_F2 của T29 (B3)",
-      "command": "python -m scripts.rerank_pool --pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_pool.jsonl --queries data/spelling/corrected_queries.jsonl --out data/T28_rrf_bge_q3e/w0.6_qc_vi90_q4b_pool.jsonl",
-      "note": "4B đo 4 cặp/s (HF, chung GPU với T18); ~612 token/cặp, embed 4B cùng backbone đo 5.700 token/s trên vLLM -> 360k cặp ~11 giờ. Chờ chốt 4B / 0.6B. Nộp chung T18b (B4)."
+      "compare": "DOCS_F2 của T29 (B3) 0.2866 · CHUNKS_F2 phải ra 0.2275 (chunk đầu bài SOTA)",
+      "command": "python -m scripts.rerank_pool --pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=Qwen/Qwen3-Reranker-0.6B --engine vllm --instruction \"Rank medical documents by their relevance to the query. Prioritize documents that directly answer the medical question across Vietnamese, English, and Chinese.\" --out data/T28_rrf_bge_q3e/w0.6_qc_vi90_q06_pool.jsonl",
+      "note": "Chốt 0.6B (4B không kịp giờ GPU). vLLM 42-54 cặp/s chung GPU; vLLM khớp HF corr 0,998, lệch TB 0,009. Prompt tự ghép đúng template qwen3_reranker.jinja; cảnh báo --chat-template của vLLM không áp dụng (gọi classify bằng token). Nộp chung chunk SOTA (B4).",
+      "batch": "B4"
     },
     {
       "id": "T27",
@@ -1321,6 +1352,32 @@
       "status": "pending",
       "compare": "DOCS_F2 0.2849 (SOTA) · CHUNKS_F2 phải ra 0.2275",
       "note": "Chỉ làm khi T26a/T26b cho R@300 > 0.489. Chấm lại mọi cặp bằng câu sửa (không dùng cache câu gốc), cần GPU. Đối chứng sạch là pool qc (bge-m3 + câu sửa + bge rerank) nếu đã đo; không thì so SOTA và ghi rõ đổi hai biến (retriever + câu sửa)."
+    },
+    {
+      "id": "T32a",
+      "label": "T32a · pool dense top3000 + q3e RRF",
+      "parents": [
+        "T29"
+      ],
+      "change": "pool top1000 bge (câu sửa) → top3000 bge exact (numpy) rồi RRF w0,6 với q3e, en/zh x0,4; rerank bge (dùng lại điểm T29)",
+      "compare": "DOCS_F2 của T29 0.2866",
+      "command": "python -m scripts.t31_pool_expand t32 && python -m scripts.rerank_pool --pool data/T31_pool_expand/T32a_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --reuse data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl --out data/T31_pool_expand/T32a_bge_pool.jsonl",
+      "note": "37,3 doc/câu từ hạng bge >1000 vào top300 (chặn dưới). Hạng 1001-3000 mới 84% có vector q3e: cần embed 170k doc (~9,9 giờ) mới công bằng. Rerank bge đã chạy 2026-10-29 để cache.",
+      "status": "pending",
+      "factor": "B"
+    },
+    {
+      "id": "T32b",
+      "label": "T32b · thêm sparse + C0 vào pool",
+      "parents": [
+        "T32a"
+      ],
+      "change": "union dense3000 + sparse1000 + C0, RRF q0,5/d0,35/s0,15 với q3e; rerank bge (reuse T29 + T32a)",
+      "compare": "DOCS_F2 của T32a",
+      "command": "python -m scripts.rerank_pool --pool data/T31_pool_expand/T32b_q0.5_d0.35_s0.15_pool.jsonl --queries data/spelling/corrected_queries.jsonl --set rerank.model=BAAI/bge-reranker-v2-m3 --reuse data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl data/T31_pool_expand/T32a_bge_pool.jsonl --out data/T31_pool_expand/T32b_bge_pool.jsonl",
+      "note": "993 doc/câu ngoài dense top1000; union chỉ 66% có vector q3e -> chặn dưới.",
+      "status": "pending",
+      "factor": "B"
     }
   ],
   "batches": {
@@ -1354,19 +1411,18 @@
       ],
       "command": "python -m scripts.chunk_windows --scorer bge --n-docs 200 && python -m scripts.fuse_submission --doc-pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2100 --chunk-pool top60 top300 --out-dir data/T18_chunk_window --window best --windows-file data/T18_chunk_window/bge_n200_cap2100_st630_windows.jsonl --name d_w0.6rr_c_t18a",
       "file": "data/T18_chunk_window/d_w0.6rr_c_t18a.zip",
-      "read": "DOCS_F2 so với 0.2849 là kết quả T29; CHUNKS_F2 so với 0.2275 là kết quả T18a.",
+      "read": "DOCS_F2 so với 0.2849 là kết quả T29; CHUNKS_F2 so với 0.2275 là kết quả T18a. ĐÃ NỘP 2026-10-29: FINAL 0.2473 (doc hoà, chunk thua, chunk bị ngắn 17%).",
       "check": "Trước khi nộp: mỗi câu đúng 160 relevant_docs và 100 relevant_chunks, zip dưới 100 MB."
     },
     "B4": {
-      "name": "T30 + T18b",
+      "name": "T30 + chunk SOTA",
       "nodes": [
-        "T30",
-        "T18b"
+        "T30"
       ],
-      "command": "python -m scripts.fuse_submission --doc-pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_q4b_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2100 --chunk-pool top60 top300 --out-dir data/T18_chunk_window --window best --windows-file data/T18_chunk_window/bge_n200_cap2100_st630_windows.jsonl --chunk-order window --name d_w0.6rr_c_t18b",
-      "file": "data/T18_chunk_window/d_w0.6rr_c_t18b.zip",
-      "read": "DOCS_F2 so với B3 là kết quả T30 (reranker); CHUNKS_F2 so với B3 là kết quả T18b.",
-      "check": "Như B3."
+      "command": "python -m scripts.fuse_submission --doc-pool data/T28_rrf_bge_q3e/w0.6_qc_vi90_q06_pool.jsonl --methods orig --m-doc 160 --m-chunk 100 --cap 2700 --chunk-pool top60 top300 --out-dir data/T28_rrf_bge_q3e --window head --name d_w0.6q06_c_head2700",
+      "file": "data/T28_rrf_bge_q3e/d_w0.6q06_c_head2700.zip",
+      "read": "Chunk giống hệt SOTA (CHUNKS_F2 phải ra 0.2275), nên DOCS_F2 so với 0.2866 (T29/B3) là tác dụng của Qwen 0.6B so với bge.",
+      "check": "Như B3, thêm: relevant_chunks trùng bản dựng lại SOTA ở 1200/1200 câu."
     }
   }
 }
