@@ -59,7 +59,11 @@ POOLS = {"top60": f"{D}/doc_d35_c44_top60_bge_pool.jsonl", "top300": f"{D}/doc_t
          "q3e_p1_retr": f"{D}/doc_top300_q3e4b_p1_retr_qcorr_pool.jsonl",
          "q3e_p2_retr": f"{D}/doc_top300_q3e4b_p2_retr_qcorr_pool.jsonl",
          "q3e_p1": f"{D}/doc_top300_q3e4b_p1_bge_qcorr_pool.jsonl",
-         "q3e_p1_q4b": f"{D}/doc_top300_q3e4b_p1_qwen3r4b_qcorr_pool.jsonl"}
+         "q3e_p1_q4b": f"{D}/doc_top300_q3e4b_p1_qwen3r4b_qcorr_pool.jsonl",
+         # T26: q3e4b tìm trong pool top1000 bge (kaggle_embed search --pool, own = pool riêng từng câu, union = hợp)
+         "q3e_own_retr": f"{D}/doc_top300_q3e4b_p1_own1000_retr_qcorr_pool.jsonl",
+         "q3e_union_retr": f"{D}/doc_top300_q3e4b_p1_union_retr_qcorr_pool.jsonl",
+         "q3e_union1000_retr": f"{D}/doc_top1000_q3e4b_p1_union_retr_qcorr_pool.jsonl"}
 # Dump top-50 chunk mỗi câu từ index chunk `medical_documents` (Phase 0).
 CHUNK_EVIDENCE = "data/tmp/sub1200/D_ft_top50.jsonl"
 RRF_K = 60
@@ -217,30 +221,49 @@ def rank_docs(cands, scores, qid, method, chunk_order=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--doc-pool", nargs="+", default=["B"], choices=sorted(POOLS),
-                    help="pool cung cấp ứng viên cho relevant_docs; nhiều pool thì hợp theo doc_id (T11)")
+    ap.add_argument("--doc-pool", nargs="+", default=["B"],
+                    help="pool cung cấp ứng viên cho relevant_docs (tên trong POOLS hoặc đường dẫn file pool); "
+                         "nhiều pool thì hợp theo doc_id (T11)")
     ap.add_argument("--chunk-pool", nargs="+", default=["top60"], choices=sorted(POOLS))
     ap.add_argument("--extra-lang", nargs="+", default=None,
                     help="chỉ nhận doc các ngôn ngữ này từ pool doc thứ hai trở đi (T22: --extra-lang vi)")
-    ap.add_argument("--chunk-order", choices=["pool", "vifirst"], default="pool",
-                    help="pool = thứ tự pool; vifirst = doc tiếng Việt lên đầu chunk list (T21)")
+    ap.add_argument("--chunk-order", choices=["pool", "vifirst", "window"], default="pool",
+                    help="pool = thứ tự pool; vifirst = doc tiếng Việt lên đầu chunk list (T21); "
+                         "window = doc đã chấm trong --windows-file xếp theo điểm cửa sổ tốt nhất (T18b)")
     ap.add_argument("--rescore", default=f"{D}/rescore_bge.jsonl")
     ap.add_argument("--methods", nargs="+", default=["orig", "matched", "max", "mix0.5", "rrf"])
     ap.add_argument("--m-doc", type=int, default=80)
     ap.add_argument("--m-chunk", type=int, default=55)
     ap.add_argument("--cap", type=int, default=8000)
-    ap.add_argument("--window", choices=["head", "middle"], default="head",
+    ap.add_argument("--windows-file", default=None, help="jsonl của scripts/chunk_windows.py (T18a/T18b)")
+    ap.add_argument("--window", choices=["head", "middle", "best"], default="head",
                     help="chunk_text lấy cap ký tự đầu bài hay ở giữa bài")
     ap.add_argument("--chunk-evidence", default=CHUNK_EVIDENCE, help="dump chunk cho method chunkrrf")
     ap.add_argument("--dry", action="store_true", help="chỉ in chẩn đoán, không ghi bài nộp")
     ap.add_argument("--base-pool", default=None, choices=sorted(POOLS),
                     help="cột 'trùng orig' so với orig của pool này (vd top300 = bài SOTA) thay vì pool doc đầu")
     ap.add_argument("--out-dir", default=D)
+    ap.add_argument("--name", default=None, help="tên bài nộp thay cho tên tự sinh (chỉ dùng với một --methods)")
     args = ap.parse_args()
+    if args.name and len(args.methods) > 1:
+        raise SystemExit("--name chỉ dùng với một --methods")
+    for i, label in enumerate(args.doc_pool):     # đường dẫn file: tên ngắn = tên file bỏ "doc_" và "_pool.jsonl"
+        if label not in POOLS:
+            if not os.path.exists(label):
+                raise SystemExit(f"--doc-pool {label}: không có trong POOLS, cũng không phải file")
+            short = os.path.basename(label).removeprefix("doc_").removesuffix(".jsonl").removesuffix("_pool")
+            POOLS[short], args.doc_pool[i] = label, short
 
+    # Điểm chấm lại theo ngôn ngữ doc chỉ dùng cho các cách gộp này; orig/vifirst/rrfrr/rlog/gate không cần.
+    need_rescore = any(m in ("matched", "max", "rrf", "maxall") or m.startswith("mix") for m in args.methods)
     scores = defaultdict(dict)
-    for r in map(json.loads, open(args.rescore, encoding="utf-8")):
-        scores[(int(r["id"]), r["kind"])].update(r["scores"])
+    if os.path.exists(args.rescore):
+        for r in map(json.loads, open(args.rescore, encoding="utf-8")):
+            scores[(int(r["id"]), r["kind"])].update(r["scores"])
+    elif need_rescore:
+        raise SystemExit(f"thiếu {args.rescore}: cần cho {args.methods}")
+    else:
+        print(f"[fuse] không có {args.rescore}, bỏ qua (không cách gộp nào cần)")
     doc_pool, mismatch = merge_pools([load_pool(POOLS[label]) for label in args.doc_pool], args.extra_lang)
     if mismatch:
         raise SystemExit(f"{mismatch:,} doc có điểm rerank khác nhau giữa các pool: pool không cùng reranker")
@@ -287,18 +310,43 @@ def main():
             chunk_rank[q] += [c["doc_id"] for c in cs if c["doc_id"] not in seen]
             for c in cs:
                 chunk_lang.setdefault((q, c["doc_id"]), lang_of(c))
+    starts = None
+    if args.windows_file:
+        recs = [json.loads(line) for line in open(args.windows_file, encoding="utf-8")]
+        win = {int(r["id"]): r["windows"] for r in recs}
+        if args.window == "best" and args.cap != recs[0]["cap"]:
+            raise SystemExit(f"--cap {args.cap} khác cap {recs[0]['cap']} (ký tự sạch) mà {args.windows_file} đã chấm")
+        missing = set(chunk_rank) - set(win)
+        if missing:
+            raise SystemExit(f"{args.windows_file} thiếu {len(missing)} câu (file smoke?)")
+        starts = {(q, d): (w["start"], w.get("end")) for q, ws in win.items() for d, w in ws.items()}
+        if args.chunk_order == "window":
+            for q, ds in chunk_rank.items():
+                # doc không có bằng chứng (C0: score None) xếp sau mọi doc có điểm, giữ thứ tự chunk list
+                scored = sorted(win[q], key=lambda d: (win[q][d]["score"] is None, -(win[q][d]["score"] or 0)))
+                chunk_rank[q] = scored + [d for d in ds if d not in win[q]]
+        n = statistics.mean(len(ws) for ws in win.values())
+        moved = statistics.mean(sum(1 for d in chunk_rank[q][: args.m_chunk] if starts.get((q, d), (0, None))[0] > 0)
+                                for q in chunk_rank)
+        print(f"[fuse] cửa sổ {args.windows_file}: {n:.0f} doc/câu đã chấm | trong {args.m_chunk} chunk nộp, "
+              f"{moved:.1f} cửa sổ KHÔNG ở đầu bài")
+    elif args.window == "best" or args.chunk_order == "window":
+        raise SystemExit("--window best / --chunk-order window cần --windows-file")
     if args.chunk_order == "vifirst":
         chunk_rank = {q: chunk_order_vifirst(ds, lambda d, q=q: chunk_lang[(q, d)]) for q, ds in chunk_rank.items()}
         nonvi = statistics.mean(sum(chunk_lang[(q, d)] != "vi" for d in ds[: args.m_chunk]) for q, ds in chunk_rank.items())
         print(f"[fuse] chunk list vifirst: còn {nonvi:.1f} doc en/zh trong {args.m_chunk} chunk đầu (câu thiếu doc vi)")
     cap_tag = (("" if args.cap == 8000 else f"_cap{args.cap}") + ("_mid" if args.window == "middle" else "")
+               + ("_best" if args.window == "best" else "") + ("_cwin" if args.chunk_order == "window" else "")
                + ("_cvi" if args.chunk_order == "vifirst" else ""))
     for method in args.methods:
         name = (f"fuse_d{args.m_doc}_c{args.m_chunk}_{'+'.join(args.doc_pool)}"
                 f"{'_x' + '+'.join(args.extra_lang) if args.extra_lang else ''}_{method}"
                 f"_c{'+'.join(args.chunk_pool)}{cap_tag}")
+        if args.name:
+            name = args.name
         rows = [(q, ranked[method][q], chunk_rank[q]) for q in sorted(doc_pool)]
-        write_submission(name, rows, args.m_doc, args.m_chunk, args.cap, True, args.out_dir, args.window)
+        write_submission(name, rows, args.m_doc, args.m_chunk, args.cap, True, args.out_dir, args.window, starts)
 
 
 if __name__ == "__main__":

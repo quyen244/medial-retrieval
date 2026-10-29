@@ -175,6 +175,46 @@ class Encoder:
         return out
 
 
+class VllmEncoder(Encoder):
+    """Cùng chuỗi token với Encoder (kế thừa ids()), chạy bằng engine offline vLLM. Đo 2026-10-28 trên
+    500 doc shard 24 (RTX 5060 Ti): 4.893 token/s, cosine với vector HF min 0,99997, nên trộn shard được.
+    vLLM trả vector đã chuẩn hoá; tìm kiếm chuẩn hoá lại nên không lệch với shard HF chưa chuẩn hoá."""
+
+    CHUNK = 256     # số doc mỗi lần gọi embed: đủ lớn để vLLM tự gom lô, đủ nhỏ để in tiến độ đều
+
+    def __init__(self, model, device, dtype, max_tokens, batch_tokens, gpu_mem=0.80):
+        from transformers import AutoTokenizer
+        from vllm import LLM
+        from vllm.inputs import TokensPrompt
+        self.TokensPrompt = TokensPrompt
+        self.tok = AutoTokenizer.from_pretrained(model)
+        self.max_tokens, self.batch_tokens = max_tokens, batch_tokens
+        self.eod = self.tok.convert_tokens_to_ids("<|endoftext|>")
+        probe = self.tok("a", add_special_tokens=True)["input_ids"]
+        self.auto_eod = bool(probe) and probe[-1] == self.eod
+        vdt = {"fp16": "float16", "bf16": "bfloat16", "fp32": "float32"}[dtype]
+        self.llm = LLM(model=model, runner="pooling", dtype=vdt, max_model_len=max_tokens,
+                       gpu_memory_utilization=gpu_mem, enable_prefix_caching=False)
+        self.dim = len(self.llm.embed([TokensPrompt(prompt_token_ids=[self.eod])], use_tqdm=False)[0].outputs.embedding)
+
+    def encode_ids(self, ids):
+        import numpy as np
+        out = np.zeros((len(ids), self.dim), dtype=np.float16)
+        total_tok, done_tok = sum(len(x) for x in ids), 0
+        t0 = t_log = time.time()
+        for i in range(0, len(ids), self.CHUNK):
+            part = ids[i: i + self.CHUNK]
+            res = self.llm.embed([self.TokensPrompt(prompt_token_ids=x) for x in part], use_tqdm=False)
+            out[i: i + len(part)] = np.array([r.outputs.embedding for r in res], dtype=np.float16)
+            done_tok += sum(len(x) for x in part)
+            if time.time() - t_log >= 60:      # tiến độ trong shard, mỗi phút một dòng
+                t_log = time.time()
+                rate = done_tok / max(t_log - t0, 1e-9)
+                print(f"[embed]   {i + len(part)}/{len(ids)} doc, {done_tok / total_tok:.0%} token, {rate:,.0f} token/s, "
+                      f"còn ~{(total_tok - done_tok) / max(rate, 1e-9) / 60:.0f} phút", flush=True)
+        return out
+
+
 def format_query(query, instruction):
     return f"Instruct: {instruction}\nQuery: {query}"
 
@@ -198,6 +238,8 @@ def embed(args, enc=None):
     if not todo and not need_q:
         return
     t0 = time.time()
+    if enc is None and args.engine == "vllm":
+        enc = VllmEncoder(args.model, args.device, args.dtype, args.max_tokens, args.batch_tokens, args.gpu_mem)
     enc = enc or Encoder(args.model, args.device, args.dtype, args.max_tokens, args.batch_tokens)
     load_s = time.time() - t0
     print(f"[embed] nạp model {load_s:.0f}s | {enc.dim} chiều | tokenizer tự thêm <|endoftext|>: {enc.auto_eod}", flush=True)
@@ -277,6 +319,38 @@ def normalize(v, dim):
     return v / np.clip(np.linalg.norm(v, axis=1, keepdims=True), 1e-12, None)
 
 
+def load_pool_mask(pool_path, mode, qids):
+    """Giới hạn doc được tìm theo một pool ({"id", "candidates": [{"doc_id"}]} mỗi dòng).
+    own  : câu q chỉ được thấy doc trong pool CỦA CHÍNH q (xếp lại pool, so sạch với bài dùng cùng pool).
+    union: mọi câu thấy hợp pool của cả 1.200 câu (tìm trên corpus con).
+    Trả (hàm ids của shard -> mask bool [số câu, số doc], mảng doc_id của pool)."""
+    import numpy as np
+    row = {int(q): i for i, q in enumerate(qids)}
+    qi, di = [], []
+    with open(pool_path, encoding="utf-8") as fh:
+        for line in fh:
+            if line.strip():
+                r = json.loads(line)
+                for c in r["candidates"]:
+                    qi.append(row[int(r["id"])])
+                    di.append(int(c["doc_id"]))
+    qi, di = np.array(qi), np.array(di, dtype=np.int64)
+    print(f"[search] pool {pool_path} ({mode}): {len(set(qi.tolist()))} câu, {len(di):,} cặp, "
+          f"{len(np.unique(di)):,} doc khác nhau", flush=True)
+    uni = np.unique(di)
+    if mode == "union":
+        return (lambda ids: np.broadcast_to(np.isin(ids, uni), (len(qids), len(ids)))), uni
+
+    def own(ids):
+        perm = np.argsort(ids)
+        loc = np.clip(np.searchsorted(ids[perm], di), 0, len(ids) - 1)
+        hit = ids[perm][loc] == di
+        m = np.zeros((len(qids), len(ids)), dtype=bool)
+        m[qi[hit], perm[loc[hit]]] = True
+        return m
+    return own, uni
+
+
 def search(args):
     """Tìm CHÍNH XÁC (nhân ma trận, không HNSW): cosine trên vector đã cắt --dim chiều rồi chuẩn hoá lại."""
     import numpy as np
@@ -286,6 +360,7 @@ def search(args):
     qids = np.load(f"{qdir}/queries.ids.npy")
     text = {int(r["id"]): r["query"] for r in map(json.loads, open(f"{qdir}/queries.jsonl", encoding="utf-8"))}
     src = json.load(open(f"{qdir}/instructions.json", encoding="utf-8")).get("_query_source") or "corrected"
+    allow, pool_docs = load_pool_mask(args.pool, args.pool_mode, qids) if args.pool else (None, None)
     best_s = np.full((len(q), 0), -np.inf, dtype=np.float32)
     best_d = np.zeros((len(q), 0), dtype=np.int64)
     n, t = 0, time.time()
@@ -294,12 +369,19 @@ def search(args):
         bad = ~np.isfinite(d).all(1)
         s = q @ d.T
         s[:, bad] = -np.inf                               # vector NaN không được lọt vào top
+        if allow is not None:
+            s[~allow(ids)] = -np.inf
         all_s = np.concatenate([best_s, s], 1)
         all_d = np.concatenate([best_d, np.broadcast_to(ids, s.shape)], 1)
         k = min(args.top_k, all_s.shape[1])
         part = np.argpartition(-all_s, k - 1, axis=1)[:, :k]
         best_s, best_d = np.take_along_axis(all_s, part, 1), np.take_along_axis(all_d, part, 1)
         n += len(ids)
+    if allow is not None:      # doc của pool chưa có vector thì không bao giờ được tìm thấy: báo rõ
+        seen = np.concatenate([ids for _, ids in load_doc_shards(dirs)])
+        cov = np.isin(pool_docs, seen).mean()
+        print(f"[search] doc của pool đã có vector: {cov:.1%} ({int(cov * len(pool_docs)):,}/{len(pool_docs):,})"
+              + ("" if cov > 0.999 else "  <- CHƯA ĐỦ, kết quả bị thiếu doc"), flush=True)
     order = np.argsort(-best_s, axis=1, kind="stable")
     best_s, best_d = np.take_along_axis(best_s, order, 1), np.take_along_axis(best_d, order, 1)
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
@@ -332,6 +414,8 @@ def main(argv=None):
     p.add_argument("--reverse", action="store_true", help="làm shard từ cuối lên")
     p.add_argument("--done-dirs", nargs="*", default=[], help="thư mục output của các phiên khác: shard có ở đó thì bỏ qua")
     p.add_argument("--max-hours", type=float, default=11.0)
+    p.add_argument("--engine", choices=["hf", "vllm"], default="hf")
+    p.add_argument("--gpu-mem", type=float, default=0.80, help="vLLM gpu_memory_utilization")
     p.set_defaults(fn=embed)
     p = sub.add_parser("search")
     p.add_argument("--vecs", nargs="+", required=True, help="thư mục chứa docs_*.npy (nhiều phiên thì nhiều thư mục)")
@@ -340,6 +424,8 @@ def main(argv=None):
     p.add_argument("--top-k", type=int, default=3000)
     p.add_argument("--retriever", required=True)
     p.add_argument("--out", required=True)
+    p.add_argument("--pool", default=None, help="pool jsonl giới hạn doc được tìm (vd. doc_top1000_bge_pool.jsonl)")
+    p.add_argument("--pool-mode", choices=["own", "union"], default="own")
     p.set_defaults(fn=search)
     args = ap.parse_args(argv)
     args.fn(args)

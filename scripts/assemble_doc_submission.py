@@ -38,10 +38,12 @@ def middle_window(text, size):
 
 
 def write_submission(name, rows, m_doc, m_chunk, cap=8000, strip=True, out_dir="data/tmp/phase1",
-                     window="head"):
+                     window="head", starts=None):
     """rows: [(id, doc_id xếp hạng cho relevant_docs, doc_id xếp hạng cho relevant_chunks)].
     Hai danh sách có thể đến từ hai thứ hạng khác nhau - hai tầng chấm độc lập.
-    window: head = cap ký tự đầu bài; middle = cap ký tự ở giữa bài."""
+    window: head = cap ký tự đầu bài; middle = cap ký tự ở giữa bài;
+    best = tiền xử lý cả bài rồi cắt đoạn [start, end) sạch theo starts[(id, doc_id)] (scripts/chunk_windows.py),
+    doc không có thì đầu bài. head giữ cách cũ (cắt cap ký tự thô rồi mới xử lý) để so được với SOTA."""
     raw_docs = RawDocs(load_index())
     prep = (lambda x: submission_chunk_text(strip_markdown(x))) if strip else submission_chunk_text
 
@@ -54,7 +56,13 @@ def write_submission(name, rows, m_doc, m_chunk, cap=8000, strip=True, out_dir="
             if not raw:
                 missing += 1
                 continue
-            text = prep(raw[:cap]) if window == "head" else middle_window(prep(raw), cap)
+            if window == "middle":
+                text = middle_window(prep(raw), cap)
+            elif window == "best":
+                a, b = (starts or {}).get((int(qid), str(d)), (0, None))
+                text = prep(raw)[a: b if b is not None else a + cap]
+            else:
+                text = prep(raw[:cap])
             chunks.append({"doc_id": submission_doc_id(d), "chunk_text": text})
         entries.append({"id": int(qid), "relevant_docs": docs, "relevant_chunks": chunks})
         n_doc.append(len(docs))

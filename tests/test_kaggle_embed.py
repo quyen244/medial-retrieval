@@ -111,6 +111,30 @@ def test_search_is_exact_cosine_over_all_shards_and_skips_nan(tmp_path):
     assert rows[0]["query"] == "q7"
 
 
+def test_search_pool_own_keeps_each_query_inside_its_own_pool_union_shares_it(tmp_path):
+    rng = np.random.default_rng(0)
+    v = tmp_path / "v"
+    v.mkdir()
+    for s, ids in enumerate([[10, 11, 12, 13], [20, 21, 22, 23]]):
+        np.save(v / f"docs_{s:05d}.npy", rng.normal(size=(4, 8)).astype(np.float16))
+        np.save(v / f"docs_{s:05d}.ids.npy", np.array(ids))
+    np.save(v / "queries_p1.npy", rng.normal(size=(2, 8)).astype(np.float16))
+    np.save(v / "queries.ids.npy", np.array([7, 9]))
+    write_jsonl(v / "queries.jsonl", [{"id": 7, "query": "a"}, {"id": 9, "query": "b"}])
+    json.dump({}, open(v / "instructions.json", "w"))
+    pool = tmp_path / "pool.jsonl"     # doc 99 không có vector: bỏ qua; doc_id kiểu chuỗi hay số đều được
+    write_jsonl(pool, [{"id": 9, "candidates": [{"doc_id": "21"}, {"doc_id": 12}]},
+                       {"id": 7, "candidates": [{"doc_id": 10}, {"doc_id": 23}, {"doc_id": 99}]}])
+    got = {}
+    for mode in ("own", "union"):
+        out = tmp_path / f"{mode}.jsonl"
+        ej.main(["search", "--vecs", str(v), "--retriever", "r", "--top-k", "10", "--out", str(out),
+                 "--pool", str(pool), "--pool-mode", mode])
+        got[mode] = {r["id"]: sorted(r["doc_ids"]) for r in map(json.loads, open(out, encoding="utf-8"))}
+    assert got["own"] == {7: ["10", "23"], 9: ["12", "21"]}
+    assert got["union"] == {7: ["10", "12", "21", "23"], 9: ["10", "12", "21", "23"]}
+
+
 def test_encoder_last_token_with_left_padding_keeps_order_and_backs_off_on_oom():
     torch = pytest.importorskip("torch")
 

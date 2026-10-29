@@ -39,6 +39,13 @@ câu hỏi ──> (A) chuỗi đem đi tìm ──> (B) truy xuất, ra pool �
 | T12 | Pool 300 có cắt mất doc tốt không | pool top300 -> top1000 | - | `DOCS_F2` 0.2849 | có lệnh, cần GPU |
 | T13 | Hybrid trên index doc có tăng recall không | dense -> dense + sparse, cùng độ sâu với T12 | RRF dense/sparse trong Qdrant | `DOCS_F2` của T12 | chờ T12 |
 | C0 | (lượt dữ liệu, không nộp) dùng index chunk 3,9M | tìm hybrid trên `medical_documents`, top 1.000 chunk/câu, rerank từng chunk bằng bge | - | - | chưa có code, cần GPU |
+| T26a | Qwen3-Embedding-4B xếp pool top1000 của chính câu có đưa gold lên top300 nhiều hơn bge-m3 không | xếp bằng cosine q3e4b (câu sửa) trong pool top1000 riêng | - | `DOCS_RECALL` 0.489 (R@300) | **đã đo 2026-10-29**: R@300 0.5023 nhưng h 33,75 < 34,89, FINAL 0.2436 |
+| T26b | Tìm trên hợp pool của mọi câu có lôi thêm gold không | own1000 -> union424k | - | `DOCS_RECALL` của T26a | **đã đo 2026-10-29**: R@300 0.4599 < 0.489 bge, FINAL 0.2313 |
+| T26c | Trần recall trên 424k có vượt top1000 của bge không | như T26b, nộp 1.000 doc | - | `DOCS_RECALL` 0.5914 (R@1000) | **đã đo 2026-10-29**: R@1000 0.5744 < 0.5914, FINAL 0.1838 |
+| T28a | Gộp RRF hạng tìm bge + q3e4b có phủ hơn từng cái không | xếp pool top1000 theo RRF w=0,5 | RRF k=60 | h 34,89 (bge) | **đã đo 2026-10-29**: h 36,48, R@300 0.5285, FINAL 0.2525 |
+| T28b | Hạ điểm doc en/zh trong RRF có lợi không | T28a + en/zh x0,8 | RRF k=60 | h của T28a | **đã đo 2026-10-29**: h 36,57 (+0,09), hoà |
+| T29 | Pool RRF có thắng SOTA khi xếp bằng reranker không | pool top300 bge -> top300 RRF w=0,6, điểm bge-reranker cache (câu gốc), d160 | RRF k=60 | `DOCS_F2` 0.2849 | có zip `data/T28_rrf_bge_q3e/w0.6_rr_d160.zip`; nộp chung T18a (B3) |
+| T27 | Pool q3e4b + bge rerank có thắng SOTA không | pool top300 bge-m3 -> pool top300 q3e4b, rerank câu sửa | - | `DOCS_F2` 0.2849 | chờ T26a/b, cần GPU |
 
 ### C. Rerank (model mới, query dịch để chấm, chuẩn hoá theo ngôn ngữ)
 
@@ -69,8 +76,8 @@ T01-T04 đo trên cấu hình cũ (pool B, d80). Thắng thì phải dựng lạ
 | T08 | Đỉnh `m_doc` | 160 -> 220 | - | `DOCS_F2` 0.2849 | **xong: thua**, 0.2810 (mục 24) |
 | T09a | Thêm chunk ngắn hơn theo luật kích thước | c100 trần 2.700 -> c120 trần 2.250, vẫn đầu bài | - | `CHUNKS_F2` 0.2275 | có lệnh |
 | T15 | Nén zip mạnh hơn có nhét thêm chunk không | `compresslevel` 6 -> 9 | - | đo dung lượng offline trước | chưa có code |
-| T18a | Cửa sổ đặt quanh đoạn liên quan | cửa sổ đầu bài -> 2.700 ký tự quanh chunk tốt nhất của C0 | - | `CHUNKS_F2` 0.2275 | chờ C0 |
-| T18b | Chọn doc cho chunk list theo bằng chứng đoạn | thứ tự doc của chunk list -> theo điểm chunk tốt nhất | - | `CHUNKS_F2` của bài thắng T18a | chờ C0 |
+| T18a | Cửa sổ đặt ở đoạn liên quan nhất | cửa sổ đầu bài -> cửa sổ lai ~2.100 ký tự sạch điểm bge cao nhất trong doc | bước 630 (overlap 70%) | `CHUNKS_F2` 0.2275 | có code, chờ smoke |
+| T18b | Chọn doc cho chunk list theo bằng chứng đoạn | 100 doc đầu chunk list -> 100/200 doc điểm cửa sổ cao nhất | - | `CHUNKS_F2` của bài thắng T18a | có code, dùng chung file cửa sổ T18a |
 | T16 | Chunk list theo thứ tự doc của bài thắng T11/T12/T14 | `--chunk-pool` -> pool thắng | - | `CHUNKS_F2` 0.2275 | chờ T11/T12/T14 |
 
 T07 (cửa sổ căn theo dump chunk cũ) được thay bằng T18a, vì C0 cho bằng chứng tươi trên 1.000 chunk thay vì 50.
@@ -223,17 +230,22 @@ Cơ sở: Callan, SIGIR 1994 (bằng chứng cấp đoạn cho xếp hạng doc)
 - Kết quả: `DOCS_F2` = ___
 - Phán quyết: ___
 
-### T18a - cửa sổ quanh chunk tốt nhất
+### T18a - cửa sổ lai tốt nhất trong doc (`scripts/chunk_windows.py`, file ở `data/T18_chunk_window/`)
 
-- Giả thuyết: cửa sổ 2.700 ký tự đặt quanh chunk có điểm cao nhất qua ngưỡng LCS nhiều hơn cửa sổ đầu bài.
-- Biến duy nhất: vị trí cửa sổ; giữ danh sách doc của chunk list và trần 2.700 như mục 21. Doc không có chunk trong C0 giữ cửa sổ đầu bài.
-- Đối chứng: `CHUNKS_F2` 0.2275. Kiểm tra: `DOCS_F2` phải ra đúng 0.2849.
+- Giả thuyết: cửa sổ đặt ở đoạn liên quan nhất của doc qua ngưỡng LCS nhiều hơn cửa sổ đầu bài.
+- Biến duy nhất: vị trí cửa sổ; giữ 100 doc của chunk list mục 21 (top60 + top300). Không cần C0: chấm thẳng .md gốc.
+- Cách cắt: tiền xử lý CẢ bài (strip_markdown + submission_chunk_text) rồi mới cắt. Cửa sổ lai ~2.100 ký tự sạch
+  (≈ 2.078 ký tự sạch thực nộp của SOTA cắt 2.700 thô, giữ dung lượng zip), bước 630 = overlap 70%,
+  đầu lùi về đầu dòng, cuối lùi về hết câu. Chấm bằng bge-reranker-v2-m3, câu sửa, max_length 1024.
+- Đo trên mẫu 3.000 doc: 3,93 cửa sổ/doc, độ dài median 2.045 (p10 1.911), 100% cửa sổ kết thúc ở hết câu/dòng, phủ 100% bài.
+- Nộp chung T29 ở phía doc (B3). Đối chứng: `CHUNKS_F2` 0.2275.
 - Kết quả: `CHUNKS_F2` = ___
 - Phán quyết: ___
 
 ### T18b - chunk list chọn doc theo bằng chứng đoạn
 
-- Thứ tự doc của chunk list theo điểm chunk tốt nhất thay vì điểm doc; cửa sổ như bài thắng T18a.
+- Chấm 200 doc đầu chunk list, chọn 100 doc có điểm cửa sổ tốt nhất cao nhất (MaxP thuần); cửa sổ như T18a.
+- Dùng chung file cửa sổ `bge_n200_cap2100_st630_windows.jsonl` với T18a; nộp chung T29 (B4), `DOCS_F2` phải trùng B3.
 - Đối chứng: `CHUNKS_F2` của bài thắng T18a (hoặc 0.2275 nếu T18a thua).
 - Kết quả: `CHUNKS_F2` = ___
 - Phán quyết: ___
@@ -282,6 +294,51 @@ Doc đó có trúng gold không thì chưa biết, chỉ leaderboard trả lời
 
 Điểm rerank của cùng một doc giống hệt nhau ở mọi pool (218.663 cặp khớp, 0 lệch), vì rerank luôn dùng câu gốc.
 Nên gộp nhiều pool rồi xếp theo điểm rerank là hợp lệ, không phải chấm lại.
+
+### T26 - Qwen3-Embedding-4B trên 424k doc ưu tiên (chưa đủ 1M)
+
+424.120 doc đầu của job embed là HỢP pool top1000 bge-m3 của cả 1.200 câu (`priority_ids` trong `scripts/kaggle_embed.py`).
+Khi shard 0-106 có vector, `kaggle_embed search --pool data/tmp/phase1/doc_top1000_bge_pool.jsonl` cho hai cách tìm từ cùng một bộ vector:
+
+- `--pool-mode own` (T26a): câu q chỉ thấy pool top1000 của chính q. Cùng tập ứng viên với bge, chỉ đổi cách xếp, trần 0.5914.
+- `--pool-mode union` (T26b): câu q thấy cả 424k. Doc gold bge bỏ sót cho q có thể nằm trong pool của câu khác cùng chủ đề, nên trần >= 0.5914 và CHƯA đo được.
+
+Chênh T26b - T26a là lượng gold lấy được từ pool của câu khác. Chênh lớn thì đáng chạy đủ 1M doc.
+Kết quả trên 424k KHÔNG phải cận dưới của kết quả trên 1M: 580k doc còn lại vừa thêm gold vừa thêm nhiễu.
+`search` in tỉ lệ doc của pool đã có vector; dưới 100% là chạy sớm, bỏ kết quả.
+
+Cả T26a/b đổi hai thứ so với R300_top300: embedding và câu sửa (bge-m3 tìm bằng câu gốc).
+Muốn tách thì cần R@300 của pool `qc_retr` (bge-m3 + câu sửa) làm đối chứng.
+
+Lệnh đầy đủ nằm ở trường `command` của node T26a/b/c trong `docs/experiments.json`.
+
+Kết quả T26b (union 424k, 2026-10-29): `DOCS_RECALL` 0.4599, `DOCS_P` 0.1014, `CHUNKS_F2` 0.2275 (khớp đối chứng).
+h_doc = 0,1014 x 300 = 30,42 so với 34,89 của bge-m3 top300: q3e4b + câu sửa mất 4,47 gold/câu (-13%) dù được thấy cả 424k doc.
+
+Kết quả T26a (own1000): `DOCS_RECALL` 0.5023 > 0.489 nhưng `DOCS_P` 0.1125, h_doc = 33,75 < 34,89.
+Macro-R tăng vì q3e thắng ở câu ít gold, tổng số hit lại giảm; `DOCS_F2` 0.2598 < 0.2627. Luôn đọc h = P x m, không đọc riêng R.
+Kết quả T26c (union, 1.000 doc): `DOCS_RECALL` 0.5744 < 0.5914, h_doc 40,3 vs 42,8.
+
+Phán quyết T26: q3e4b (+ câu sửa) không phải retriever tốt hơn bge-m3 ở độ sâu nào đã đo; tìm rộng (union) còn thêm nhiễu (h 30,42 vs 33,75 của own).
+Điều còn mở: q3e xếp KHÁC bge (thắng ở câu ít gold), nên gộp RRF bge + q3e trong pool top1000 có thể hơn từng cái.
+
+### T28 - gộp RRF hạng tìm bge-m3 + q3e4b (`scripts/fuse_retrieval.py`, file ở `data/T28_rrf_bge_q3e/`)
+
+Điểm = w/(60 + hạng_q3e) + (1-w)/(60 + hạng_bge) trong pool top1000 bge của chính câu; không rerank, nộp 300 doc.
+Tên file chỉ ghi biến: `w0.5` = chia đều, `_en0.8_zh0.8` = điểm doc en/zh nhân 0,8.
+
+| bài | R@300 | h_doc (P x 300) | FINAL |
+|---|---:|---:|---:|
+| R300_top300 (bge) | 0.489 | 34,89 | 0.2451 |
+| T26a (q3e) | 0.5023 | 33,75 | 0.2436 |
+| **T28a w0.5** | **0.5285** | **36,48** | 0.2525 |
+| T28b w0.5_en0.8_zh0.8 | 0.5300 | 36,57 | 0.2529 |
+
+Hai retriever chỉ trùng 159/300 doc, nên gộp phủ hơn cả hai (+1,59 gold/câu so với bge). Trọng số ngôn ngữ hoà.
+
+T29: w=0,6, top300 RRF xếp lại bằng điểm bge-reranker CÓ SẴN của pool top1000 (câu gốc, trùng hẳn điểm pool SOTA:
+359.865 cặp, lệch 0), nộp d160. Chỉ đổi pool so với SOTA; top160 trùng SOTA 123,6/160, vi 83%.
+Lệch quy tắc câu sửa 2026-10-27 (cố ý, để giữ một biến). Kết quả: `DOCS_F2` = ___
 
 ### T11 - gộp pool top300 + HyDE
 

@@ -284,7 +284,7 @@ def run_local(args):
         cmd = [sys.executable, EMBED_JOB, "embed", "--job", args.job, "--model", model, "--out", out,
                "--part", args.part, "--worker", f"{w}/{n_gpu}", "--device", f"cuda:{w}", "--dtype", args.dtype,
                "--batch-tokens", str(args.batch_tokens or batch_tokens), "--max-tokens", str(args.max_tokens),
-               "--max-hours", str(args.max_hours),
+               "--max-hours", str(args.max_hours), "--engine", args.engine, "--gpu-mem", str(args.gpu_mem),
                *(["--reverse"] if args.reverse else []),
                "--done-dirs", *[os.path.join(d, args.model) for d in args.done_dirs]]
         print(" ".join(cmd), flush=True)
@@ -314,7 +314,8 @@ def search(args):
     mod = embed_job_module()
     out = args.out or f"{PHASE1}/cands_top{args.top_k}_{args.retriever}_qcorr.jsonl"
     mod.main(["search", "--vecs", *args.vecs, "--instruction", args.instruction, "--dim", str(args.dim),
-              "--top-k", str(args.top_k), "--retriever", args.retriever, "--out", out])
+              "--top-k", str(args.top_k), "--retriever", args.retriever, "--out", out,
+              *(["--pool", args.pool, "--pool-mode", args.pool_mode] if args.pool else [])])
 
 
 def main(argv=None):
@@ -348,6 +349,9 @@ def main(argv=None):
     p.add_argument("--max-tokens", type=int, default=4096)
     p.add_argument("--max-hours", type=float, default=1000.0)
     p.add_argument("--reverse", action="store_true", help="làm từ shard cuối lên trong lúc Kaggle làm từ đầu xuống")
+    p.add_argument("--engine", choices=["hf", "vllm"], default="hf",
+                   help="vllm: chạy bằng python của venv có vLLM (vd. .venv-vllm/bin/python)")
+    p.add_argument("--gpu-mem", type=float, default=0.80, help="vLLM gpu_memory_utilization")
     p.set_defaults(fn=run_local)
 
     p = sub.add_parser("report", help="tốc độ đo được + thời gian suy ra cho 1.003.391 doc")
@@ -361,6 +365,9 @@ def main(argv=None):
     p.add_argument("--dim", type=int, default=0)
     p.add_argument("--top-k", type=int, default=3000)
     p.add_argument("--out", default=None)
+    p.add_argument("--pool", default=None, help="pool jsonl giới hạn doc được tìm (vd. doc_top1000_bge_pool.jsonl)")
+    p.add_argument("--pool-mode", choices=["own", "union"], default="own",
+                   help="own: mỗi câu chỉ xếp lại pool của chính nó; union: tìm trên hợp pool của mọi câu")
     p.set_defaults(fn=search)
     args = ap.parse_args(argv)
     args.fn(args)

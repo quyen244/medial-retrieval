@@ -25,8 +25,12 @@ QWEN3_INSTRUCTION = ("Given a medical question written in Vietnamese, judge whet
                      "which may be in Vietnamese, English or Chinese, is relevant to the question")
 
 
-def make_reranker(model_name: str = DEFAULT_RERANKER_MODEL, max_length: int = 1024, fp16: bool = True):
-    """Chọn lớp theo tên model: họ Qwen3-Reranker là LM nhân quả, còn lại là cross-encoder."""
+def make_reranker(model_name: str = DEFAULT_RERANKER_MODEL, max_length: int = 1024, fp16: bool = True,
+                  engine: str = "hf"):
+    """Chọn lớp theo tên model: họ Qwen3-Reranker là LM nhân quả, còn lại là cross-encoder.
+    engine="vllm" chỉ áp cho Qwen3-Reranker (0.6B/4B/8B): cùng template, cùng điểm P(yes), chạy bằng vLLM."""
+    if "qwen3-reranker" in model_name.lower() and engine == "vllm":
+        return VLLMQwen3Reranker(model_name=model_name, max_length=max_length)
     if "qwen3-reranker" in model_name.lower():
         return Qwen3Reranker(model_name=model_name, max_length=max_length, fp16=fp16)
     return CrossEncoderReranker(model_name=model_name, max_length=max_length, fp16=fp16)
@@ -138,7 +142,8 @@ class Qwen3Reranker(CrossEncoderReranker):
                 idx = order[b: b + self.batch_size]
                 batch = self.tokenizer.pad({"input_ids": [ids[i] for i in idx]}, padding=True,
                                            return_tensors="pt").to(self.device)
-                last = self.model(**batch).logits[:, -1, :]
+                # logits_to_keep=1: chỉ chiếu lm_head (151k từ) ở token cuối, không phải mọi vị trí
+                last = self.model(**batch, logits_to_keep=1).logits[:, -1, :]
                 two = torch.stack([last[:, self.no_id], last[:, self.yes_id]], dim=1).float()
                 for i, p in zip(idx, torch.softmax(two, dim=1)[:, 1].tolist()):
                     out[i] = float(p)
@@ -147,3 +152,39 @@ class Qwen3Reranker(CrossEncoderReranker):
     def get_params(self) -> Dict[str, Any]:
         return {"type": "qwen3", "model_name": self.model_name, "max_length": self.max_length,
                 "fp16": self.fp16, "instruction": self.instruction}
+
+
+class VLLMQwen3Reranker(Qwen3Reranker):
+    """Qwen3-Reranker chạy trên vLLM (runner pooling, đổi lm_head thành bộ phân loại yes-no như model card
+    vLLM hướng dẫn). Chuỗi token giữ nguyên _encode() của lớp HF, nên điểm phải khớp lớp HF tới sai số fp."""
+
+    def __init__(self, model_name: str = "Qwen/Qwen3-Reranker-4B", max_length: int = 1024,
+                 instruction: str = QWEN3_INSTRUCTION, gpu_mem: float = 0.6):
+        import threading
+
+        from transformers import AutoTokenizer
+        from vllm import LLM
+
+        self.model_name, self.max_length, self.instruction, self.fp16 = model_name, max_length, instruction, True
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.prefix_ids = self.tokenizer.encode(self.PREFIX, add_special_tokens=False)
+        self.suffix_ids = self.tokenizer.encode(self.SUFFIX, add_special_tokens=False)
+        self.llm = LLM(model=model_name, runner="pooling", max_model_len=max_length + 256,
+                       gpu_memory_utilization=gpu_mem, enable_prefix_caching=True,
+                       hf_overrides={"architectures": ["Qwen3ForSequenceClassification"],
+                                     "classifier_from_token": ["no", "yes"], "is_original_qwen3_reranker": True})
+        self._lock = threading.Lock()
+
+    def score_pairs(self, pairs: List[tuple]) -> List[float]:
+        if not pairs:
+            return []
+        from vllm.inputs import TokensPrompt
+
+        prompts = [TokensPrompt(prompt_token_ids=self._encode(q, d)) for q, d in pairs]
+        with self._lock:
+            outs = self.llm.classify(prompts, use_tqdm=False)
+        return [float(o.outputs.probs[0]) for o in outs]
+
+    def get_params(self) -> Dict[str, Any]:
+        return {"type": "qwen3-vllm", "model_name": self.model_name, "max_length": self.max_length,
+                "instruction": self.instruction}
