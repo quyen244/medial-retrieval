@@ -1,0 +1,250 @@
+{
+  "query_id": 8,
+  "query": "Đau họng, khó ngủ có nên ngậm viên ho lotus chiết xuất cao thường xuân không?",
+  "pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
+  "compare_pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_pool.jsonl",
+  "fingerprint": "97d0ebce0eb0",
+  "exported_at": "2026-11-03T18:05:15.871Z",
+  "labels": [
+    {
+      "rank_1024": 1,
+      "rank_2048": 7,
+      "doc_id": "507250",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:25:58.390Z"
+    },
+    {
+      "rank_1024": 2,
+      "rank_2048": 4,
+      "doc_id": "561144",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:25:01.711Z"
+    },
+    {
+      "rank_1024": 3,
+      "rank_2048": 3,
+      "doc_id": "507149",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:24:50.745Z"
+    },
+    {
+      "rank_1024": 7,
+      "rank_2048": 10,
+      "doc_id": "742165",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:27:11.662Z"
+    },
+    {
+      "rank_1024": 9,
+      "rank_2048": 1,
+      "doc_id": "127543",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:24:24.430Z"
+    },
+    {
+      "rank_1024": 10,
+      "rank_2048": 2,
+      "doc_id": "122164",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:24:34.599Z"
+    },
+    {
+      "rank_1024": 16,
+      "rank_2048": 5,
+      "doc_id": "561146",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:25:15.874Z"
+    },
+    {
+      "rank_1024": 18,
+      "rank_2048": 6,
+      "doc_id": "566459",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:25:45.591Z"
+    },
+    {
+      "rank_1024": 20,
+      "rank_2048": 21,
+      "doc_id": "75610",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:27:51.652Z"
+    },
+    {
+      "rank_1024": 30,
+      "rank_2048": 9,
+      "doc_id": "763798",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:26:52.485Z"
+    },
+    {
+      "rank_1024": 34,
+      "rank_2048": 8,
+      "doc_id": "194693",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:26:25.666Z"
+    },
+    {
+      "rank_1024": 50,
+      "rank_2048": 100,
+      "doc_id": "443239",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:34:53.527Z"
+    },
+    {
+      "rank_1024": 58,
+      "rank_2048": 60,
+      "doc_id": "666538",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:33:03.019Z"
+    },
+    {
+      "rank_1024": 62,
+      "rank_2048": 80,
+      "doc_id": "104880",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:33:39.486Z"
+    },
+    {
+      "rank_1024": 63,
+      "rank_2048": 90,
+      "doc_id": "710553",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:34:00.835Z"
+    },
+    {
+      "rank_1024": 92,
+      "rank_2048": 50,
+      "doc_id": "548396",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:30:59.038Z"
+    },
+    {
+      "rank_1024": 108,
+      "rank_2048": 185,
+      "doc_id": "607881",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:36:02.534Z"
+    },
+    {
+      "rank_1024": 113,
+      "rank_2048": 170,
+      "doc_id": "72306",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:35:36.829Z"
+    },
+    {
+      "rank_1024": 126,
+      "rank_2048": 70,
+      "doc_id": "481942",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:33:25.921Z"
+    },
+    {
+      "rank_1024": 138,
+      "rank_2048": 200,
+      "doc_id": "17255",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:36:36.615Z"
+    },
+    {
+      "rank_1024": 140,
+      "rank_2048": 40,
+      "doc_id": "302721",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:29:31.676Z"
+    },
+    {
+      "rank_1024": 151,
+      "rank_2048": 30,
+      "doc_id": "204936",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:29:05.618Z"
+    },
+    {
+      "rank_1024": 173,
+      "rank_2048": 120,
+      "doc_id": "108074",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:35:06.558Z"
+    },
+    {
+      "rank_1024": 179,
+      "rank_2048": 245,
+      "doc_id": "168741",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:37:42.928Z"
+    },
+    {
+      "rank_1024": 195,
+      "rank_2048": 275,
+      "doc_id": "560563",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:38:26.234Z"
+    },
+    {
+      "rank_1024": 240,
+      "rank_2048": 215,
+      "doc_id": "650643",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:36:50.909Z"
+    },
+    {
+      "rank_1024": 255,
+      "rank_2048": 260,
+      "doc_id": "702474",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:37:58.039Z"
+    },
+    {
+      "rank_1024": 269,
+      "rank_2048": 230,
+      "doc_id": "760617",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:37:15.940Z"
+    },
+    {
+      "rank_1024": 283,
+      "rank_2048": 290,
+      "doc_id": "607383",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:38:35.737Z"
+    },
+    {
+      "rank_1024": 299,
+      "rank_2048": 300,
+      "doc_id": "640703",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:38:57.654Z"
+    }
+  ]
+}

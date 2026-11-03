@@ -1,0 +1,250 @@
+{
+  "query_id": 9,
+  "query": "Em bị dị ứng một loại thuốc giảm đau, khi uống thuốc có thành phần này chỉ bị sưng mắt, nếu ngưng uống triệu chứng tự hết. Vậy em có thể tiêm vắc xin Covid-19 được không?",
+  "pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
+  "compare_pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_pool.jsonl",
+  "fingerprint": "ce0659b65b63",
+  "exported_at": "2026-11-03T18:05:17.521Z",
+  "labels": [
+    {
+      "rank_1024": 1,
+      "rank_2048": 2,
+      "doc_id": "293887",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:40:36.418Z"
+    },
+    {
+      "rank_1024": 2,
+      "rank_2048": 7,
+      "doc_id": "698386",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:42:30.721Z"
+    },
+    {
+      "rank_1024": 3,
+      "rank_2048": 8,
+      "doc_id": "698387",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:42:44.321Z"
+    },
+    {
+      "rank_1024": 4,
+      "rank_2048": 1,
+      "doc_id": "193694",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:40:11.843Z"
+    },
+    {
+      "rank_1024": 5,
+      "rank_2048": 6,
+      "doc_id": "673171",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:42:00.843Z"
+    },
+    {
+      "rank_1024": 7,
+      "rank_2048": 4,
+      "doc_id": "506347",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:41:10.721Z"
+    },
+    {
+      "rank_1024": 8,
+      "rank_2048": 5,
+      "doc_id": "664190",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:41:43.423Z"
+    },
+    {
+      "rank_1024": 9,
+      "rank_2048": 10,
+      "doc_id": "691348",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:43:31.567Z"
+    },
+    {
+      "rank_1024": 16,
+      "rank_2048": 9,
+      "doc_id": "353810",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:43:03.523Z"
+    },
+    {
+      "rank_1024": 20,
+      "rank_2048": 3,
+      "doc_id": "106534",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:40:57.962Z"
+    },
+    {
+      "rank_1024": 23,
+      "rank_2048": 60,
+      "doc_id": "95872",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:45:24.889Z"
+    },
+    {
+      "rank_1024": 27,
+      "rank_2048": 21,
+      "doc_id": "196409",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:43:47.451Z"
+    },
+    {
+      "rank_1024": 38,
+      "rank_2048": 40,
+      "doc_id": "457122",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:44:35.276Z"
+    },
+    {
+      "rank_1024": 40,
+      "rank_2048": 30,
+      "doc_id": "674184",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:44:15.502Z"
+    },
+    {
+      "rank_1024": 43,
+      "rank_2048": 70,
+      "doc_id": "306372",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:45:38.001Z"
+    },
+    {
+      "rank_1024": 72,
+      "rank_2048": 50,
+      "doc_id": "178699",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:44:48.555Z"
+    },
+    {
+      "rank_1024": 94,
+      "rank_2048": 100,
+      "doc_id": "666722",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:47:04.436Z"
+    },
+    {
+      "rank_1024": 111,
+      "rank_2048": 90,
+      "doc_id": "6742",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:46:37.441Z"
+    },
+    {
+      "rank_1024": 127,
+      "rank_2048": 200,
+      "doc_id": "325095",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:48:24.988Z"
+    },
+    {
+      "rank_1024": 129,
+      "rank_2048": 80,
+      "doc_id": "674193",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:46:03.359Z"
+    },
+    {
+      "rank_1024": 161,
+      "rank_2048": 120,
+      "doc_id": "605030",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:47:20.512Z"
+    },
+    {
+      "rank_1024": 167,
+      "rank_2048": 170,
+      "doc_id": "42107",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:51:49.685Z"
+    },
+    {
+      "rank_1024": 175,
+      "rank_2048": 230,
+      "doc_id": "645879",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:51:09.031Z"
+    },
+    {
+      "rank_1024": 183,
+      "rank_2048": 245,
+      "doc_id": "646198",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:49:35.170Z"
+    },
+    {
+      "rank_1024": 201,
+      "rank_2048": 260,
+      "doc_id": "87798",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:51:02.356Z"
+    },
+    {
+      "rank_1024": 231,
+      "rank_2048": 275,
+      "doc_id": "92474",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:50:47.537Z"
+    },
+    {
+      "rank_1024": 252,
+      "rank_2048": 290,
+      "doc_id": "342004",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:50:57.979Z"
+    },
+    {
+      "rank_1024": 269,
+      "rank_2048": 185,
+      "doc_id": "532697",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:48:02.844Z"
+    },
+    {
+      "rank_1024": 276,
+      "rank_2048": 215,
+      "doc_id": "708962",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:49:02.962Z"
+    },
+    {
+      "rank_1024": 297,
+      "rank_2048": 300,
+      "doc_id": "432202",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T18:02:25.225Z"
+    }
+  ]
+}

@@ -1,0 +1,250 @@
+{
+  "query_id": 2,
+  "query": "Răng có lỗ chấm đen, chảy máu khi thức dậy là sao?",
+  "pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
+  "compare_pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_pool.jsonl",
+  "fingerprint": "f458e13f9ebd",
+  "exported_at": "2026-11-03T18:05:02.984Z",
+  "labels": [
+    {
+      "rank_1024": 1,
+      "rank_2048": 1,
+      "doc_id": "650951",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T15:57:08.531Z"
+    },
+    {
+      "rank_1024": 2,
+      "rank_2048": 3,
+      "doc_id": "9520",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:08.989Z"
+    },
+    {
+      "rank_1024": 4,
+      "rank_2048": 7,
+      "doc_id": "519001",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:09:01.457Z"
+    },
+    {
+      "rank_1024": 6,
+      "rank_2048": 6,
+      "doc_id": "734881",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:12.227Z"
+    },
+    {
+      "rank_1024": 7,
+      "rank_2048": 4,
+      "doc_id": "542837",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:10.487Z"
+    },
+    {
+      "rank_1024": 9,
+      "rank_2048": 9,
+      "doc_id": "304862",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:15.928Z"
+    },
+    {
+      "rank_1024": 13,
+      "rank_2048": 2,
+      "doc_id": "738689",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:07.066Z"
+    },
+    {
+      "rank_1024": 14,
+      "rank_2048": 5,
+      "doc_id": "295434",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:11.241Z"
+    },
+    {
+      "rank_1024": 16,
+      "rank_2048": 30,
+      "doc_id": "619864",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:11:09.027Z"
+    },
+    {
+      "rank_1024": 25,
+      "rank_2048": 100,
+      "doc_id": "503712",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:14:25.536Z"
+    },
+    {
+      "rank_1024": 30,
+      "rank_2048": 50,
+      "doc_id": "760789",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:11:51.629Z"
+    },
+    {
+      "rank_1024": 33,
+      "rank_2048": 10,
+      "doc_id": "127714",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:16.366Z"
+    },
+    {
+      "rank_1024": 42,
+      "rank_2048": 40,
+      "doc_id": "664895",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:18.063Z"
+    },
+    {
+      "rank_1024": 63,
+      "rank_2048": 8,
+      "doc_id": "672227",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:09:31.210Z"
+    },
+    {
+      "rank_1024": 73,
+      "rank_2048": 80,
+      "doc_id": "2379617",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:19.915Z"
+    },
+    {
+      "rank_1024": 114,
+      "rank_2048": 21,
+      "doc_id": "637088",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:16.739Z"
+    },
+    {
+      "rank_1024": 136,
+      "rank_2048": 120,
+      "doc_id": "176952",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:14:57.199Z"
+    },
+    {
+      "rank_1024": 164,
+      "rank_2048": 200,
+      "doc_id": "541506",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:16:37.119Z"
+    },
+    {
+      "rank_1024": 165,
+      "rank_2048": 60,
+      "doc_id": "638899",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:12:49.642Z"
+    },
+    {
+      "rank_1024": 168,
+      "rank_2048": 185,
+      "doc_id": "2357377",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:20.297Z"
+    },
+    {
+      "rank_1024": 180,
+      "rank_2048": 70,
+      "doc_id": "644123",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:19.498Z"
+    },
+    {
+      "rank_1024": 185,
+      "rank_2048": 230,
+      "doc_id": "541346",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:17:10.865Z"
+    },
+    {
+      "rank_1024": 198,
+      "rank_2048": 90,
+      "doc_id": "93469",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:14:06.378Z"
+    },
+    {
+      "rank_1024": 211,
+      "rank_2048": 170,
+      "doc_id": "540336",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:15:19.076Z"
+    },
+    {
+      "rank_1024": 247,
+      "rank_2048": 245,
+      "doc_id": "502182",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:20.697Z"
+    },
+    {
+      "rank_1024": 250,
+      "rank_2048": 260,
+      "doc_id": "430882",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:17:47.344Z"
+    },
+    {
+      "rank_1024": 262,
+      "rank_2048": 275,
+      "doc_id": "803708",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:21.297Z"
+    },
+    {
+      "rank_1024": 279,
+      "rank_2048": 215,
+      "doc_id": "107116",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:16:57.294Z"
+    },
+    {
+      "rank_1024": 291,
+      "rank_2048": 290,
+      "doc_id": "657010",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:18:24.963Z"
+    },
+    {
+      "rank_1024": 298,
+      "rank_2048": 300,
+      "doc_id": "2544013",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:28:21.747Z"
+    }
+  ]
+}

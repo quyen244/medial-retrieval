@@ -1,0 +1,250 @@
+{
+  "query_id": 7,
+  "query": "Thường xuyên nổi nóng không kiềm chế được, phải làm sao?",
+  "pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
+  "compare_pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_pool.jsonl",
+  "fingerprint": "c2a5fa562fa4",
+  "exported_at": "2026-11-03T18:05:14.357Z",
+  "labels": [
+    {
+      "rank_1024": 1,
+      "rank_2048": 7,
+      "doc_id": "539104",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:19:14.342Z"
+    },
+    {
+      "rank_1024": 2,
+      "rank_2048": 9,
+      "doc_id": "639088",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:19:31.321Z"
+    },
+    {
+      "rank_1024": 3,
+      "rank_2048": 3,
+      "doc_id": "127095",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:18:37.201Z"
+    },
+    {
+      "rank_1024": 4,
+      "rank_2048": 6,
+      "doc_id": "752399",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:19:05.598Z"
+    },
+    {
+      "rank_1024": 6,
+      "rank_2048": 4,
+      "doc_id": "570912",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:18:49.172Z"
+    },
+    {
+      "rank_1024": 9,
+      "rank_2048": 10,
+      "doc_id": "137451",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:19:42.030Z"
+    },
+    {
+      "rank_1024": 13,
+      "rank_2048": 8,
+      "doc_id": "173648",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:19:24.624Z"
+    },
+    {
+      "rank_1024": 15,
+      "rank_2048": 21,
+      "doc_id": "4028561",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:19:52.358Z"
+    },
+    {
+      "rank_1024": 16,
+      "rank_2048": 1,
+      "doc_id": "129382",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:17:25.702Z"
+    },
+    {
+      "rank_1024": 21,
+      "rank_2048": 2,
+      "doc_id": "191657",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:18:27.799Z"
+    },
+    {
+      "rank_1024": 26,
+      "rank_2048": 5,
+      "doc_id": "176992",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:18:56.871Z"
+    },
+    {
+      "rank_1024": 29,
+      "rank_2048": 50,
+      "doc_id": "135103",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:20:14.868Z"
+    },
+    {
+      "rank_1024": 30,
+      "rank_2048": 40,
+      "doc_id": "4092718",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:20:05.873Z"
+    },
+    {
+      "rank_1024": 32,
+      "rank_2048": 80,
+      "doc_id": "2439705",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:20:39.232Z"
+    },
+    {
+      "rank_1024": 60,
+      "rank_2048": 30,
+      "doc_id": "622359",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:19:59.095Z"
+    },
+    {
+      "rank_1024": 89,
+      "rank_2048": 120,
+      "doc_id": "611631",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:48.117Z"
+    },
+    {
+      "rank_1024": 98,
+      "rank_2048": 170,
+      "doc_id": "111103",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:51.726Z"
+    },
+    {
+      "rank_1024": 120,
+      "rank_2048": 60,
+      "doc_id": "671192",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:20:24.359Z"
+    },
+    {
+      "rank_1024": 122,
+      "rank_2048": 185,
+      "doc_id": "287501",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:52.844Z"
+    },
+    {
+      "rank_1024": 133,
+      "rank_2048": 90,
+      "doc_id": "304461",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:20:46.032Z"
+    },
+    {
+      "rank_1024": 135,
+      "rank_2048": 70,
+      "doc_id": "644693",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:20:33.615Z"
+    },
+    {
+      "rank_1024": 192,
+      "rank_2048": 215,
+      "doc_id": "165908",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:55.808Z"
+    },
+    {
+      "rank_1024": 197,
+      "rank_2048": 200,
+      "doc_id": "101126",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:53.457Z"
+    },
+    {
+      "rank_1024": 210,
+      "rank_2048": 100,
+      "doc_id": "104962",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:32.257Z"
+    },
+    {
+      "rank_1024": 222,
+      "rank_2048": 230,
+      "doc_id": "731009",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:56.738Z"
+    },
+    {
+      "rank_1024": 232,
+      "rank_2048": 245,
+      "doc_id": "139716",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:57.594Z"
+    },
+    {
+      "rank_1024": 244,
+      "rank_2048": 260,
+      "doc_id": "665507",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:58.340Z"
+    },
+    {
+      "rank_1024": 277,
+      "rank_2048": 290,
+      "doc_id": "64796",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:22:10.001Z"
+    },
+    {
+      "rank_1024": 287,
+      "rank_2048": 275,
+      "doc_id": "521311",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:21:59.640Z"
+    },
+    {
+      "rank_1024": 300,
+      "rank_2048": 300,
+      "doc_id": "508727",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:22:28.576Z"
+    }
+  ]
+}
