@@ -99,7 +99,7 @@ def start_servers(model, n_gpu, out, max_len, mem, max_seqs, extra, prefix_cache
                                       # WARNING: bản vLLM cũ log nguyên văn mọi prompt ở INFO (hàng trăm MB);
                                       # cờ tắt log request lại đổi tên giữa các bản, biến môi trường thì không.
                                       env=dict(os.environ, CUDA_VISIBLE_DEVICES=str(i), VLLM_USE_FLASHINFER_SAMPLER="0",
-                                               VLLM_LOGGING_LEVEL="WARNING")))
+                                               VLLM_LOGGING_LEVEL=os.environ.get("VLLM_LOGGING_LEVEL", "WARNING"))))
     return procs
 
 
