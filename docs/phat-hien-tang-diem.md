@@ -463,12 +463,9 @@ Thư mục `res/` có 7 zip cho 5 phép đo: hai cặp trùng từng byte (cùng
 | `fuse_d160_c100_..._ctop60t.zip` | đúng tên, mục 21 |
 | `scoring_result.zip` | **bản sao của trên**, chưa đổi tên sau khi tải |
 | `fuse_d110_c55_top300_mix0.3_ctop300.zip` | FINAL 0.2327, nhưng chủ của điểm này còn SUY LUẬN |
-| `doc_top300_bge_vcorr_enzh_hyde.zip` | **bản sao của trên** |
+| `doc_top300_bge_vcorr_enzh_hyde.zip` | **bản sao của trên**; điểm thật của HyDE là 0.2225 (mục 25) |
 
-Cặp cuối chưa chốt được: điểm 0.2327 có `DOCS_P` = 0.2093, cho `h_doc` = 23,02 nếu `m` = 110 (bản mix0.3)
-hoặc 16,74 nếu `m` = 80 (bản HyDE).
-23,02 khớp liền mạch với 22,83 của d110 thuần (mục 19), còn 16,74 đòi HyDE phải kém d80 thuần (18,95) mà `DOCS_R` lại cao hơn hẳn - khó xảy ra.
-Nên khả năng cao là của mix0.3, nhưng CHƯA đo. Phải tải lại một trong hai bài để chốt, vì vậy chưa cấp mục số cho nó.
+Cặp cuối ĐÃ CHỐT (2026-10-25): bài HyDE được chấm lại ra 0.2225 (mục 25), nên 0.2327 là của `fuse_d110_c55_top300_mix0.3_ctop300`.
 | `doc_d80_c55_top300_bge_vcorr_enzh_a.zip` | đúng tên, mục 18 (`a` = aspects) |
 
 Hai bài `fuse_d160_*` có `relevant_docs` giống hệt nhau cả 1200 câu, nên tầng doc của chúng chấm ra số y hệt.
@@ -494,6 +491,149 @@ Tập thay vào trúng ít hơn tập bị đẩy ra 1,50 doc mỗi câu.
 
 **Phán quyết: RRF không trọng số với nhánh chunk làm tụt tầng doc. Không dùng.**
 Còn để ngỏ: dùng nhánh chunk chỉ để xếp lại doc đã có trong pool, chưa đo.
+
+## 24. Nới m_doc 160 -> 220: FINAL 0.2562 -> 0.2542 (thua)
+
+Bài `fuse_d220_c100_top300_orig_ctop60+top300_cap2700` (T08).
+Đã kiểm file nộp: 220 doc mỗi câu, 160 doc đầu và `relevant_chunks` trùng 1200/1200 câu với mục 21; `CHUNKS_F2` ra đúng 0.2275.
+
+| | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | FINAL |
+|---|---:|---:|---:|---:|---:|
+| m_doc 160 (mục 21) | 0.1740 | 0.4168 | 27,84 | 0.2849 | 0.2562 |
+| m_doc 220 | 0.1450 | 0.4601 | 31,90 | 0.2810 | 0.2542 |
+
+60 doc hạng 161-220 trúng thêm 4,06 doc mỗi câu, tức biên 6,8% mỗi doc.
+Biên theo hạng đã đo: 81-110 là 12,9%, 111-160 là 10,0%, 161-220 là 6,8%.
+
+**Phán quyết: 6,8% đã dưới ngưỡng, F2 tụt. Giữ m_doc 160.**
+Recall 0.46 ở 220 doc không phải trần của pool: muốn tăng điểm phải đổi doc nằm TRONG top 160, không phải nộp thêm đuôi.
+
+## 25. HyDE và mix0.3: HyDE gỡ lại phần doc mà pool B mất, mix0.3 thắng nhẹ trên pool top300
+
+Hai bài, cùng ngày, đã chốt danh tính điểm 0.2327 (mục 22).
+
+**HyDE** (`doc_top300_bge_vcorr_enzh_hyde`, 80 doc / 55 chunk, pool Bhyde = RRF 5 lượt tìm: câu gốc, câu sửa, en, zh, đoạn HyDE):
+
+| | pool | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | `CHUNKS_F2` | FINAL |
+|---|---|---:|---:|---:|---:|---:|---:|
+| d80 top300 (mục 15) | chỉ câu gốc | 0.2369 | 0.3117 | 18,95 | **0.2574** | 0.1887 | **0.2230** |
+| d80 B (mục 17) | + câu sửa + en + zh | 0.2370 | 0.3029 | 18,96 | 0.2520 | 0.1913 | 0.2216 |
+| d80 Bhyde | + HyDE | 0.2364 | 0.3121 | 18,91 | 0.2563 | 0.1888 | 0.2225 |
+
+**Phán quyết: trung tính.** HyDE kéo `DOCS_F2` của pool B lên +0,0043 nhưng vẫn dưới pool chỉ câu gốc; `h_doc` gần như không đổi.
+
+**mix0.3 trên pool top300** (`fuse_d110_c55_top300_mix0.3_ctop300`, 110 doc / 55 chunk, chunk list top300 như mục 19):
+
+| | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | FINAL |
+|---|---:|---:|---:|---:|---:|
+| d110 orig (mục 19) | 0.2075 | - | 22,83 | 0.2745 | 0.2316 |
+| d110 mix0.3 | 0.2093 | 0.3636 | 23,02 | **0.2766** | **0.2327** |
+
+**Phán quyết: thắng nhẹ, +0,0021 `DOCS_F2`.** Pool top300 khoảng 80% doc vi nên điểm câu cùng ngôn ngữ ít khi khác điểm câu gốc; hiệu ứng nhỏ.
+Chưa thử trên bài SOTA d160 (T19 trong `docs/experiments.json`).
+
+## 26. Cách A trên pool B: đẩy điểm doc en/zh lên càng mạnh càng thua
+
+Cùng pool B, 80 doc, cùng chunk list top60 (`CHUNKS_F2` ra đúng 0.1930 ở cả ba bài, nên bài dựng đúng). Chỉ đổi trọng số λ của điểm câu cùng ngôn ngữ (`s_m`) trong `λ·s_m + (1-λ)·s_o`.
+
+| λ | bài | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | Δ so với orig |
+|---:|---|---:|---:|---:|---:|---:|
+| 0 | orig (mục 17) | 0.2370 | 0.3029 | 18,96 | 0.2520 | - |
+| 0,3 | `fuse_d80_c55_B_mix0.3_ctop60` | 0.2288 | 0.2928 | 18,30 | 0.2424 | −0,0096 |
+| 0,5 | `fuse_d80_c55_B_mix0.5_ctop60` | 0.2205 | 0.2809 | 17,64 | 0.2332 | −0,0188 |
+| 1 | `fuse_d80_c55_B_matched_ctop60` (T01) | 0.1890 | 0.2509 | 15,12 | 0.2051 | −0,0469 |
+
+Chuẩn hoá điểm theo từng ngôn ngữ (T03, T04, nộp 2026-10-26, cùng pool B, cùng chunk list, `CHUNKS_F2` 0.1930 ở cả hai):
+
+| cách | bài | en+zh trong top 80 | `DOCS_P` | `DOCS_R` | `h_doc` | `DOCS_F2` | Δ so với orig |
+|---|---|---:|---:|---:|---:|---:|---:|
+| orig | (mục 17) | 24% | 0.2370 | 0.3029 | 18,96 | 0.2520 | - |
+| min-max [-1, 1] (T03) | `fuse_d80_c55_B_langmm_ctop60` | 40% | 0.2121 | 0.2688 | 16,97 | 0.2238 | −0,0282 |
+| z-score logit (T04) | `fuse_d80_c55_B_langz_ctop60` | 63% | 0.1477 | 0.2001 | 11,82 | 0.1631 | −0,0889 |
+
+**Phán quyết: thua, đơn điệu theo λ.** Trên pool B (63% doc en/zh), chấm bằng câu cùng ngôn ngữ đưa doc en/zh lên, và chúng trúng ít hơn doc vi bị đẩy ra.
+Suy luận, chưa đo: hoặc gold chủ yếu là doc vi, hoặc điểm của reranker với câu dịch thổi phồng doc en/zh. T03 và T04 đã xác nhận: chuẩn hoá theo ngôn ngữ càng đẩy en/zh lên càng thua (T04 thua nặng nhất). T02 và phần en/zh của T11 cùng hướng rủi ro này.
+
+## 27. Hạ doc en/zh cũng thua; gộp doc vi của HyDE hoà (T20, T21, T22, nộp 2026-10-27)
+
+Đối chứng là SOTA `fuse_d160_c100_cap2700` (160 doc, 100 chunk, trần 2.700): `DOCS_F2` 0.2849, `CHUNKS_F2` 0.2275.
+`h = P × m`, với m = 160 doc và 100 chunk.
+
+T20 và T21 đi chung bài B2 (`fuse_d160_c100_top300_vifirst_ctop60+top300_cap2700_cvi`): T20 đọc tầng doc, T21 đọc tầng chunk.
+
+| thí nghiệm | tầng | `P` | `R` | `h` | `F2` | Δ |
+|---|---|---:|---:|---:|---:|---:|
+| SOTA | doc | 0.1740 | 0.4168 | 27,84 | 0.2849 | - |
+| T20 (doc vi trước) | doc | 0.1716 | 0.4117 | 27,46 | 0.2813 | −0,0036 |
+| T22 (+ doc vi của Bhyde) | doc | 0.1731 | 0.4209 | 27,70 | 0.2850 | +0,0001 |
+| SOTA | chunk | 0.1916 | 0.2835 | 19,16 | 0.2275 | - |
+| T21 (chunk doc vi trước) | chunk | 0.1896 | 0.2823 | 18,96 | 0.2262 | −0,0013 |
+
+T22 ra đúng `CHUNKS_F2` 0.2275 ở tầng không đổi, nên bài dựng đúng.
+
+**Phán quyết:**
+
+- T20 thua, T21 thua. Cùng với mục 26, thứ tự của reranker (câu gốc) đã đúng chỗ theo cả hai chiều: đẩy doc en/zh lên thua, hạ xuống cũng thua. Ngôn ngữ của doc không phải đòn bẩy để sắp lại.
+- T22 hoà. `R` tăng 0.0041 nhưng `P × m` giảm 0,14; khác biệt nằm trong nhiễu. Doc vi mà HyDE tìm thêm không thắng doc hạng thấp của pool top300.
+
+## 28. Nộp cả pool: top300 chỉ chứa 48,9% gold, pool B còn ít hơn (chẩn đoán, 2026-10-27)
+
+Nộp toàn bộ 300 doc của pool thì thứ hạng không còn ảnh hưởng, nên `DOCS_RECALL` là trần recall của pool.
+Tầng chunk giữ như SOTA và ra đúng 0.2275 ở cả hai bài, nên bài dựng đúng.
+
+| pool | `DOCS_P` | `DOCS_R` (= phủ) | `h` (P × 300) |
+|---|---:|---:|---:|
+| top300 (chỉ câu gốc) | 0.1163 | **0.4890** | 34,89 |
+| B (RRF câu gốc + câu sửa + en + zh) | 0.0883 | 0.3891 | 26,49 |
+
+Đối chiếu với SOTA trên cùng pool top300 (R@160 = 0.4168, h 27,84):
+
+- Ở 160 doc, reranker đã lấy được 0.4168 / 0.4890 = **85%** số gold có trong pool. Hạng 161-300 chỉ trúng (34,89 − 27,84) / 140 = 5,0% mỗi doc.
+- **51% gold không có trong pool top300.** Không reranker hay cách xếp lại nào với tới phần này.
+- Pool B phủ ÍT hơn top300 (0.3891 so với 0.4890): các lượt tìm bằng bản dịch en/zh chiếm chỗ của doc gold chứ không mở rộng phủ. Đây là lý do thật của mục 17, không phải do xếp hạng doc en/zh.
+
+**Phán quyết:** nghẽn chính là PHỦ, không phải xếp hạng.
+Ưu tiên những gì đưa thêm gold vào pool: pool sâu hơn (T12), embedding mới với text dài (`scripts/embed_q3e.py`), PRF theo cụm (T24).
+Những gì chỉ xếp lại trong pool (reranker mới, T23, cắt theo từng câu) chỉ còn tranh phần 15% gold đã có trong pool mà nằm dưới hạng 160.
+Lưu ý: corpus đã crawl được 82,2% (vi 88,7%), nên một phần gold có thể không bao giờ tìm được dù pool sâu tới đâu.
+
+## 29. Pool top1000 (T12): có thêm gold nhưng reranker kéo nhầm doc sâu lên, thua (2026-10-27)
+
+Pool top1000: câu gốc, dense bge-m3, `hnsw_ef` 1000, rerank bge-reranker-v2-m3 (740.429 cặp chấm trên Kaggle, 459.571 cặp dùng lại cache).
+
+| bài | m_doc | `DOCS_P` | `DOCS_R` | `h` | `DOCS_F2` |
+|---|---:|---:|---:|---:|---:|
+| SOTA (pool top300) | 160 | 0.1740 | 0.4168 | 27,84 | 0.2849 |
+| **T12** (pool top1000) | 160 | 0.1563 | 0.3919 | 25,01 | 0.2606 |
+| chẩn đoán R@300 (mục 28) | 300 | 0.1163 | 0.4890 | 34,89 | - |
+| chẩn đoán R@1000 | 1.000 | 0.0428 | 0.5914 | 42,80 | - |
+
+- Hạng truy xuất 301-1000 có thêm 42,80 − 34,89 = 7,9 gold mỗi câu, trên 700 doc: 1,1% mỗi doc.
+- Reranker đưa trung bình 55,5 doc mới (đo offline) vào top 160, và nhóm này trúng kém nhóm bị đẩy ra khoảng 5 điểm % (h giảm 2,83).
+- Ở 160 doc, T12 chỉ lấy được 0.3919 / 0.5914 = 66% số gold có trong pool, so với 85% của pool top300.
+- 41% gold vẫn nằm ngoài top 1.000 của bge-m3.
+
+**Phán quyết: T12 thua.** Đào sâu bằng cùng retriever và cùng reranker làm loãng: pool sâu có thêm gold nhưng thưa (1,1%), và bge-reranker không lọc được.
+Hai hướng còn lại: (1) giữ thông tin thứ hạng truy xuất khi xếp (doc hạng sâu phải có điểm rerank rất cao mới được vào), làm offline được trên pool top1000; (2) đổi tầng đầu (embedding mới) để gold lên hạng cao ngay từ khi tìm.
+
+Phụ: bài R@1000 nộp 90 chunk, `h_chunk` 0.2013 × 90 = 18,12 so với 19,16 ở 100 chunk: chunk hạng 91-100 vẫn trúng 10,4% mỗi chunk.
+
+## 30. Cổng hạng truy xuất trên pool top1000 (T25a): hơn T12, vẫn thua SOTA (2026-10-27)
+
+`gate300_0.6`: doc có hạng truy xuất > 300 chỉ được giữ điểm bge khi điểm >= 0,6, còn lại bị trừ 1.
+
+| bài | m_doc | `DOCS_P` | `DOCS_R` | `h` | `DOCS_F2` |
+|---|---:|---:|---:|---:|---:|
+| SOTA (pool top300) | 160 | 0.1740 | 0.4168 | 27,84 | 0.2849 |
+| T12 (pool top1000, xếp thẳng theo bge) | 160 | 0.1563 | 0.3919 | 25,01 | 0.2606 |
+| **T25a** (pool top1000, gate300_0.6) | 160 | 0.1688 | 0.4128 | 27,01 | 0.2796 |
+
+- Đo offline: top 160 của T25a trùng SOTA 149,0 doc/câu; 11 doc khác, trong đó 10,0 doc từ hạng truy xuất > 300.
+- 11 doc đổi vào mang về ít hơn 0,83 hit so với 11 doc bị đẩy ra.
+- Doc bị đẩy ra là đuôi top 160 của SOTA; kể cả doc sâu có điểm bge >= 0,6 cũng trúng kém nhóm đó.
+
+**Phán quyết: T25a thua SOTA (−0,0053 DOCS_F2).** Cổng chặt hơn chỉ tiến dần về SOTA (gate300_0.9 còn 1,6 doc sâu), không có lợi để nộp.
+Cùng kết luận với mục 29: bge-reranker không tách được gold trong phần pool hạng 301-1000; muốn dùng pool sâu phải đổi reranker (T14) hoặc đổi tầng tìm.
 
 ## Nguyên tắc rút ra về cách thí nghiệm
 

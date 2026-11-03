@@ -1,0 +1,1 @@
+Retrieve Vietnamese, English, or Chinese medical documents that are semantically relevant to the Vietnamese medical query, including clinically equivalent terminology and paraphrases.

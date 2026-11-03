@@ -1,0 +1,250 @@
+{
+  "query_id": 4,
+  "query": "Chỉ số SCC của em sau khi xét nghiệm là 1.52 vẫn nằm trong ngưỡng bình thường nhưng có vẻ hơi cao. Em có cần để ý, chú ý thêm hay sau mấy tháng phải xét nghiệm lại không. Bác sĩ có thể giải thích thêm về chỉ số của em không.",
+  "pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
+  "compare_pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_pool.jsonl",
+  "fingerprint": "34863e555f4a",
+  "exported_at": "2026-11-03T18:05:09.330Z",
+  "labels": [
+    {
+      "rank_1024": 1,
+      "rank_2048": 1,
+      "doc_id": "671059",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:31:43.476Z"
+    },
+    {
+      "rank_1024": 2,
+      "rank_2048": 8,
+      "doc_id": "4000913",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:35:15.151Z"
+    },
+    {
+      "rank_1024": 5,
+      "rank_2048": 5,
+      "doc_id": "198489",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:33:55.729Z"
+    },
+    {
+      "rank_1024": 8,
+      "rank_2048": 2,
+      "doc_id": "194328",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T16:32:17.442Z"
+    },
+    {
+      "rank_1024": 9,
+      "rank_2048": 3,
+      "doc_id": "198490",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:32:42.859Z"
+    },
+    {
+      "rank_1024": 13,
+      "rank_2048": 7,
+      "doc_id": "431039",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:34:44.359Z"
+    },
+    {
+      "rank_1024": 19,
+      "rank_2048": 40,
+      "doc_id": "1494793",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T16:38:56.106Z"
+    },
+    {
+      "rank_1024": 22,
+      "rank_2048": 4,
+      "doc_id": "675545",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T16:33:33.312Z"
+    },
+    {
+      "rank_1024": 41,
+      "rank_2048": 9,
+      "doc_id": "191324",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:35:30.042Z"
+    },
+    {
+      "rank_1024": 48,
+      "rank_2048": 21,
+      "doc_id": "179801",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:37:28.641Z"
+    },
+    {
+      "rank_1024": 50,
+      "rank_2048": 30,
+      "doc_id": "5111783",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T16:38:35.132Z"
+    },
+    {
+      "rank_1024": 52,
+      "rank_2048": 10,
+      "doc_id": "758950",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:35:52.219Z"
+    },
+    {
+      "rank_1024": 56,
+      "rank_2048": 80,
+      "doc_id": "5478758",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T16:49:39.129Z"
+    },
+    {
+      "rank_1024": 78,
+      "rank_2048": 170,
+      "doc_id": "562367",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:27.859Z"
+    },
+    {
+      "rank_1024": 80,
+      "rank_2048": 230,
+      "doc_id": "2197526",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:39.985Z"
+    },
+    {
+      "rank_1024": 85,
+      "rank_2048": 100,
+      "doc_id": "179638",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:01.291Z"
+    },
+    {
+      "rank_1024": 102,
+      "rank_2048": 50,
+      "doc_id": "665703",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:39:04.454Z"
+    },
+    {
+      "rank_1024": 104,
+      "rank_2048": 70,
+      "doc_id": "197607",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:39:59.793Z"
+    },
+    {
+      "rank_1024": 119,
+      "rank_2048": 6,
+      "doc_id": "665610",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:34:21.954Z"
+    },
+    {
+      "rank_1024": 126,
+      "rank_2048": 60,
+      "doc_id": "186459",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:39:48.841Z"
+    },
+    {
+      "rank_1024": 133,
+      "rank_2048": 260,
+      "doc_id": "2191333",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:40.923Z"
+    },
+    {
+      "rank_1024": 147,
+      "rank_2048": 120,
+      "doc_id": "179723",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:09.731Z"
+    },
+    {
+      "rank_1024": 197,
+      "rank_2048": 275,
+      "doc_id": "2503854",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:41.414Z"
+    },
+    {
+      "rank_1024": 207,
+      "rank_2048": 215,
+      "doc_id": "184800",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:39.804Z"
+    },
+    {
+      "rank_1024": 229,
+      "rank_2048": 185,
+      "doc_id": "198049",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:28.251Z"
+    },
+    {
+      "rank_1024": 241,
+      "rank_2048": 90,
+      "doc_id": "177852",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:49:52.537Z"
+    },
+    {
+      "rank_1024": 271,
+      "rank_2048": 200,
+      "doc_id": "2209808",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:39.637Z"
+    },
+    {
+      "rank_1024": 274,
+      "rank_2048": 290,
+      "doc_id": "2224443",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:42.874Z"
+    },
+    {
+      "rank_1024": 294,
+      "rank_2048": 245,
+      "doc_id": "706358",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:40.167Z"
+    },
+    {
+      "rank_1024": 300,
+      "rank_2048": 300,
+      "doc_id": "623155",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T16:50:43.887Z"
+    }
+  ]
+}

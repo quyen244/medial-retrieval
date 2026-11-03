@@ -39,11 +39,12 @@ class FakePoint:
 class FakeEncoder:
     """Không có encode_with_sparse -> candidates.py đi đường dense."""
 
-    def encode(self, text, normalize_embeddings=True):
+    def encode(self, text, normalize_embeddings=True, **kwargs):
         class _V:
             def tolist(self_inner):
                 return [0.1, 0.2, 0.3]
-        return _V()
+        # candidates.py encode cả lô câu một lần (list -> một vector mỗi câu)
+        return [_V() for _ in text] if isinstance(text, list) else _V()
 
 
 class FakeVectorStore:
@@ -160,7 +161,8 @@ class TestBuoc4(unittest.TestCase):
             FakeVectorStore(), make_records(), self.cfg, SRC_LOOKUP)
 
     def test_han_ngach_dung_so(self):
-        self.assertEqual(lang_targets(self.cfg), {"en": 25, "vi": 15, "zh": 10})
+        # Khớp branch_keep lúc inference, xem LabelingConfig.candidate_lang_quota.
+        self.assertEqual(lang_targets(self.cfg), {"vi": 26, "en": 16, "zh": 8})
         self.assertEqual(sum(lang_targets(self.cfg).values()), self.cfg.candidates_per_query)
 
     def test_pool_dung_50_va_dung_quota(self):
@@ -250,7 +252,7 @@ class TestBuoc5(unittest.TestCase):
             self.assertLess(p.index("QUERY="), p.index("CHUNKS="))
 
     def test_weight_theo_bang_diem(self):
-        bang = {3: 1.0, 2: 0.6, 1: None, 0: 0.0}
+        bang = {3: 1.0, 2: 0.4, 1: None, 0: 0.0}   # judge.SCORE_WEIGHT
         for row in self.rows:
             for c in row["candidates"]:
                 self.assertEqual(c["weight"], bang[c["t2_score"]])

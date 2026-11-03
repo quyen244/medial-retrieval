@@ -1,0 +1,250 @@
+{
+  "query_id": 6,
+  "query": "Nhân tuyến giáp có nên điều trị hay không và can thiệp những gì?",
+  "pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
+  "compare_pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_pool.jsonl",
+  "fingerprint": "e66c179072a9",
+  "exported_at": "2026-11-03T18:05:12.670Z",
+  "labels": [
+    {
+      "rank_1024": 1,
+      "rank_2048": 7,
+      "doc_id": "100172",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:08:03.082Z"
+    },
+    {
+      "rank_1024": 3,
+      "rank_2048": 4,
+      "doc_id": "192696",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:07:10.130Z"
+    },
+    {
+      "rank_1024": 4,
+      "rank_2048": 2,
+      "doc_id": "188762",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:05:30.732Z"
+    },
+    {
+      "rank_1024": 5,
+      "rank_2048": 40,
+      "doc_id": "742832",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:10:07.586Z"
+    },
+    {
+      "rank_1024": 14,
+      "rank_2048": 5,
+      "doc_id": "188761",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:07:42.462Z"
+    },
+    {
+      "rank_1024": 19,
+      "rank_2048": 8,
+      "doc_id": "174353",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:08:51.130Z"
+    },
+    {
+      "rank_1024": 23,
+      "rank_2048": 200,
+      "doc_id": "459992",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:13:30.293Z"
+    },
+    {
+      "rank_1024": 30,
+      "rank_2048": 21,
+      "doc_id": "748371",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:09:39.934Z"
+    },
+    {
+      "rank_1024": 35,
+      "rank_2048": 3,
+      "doc_id": "669705",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:05:40.043Z"
+    },
+    {
+      "rank_1024": 36,
+      "rank_2048": 10,
+      "doc_id": "195879",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:09:25.154Z"
+    },
+    {
+      "rank_1024": 38,
+      "rank_2048": 100,
+      "doc_id": "756877",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:11:54.272Z"
+    },
+    {
+      "rank_1024": 47,
+      "rank_2048": 1,
+      "doc_id": "100269",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:05:21.587Z"
+    },
+    {
+      "rank_1024": 50,
+      "rank_2048": 30,
+      "doc_id": "180308",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:09:54.296Z"
+    },
+    {
+      "rank_1024": 56,
+      "rank_2048": 90,
+      "doc_id": "174675",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:11:20.274Z"
+    },
+    {
+      "rank_1024": 61,
+      "rank_2048": 9,
+      "doc_id": "720060",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:09:12.820Z"
+    },
+    {
+      "rank_1024": 87,
+      "rank_2048": 245,
+      "doc_id": "108614",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:14:52.602Z"
+    },
+    {
+      "rank_1024": 116,
+      "rank_2048": 120,
+      "doc_id": "760884",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:12:24.065Z"
+    },
+    {
+      "rank_1024": 121,
+      "rank_2048": 6,
+      "doc_id": "196079",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:07:54.099Z"
+    },
+    {
+      "rank_1024": 127,
+      "rank_2048": 70,
+      "doc_id": "304127",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:10:50.697Z"
+    },
+    {
+      "rank_1024": 128,
+      "rank_2048": 60,
+      "doc_id": "126876",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:10:29.032Z"
+    },
+    {
+      "rank_1024": 163,
+      "rank_2048": 275,
+      "doc_id": "109897",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:15:21.280Z"
+    },
+    {
+      "rank_1024": 174,
+      "rank_2048": 230,
+      "doc_id": "742514",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:14:32.604Z"
+    },
+    {
+      "rank_1024": 207,
+      "rank_2048": 80,
+      "doc_id": "740573",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:10:59.105Z"
+    },
+    {
+      "rank_1024": 210,
+      "rank_2048": 260,
+      "doc_id": "556520",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:15:05.386Z"
+    },
+    {
+      "rank_1024": 264,
+      "rank_2048": 50,
+      "doc_id": "573027",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:10:19.360Z"
+    },
+    {
+      "rank_1024": 279,
+      "rank_2048": 290,
+      "doc_id": "522929",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:16:13.515Z"
+    },
+    {
+      "rank_1024": 291,
+      "rank_2048": 185,
+      "doc_id": "751392",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:13:05.138Z"
+    },
+    {
+      "rank_1024": 292,
+      "rank_2048": 215,
+      "doc_id": "126847",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-11-03T17:13:51.906Z"
+    },
+    {
+      "rank_1024": 298,
+      "rank_2048": 170,
+      "doc_id": "305411",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:13:12.218Z"
+    },
+    {
+      "rank_1024": 300,
+      "rank_2048": 300,
+      "doc_id": "536744",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-11-03T17:16:38.759Z"
+    }
+  ]
+}

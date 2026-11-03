@@ -1,0 +1,250 @@
+{
+  "query_id": 1,
+  "query": "Em bị viêm xung huyết 1/3 dưới thực quản, viêm dạ dày trợt xung huyết mạn tính, sẹo loét hành tá tràng. Cho em hỏi các bệnh này của em có nặng và có thể khỏi được không. Em vừa uống xong đợt thuốc được 1-2 ngày thì giờ em lại thấy triệu chứng bị nghẹn ở cổ và hơi buồn nôn. Không biết có phải bệnh nặng lên hay do sao.",
+  "pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
+  "compare_pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_pool.jsonl",
+  "fingerprint": "7018077e705a",
+  "exported_at": "2026-10-30T05:46:09.559Z",
+  "labels": [
+    {
+      "rank_1024": 1,
+      "rank_2048": 8,
+      "doc_id": "615146",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:23:57.951Z"
+    },
+    {
+      "rank_1024": 3,
+      "rank_2048": 2,
+      "doc_id": "664021",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:19:42.939Z"
+    },
+    {
+      "rank_1024": 4,
+      "rank_2048": 1,
+      "doc_id": "674793",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:19:41.783Z"
+    },
+    {
+      "rank_1024": 5,
+      "rank_2048": 5,
+      "doc_id": "754249",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:23:07.233Z"
+    },
+    {
+      "rank_1024": 6,
+      "rank_2048": 6,
+      "doc_id": "664460",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:23:18.306Z"
+    },
+    {
+      "rank_1024": 9,
+      "rank_2048": 7,
+      "doc_id": "758454",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:23:45.757Z"
+    },
+    {
+      "rank_1024": 11,
+      "rank_2048": 10,
+      "doc_id": "177217",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:25:01.194Z"
+    },
+    {
+      "rank_1024": 13,
+      "rank_2048": 9,
+      "doc_id": "169306",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:24:29.166Z"
+    },
+    {
+      "rank_1024": 15,
+      "rank_2048": 3,
+      "doc_id": "560679",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:19:45.686Z"
+    },
+    {
+      "rank_1024": 19,
+      "rank_2048": 30,
+      "doc_id": "758548",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:28:49.947Z"
+    },
+    {
+      "rank_1024": 52,
+      "rank_2048": 40,
+      "doc_id": "552911",
+      "label": "relevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:29:19.019Z"
+    },
+    {
+      "rank_1024": 63,
+      "rank_2048": 50,
+      "doc_id": "753501",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:29:49.640Z"
+    },
+    {
+      "rank_1024": 64,
+      "rank_2048": 70,
+      "doc_id": "758438",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:38:33.336Z"
+    },
+    {
+      "rank_1024": 66,
+      "rank_2048": 120,
+      "doc_id": "747488",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:39:05.106Z"
+    },
+    {
+      "rank_1024": 69,
+      "rank_2048": 4,
+      "doc_id": "746067",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:22:42.269Z"
+    },
+    {
+      "rank_1024": 120,
+      "rank_2048": 215,
+      "doc_id": "560352",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:42:02.052Z"
+    },
+    {
+      "rank_1024": 123,
+      "rank_2048": 60,
+      "doc_id": "673085",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:34:22.714Z"
+    },
+    {
+      "rank_1024": 134,
+      "rank_2048": 200,
+      "doc_id": "739600",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:40:52.594Z"
+    },
+    {
+      "rank_1024": 144,
+      "rank_2048": 245,
+      "doc_id": "653096",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:42:44.365Z"
+    },
+    {
+      "rank_1024": 147,
+      "rank_2048": 80,
+      "doc_id": "552880",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:38:44.159Z"
+    },
+    {
+      "rank_1024": 155,
+      "rank_2048": 185,
+      "doc_id": "646429",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:39:34.705Z"
+    },
+    {
+      "rank_1024": 156,
+      "rank_2048": 90,
+      "doc_id": "555144",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:38:53.677Z"
+    },
+    {
+      "rank_1024": 164,
+      "rank_2048": 21,
+      "doc_id": "625714",
+      "label": "unsure",
+      "note": "",
+      "updated_at": "2026-10-30T05:27:37.544Z"
+    },
+    {
+      "rank_1024": 166,
+      "rank_2048": 170,
+      "doc_id": "546116",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:39:10.249Z"
+    },
+    {
+      "rank_1024": 249,
+      "rank_2048": 230,
+      "doc_id": "520237",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:42:42.330Z"
+    },
+    {
+      "rank_1024": 250,
+      "rank_2048": 100,
+      "doc_id": "571808",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:39:02.435Z"
+    },
+    {
+      "rank_1024": 268,
+      "rank_2048": 290,
+      "doc_id": "749457",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:42:49.610Z"
+    },
+    {
+      "rank_1024": 286,
+      "rank_2048": 260,
+      "doc_id": "194841",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:42:46.601Z"
+    },
+    {
+      "rank_1024": 291,
+      "rank_2048": 275,
+      "doc_id": "512201",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:42:47.424Z"
+    },
+    {
+      "rank_1024": 299,
+      "rank_2048": 300,
+      "doc_id": "85515",
+      "label": "irrelevant",
+      "note": "",
+      "updated_at": "2026-10-30T05:42:54.673Z"
+    }
+  ]
+}

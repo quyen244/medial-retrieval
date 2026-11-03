@@ -139,8 +139,8 @@ def main():
     if not plan:
         return
 
-    from src.rag.pipeline.components.reranking import CrossEncoderReranker
-    reranker = CrossEncoderReranker(model_name=rr_model, max_length=rr_len)
+    from src.rag.pipeline.components.reranking import make_reranker
+    reranker = make_reranker(model_name=rr_model, max_length=rr_len)
     client = QdrantClient(url=cfg.get("qdrant.url", "http://localhost:6333"),
                           timeout=cfg.get("qdrant.timeout", 600))
 

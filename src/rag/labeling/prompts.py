@@ -30,6 +30,9 @@ REQUIRED_VARS: Dict[str, List[str]] = {
     # mảng JSON các {"chunk_id": int, "text": str}), không phải {{documents}}
     # như doc thiết kế dự kiến ban đầu.
     "judge_tier2": ["query", "chunks"],
+    # Nhãn cấp doc 3 mức trên câu thật đã sửa (src/rag/labeling/doc_labels.py). Ý nghĩa
+    # từng biến: docstring của run_doc_labels.py.
+    "judge_doc_3level": ["query", "few_shots", "documents"],
     # Pha augment câu truy vấn (src/rag/augment). Lưu ý hai prompt dịch khác
     # nhau về độ hạt: disease_translation nhận MỘT tên bệnh một lần, còn
     # symptom_translation nhận cả mảng triệu chứng trong một lần.
