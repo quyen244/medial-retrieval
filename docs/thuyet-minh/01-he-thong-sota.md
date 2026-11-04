@@ -144,15 +144,15 @@ Code chia đoạn theo ngôn ngữ trong `src/rag/chunker/` và index đoạn `m
 
 | Dữ liệu | Đường dẫn trong repo | Dung lượng | Cách lấy |
 |---|---|---:|---|
-| Câu hỏi | `data/queries/real_queries.jsonl` | 0,23 MB | `python -m scripts.export_real_queries`, hoặc `<LINK_DRIVE: data/queries/real_queries.jsonl>` |
-| Tài liệu gốc đã crawl | `data/raw_documents/` | `TODO(kiểm): dung lượng` | HF dataset `quyenpro/vibiomir-raw-documents` (85 file zip theo domain, giải nén bằng `bash scripts/unzip_raw_documents.sh`), hoặc `<LINK_DRIVE: zip_folder/ gồm 85 file <domain>.zip>`. `TODO(kiểm):` repo HF có để public không. |
-| Chỉ mục doc_id -> domain | `data/raw_documents_index.json` | 30,3 MB | Sinh lại bằng `build_index()` sau khi giải nén, hoặc `<LINK_DRIVE: data/raw_documents_index.json>` |
-| Snapshot Qdrant `medical_docs` | `data/backups/medical_docs-20261024-211206/` (`manifest.json`, `medical_docs.snapshot`) | 7,0 GB | HF dataset `quyenpro/vibiomir-medical-docs` qua `restore_medical_docs.sh`, hoặc `<LINK_DRIVE: data/backups/medical_docs-20261024-211206/>` |
-| Văn bản đại diện (để dựng lại index) | `data/doc_texts.jsonl` | 2,14 GB | `python -m scripts.build_doc_texts`, hoặc `<LINK_DRIVE: data/doc_texts.jsonl>` |
-| Pool top300 đã rerank | `data/tmp/phase1/doc_top300_bge_pool.jsonl` | 73,7 MB | `<LINK_DRIVE: data/tmp/phase1/doc_top300_bge_pool.jsonl>` |
-| Pool top60 đã rerank | `data/tmp/phase1/doc_d35_c44_top60_bge_pool.jsonl` | 13,6 MB | `<LINK_DRIVE: data/tmp/phase1/doc_d35_c44_top60_bge_pool.jsonl>` |
-| Điểm rescore (fuse_submission luôn mở file này) | `data/tmp/phase1/rescore_bge.jsonl` | 8,9 MB | `<LINK_DRIVE: data/tmp/phase1/rescore_bge.jsonl>` |
-| Bài nộp SOTA | `data/fuse_d160_c100_top300_orig_ctop60+top300_cap2700.zip` | 98,9 MB | `<LINK_DRIVE: data/fuse_d160_c100_top300_orig_ctop60+top300_cap2700.zip>` |
+| Câu hỏi | `data/queries/real_queries.jsonl` | 0,23 MB | `python -m scripts.export_real_queries`, hoặc [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| Tài liệu gốc đã crawl | `data/raw_documents/` | `TODO(kiểm): dung lượng` | HF dataset `quyenpro/vibiomir-raw-documents` (85 file zip theo domain, giải nén bằng `bash scripts/unzip_raw_documents.sh`), hoặc [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `05_raw_documents.zip`. `TODO(kiểm):` repo HF có để public không. |
+| Chỉ mục doc_id -> domain | `data/raw_documents_index.json` | 30,3 MB | Sinh lại bằng `build_index()` sau khi giải nén, hoặc [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| Snapshot Qdrant `medical_docs` | `data/backups/medical_docs-20261024-211206/` (`manifest.json`, `medical_docs.snapshot`) | 7,0 GB | HF dataset `quyenpro/vibiomir-medical-docs` qua `restore_medical_docs.sh`, hoặc [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `04_qdrant_medical_docs_snapshot.zip` |
+| Văn bản đại diện (để dựng lại index) | `data/doc_texts.jsonl` | 2,14 GB | `python -m scripts.build_doc_texts`, hoặc không upload (file trung gian, sinh lại được) |
+| Pool top300 đã rerank | `data/tmp/phase1/doc_top300_bge_pool.jsonl` | 73,7 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| Pool top60 đã rerank | `data/tmp/phase1/doc_d35_c44_top60_bge_pool.jsonl` | 13,6 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| Điểm rescore (fuse_submission luôn mở file này) | `data/tmp/phase1/rescore_bge.jsonl` | 8,9 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| Bài nộp SOTA | `data/fuse_d160_c100_top300_orig_ctop60+top300_cap2700.zip` | 98,9 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `02_bai_nop_private.zip` |
 
 Có hai pool đã rerank là đủ để dựng lại bài SOTA bằng CPU, không cần GPU hay Qdrant.
 
@@ -231,8 +231,8 @@ Lệnh trên server Linux ghi bash và ghi rõ.
 ### 5.1 Môi trường
 
 ```powershell
-git clone <REPO_URL> r2ai; cd r2ai
-git checkout kaggle-rerank-jobs
+git clone https://github.com/quyen244/medial-retrieval r2ai; cd r2ai
+git checkout main
 py -3.12 -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cu126
@@ -241,7 +241,7 @@ pip install "transformers==5.20.1" "sentence-transformers==6.1.0" "FlagEmbedding
 docker compose up -d qdrant
 ```
 
-`TODO(kiểm):` `<REPO_URL>` (link repo mã nguồn công khai hoặc `<LINK_DRIVE: mã nguồn repo>`).
+Mã nguồn: [GitHub](https://github.com/quyen244/medial-retrieval), nhánh `main`.
 
 ### 5.2 Đường tắt: dựng lại bài 0 từ pool đã rerank (chỉ CPU)
 

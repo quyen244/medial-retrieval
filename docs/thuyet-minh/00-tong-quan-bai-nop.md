@@ -66,31 +66,42 @@ Kiểm định dạng mỗi zip theo [01-he-thong-sota.md](01-he-thong-sota.md) 
 
 ## Dữ liệu cần upload và link cần điền
 
-Thay mỗi `<LINK_DRIVE: ...>` trong ba tài liệu bằng link thật sau khi upload.
+Mọi dữ liệu nằm trong một thư mục Drive: https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing
+Mã nguồn: https://github.com/quyen244/medial-retrieval (nhánh `main`).
+Đường dẫn trong mỗi zip giữ dạng `data/...`, giải nén tại thư mục gốc repo là file về đúng chỗ.
+
+| Gói zip | Dung lượng | Nội dung |
+|---|---:|---|
+| `01_inputs_dung_bai.zip` | 47 MiB | index doc, câu hỏi, câu sửa, pool top60/top300, `rescore_bge.jsonl`, pool ftrr |
+| `02_bai_nop_private.zip` | 474 MiB | 5 bài nộp |
+| `03_doc_texts_8k.zip` | 964 MiB | `data/doc_texts_8k.jsonl` |
+| `04_qdrant_medical_docs_snapshot.zip` | 5,3 GiB | snapshot Qdrant `medical_docs` |
+| `05_raw_documents.zip` | 2,1 GiB | `data/raw_documents/` (1.003.793 file, 5,4 GB giải nén) + `raw_documents_index.json` |
+| `06_sft_reranker_data.zip` | 38 MiB | train/val SFT + pool gán nhãn T28 |
 Dung lượng đo bằng `ls -la` trên máy local ngày 2026-11-04, trừ chỗ ghi `TODO(kiểm)`.
 
 | # | File / thư mục | Dung lượng | Dùng cho | Link |
 |---|---|---:|---|---|
-| 1 | Mã nguồn repo (nhánh `kaggle-rerank-jobs`) | - | mọi bài | `<REPO_URL>` hoặc `<LINK_DRIVE: mã nguồn repo>` |
-| 2 | `data/queries/real_queries.jsonl` | 0,23 MB | mọi bài | `<LINK_DRIVE: data/queries/real_queries.jsonl>` |
-| 3 | `zip_folder/` (85 zip tài liệu gốc theo domain) hoặc `data/raw_documents/` | `TODO(kiểm)` | tầng chunk mọi bài | `<LINK_DRIVE: zip_folder/>`; có sẵn ở HF dataset `quyenpro/vibiomir-raw-documents` (`TODO(kiểm):` public?) |
-| 4 | `data/raw_documents_index.json` | 30,3 MB | tầng chunk mọi bài | `<LINK_DRIVE: data/raw_documents_index.json>` |
-| 5 | `data/backups/medical_docs-20261024-211206/` (snapshot Qdrant + manifest) | 7,0 GB | truy hồi lại từ đầu | `<LINK_DRIVE: data/backups/medical_docs-20261024-211206/>`; có sẵn ở HF dataset `quyenpro/vibiomir-medical-docs` (`TODO(kiểm):` public?) |
-| 6 | `data/doc_texts.jsonl` | 2,14 GB | dựng lại index | `<LINK_DRIVE: data/doc_texts.jsonl>` |
-| 7 | `data/doc_texts_8k.jsonl` | 4,08 GB | chấm ftrr, gán nhãn | `<LINK_DRIVE: data/doc_texts_8k.jsonl>` |
-| 8 | `data/spelling/corrected_queries.jsonl` | 1,1 MB | ftrr | `<LINK_DRIVE: data/spelling/corrected_queries.jsonl>` |
-| 9 | `data/tmp/phase1/doc_top300_bge_pool.jsonl` | 73,7 MB | bài 0-4 | `<LINK_DRIVE: data/tmp/phase1/doc_top300_bge_pool.jsonl>` |
-| 10 | `data/tmp/phase1/doc_d35_c44_top60_bge_pool.jsonl` | 13,6 MB | tầng chunk bài 0-4 | `<LINK_DRIVE: data/tmp/phase1/doc_d35_c44_top60_bge_pool.jsonl>` |
-| 11 | `data/tmp/phase1/rescore_bge.jsonl` | 8,9 MB | `fuse_submission.py` luôn mở | `<LINK_DRIVE: data/tmp/phase1/rescore_bge.jsonl>` |
-| 12 | `data/tmp/phase1/doc_top300_ftrr_qcorr_full_pool.jsonl` | 86,3 MB | bài 1, 3, 4 | `<LINK_DRIVE: data/tmp/phase1/doc_top300_ftrr_qcorr_full_pool.jsonl>` |
-| 13 | `data/tmp/phase1/doc_top300_ftrr_qcorr_pool.jsonl` (406 câu server) | khoảng 30 MB | tái hiện merge | `<LINK_DRIVE: data/tmp/phase1/doc_top300_ftrr_qcorr_pool.jsonl>` |
-| 14 | `data/kaggle/out/ftrr_rest/` (điểm 794 câu Kaggle + log) | khoảng 4,8 MB | tái hiện merge | `<LINK_DRIVE: data/kaggle/out/ftrr_rest/>` |
-| 15 | `data/labeling_doc_qcorr/` (`candidates.jsonl`, `texts.jsonl`) | 316 MB | gán nhãn LLM | `<LINK_DRIVE: data/labeling_doc_qcorr/>` |
-| 16 | `data/labeling_doc_qcorr_fit/train.jsonl`, `val.jsonl` (tập SFT thật, khớp model card; `out_labels/` của server đã mất) | 93,0 MB + 6,9 MB | SFT | `<LINK_DRIVE: data/labeling_doc_qcorr_fit/>` |
-| 17 | `data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_full_pool.jsonl` | 88,8 MB | pool gán nhãn | `<LINK_DRIVE: data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_full_pool.jsonl>` |
-| 18 | `artifact/labeling.zip` (trang gán nhãn) | 5,7 MB | minh hoạ nhãn tay | `<LINK_DRIVE: artifact/labeling.zip>` |
-| 19 | Bài 0 `data/fuse_d160_c100_top300_orig_ctop60+top300_cap2700.zip` | 98,9 MB | nộp, đầu vào bài 1-4 | `<LINK_DRIVE: bài 0>` |
-| 20 | Bài 1-4 trong `data/tmp/phase1/` | 98,9 MB (bài 1), 99,5 MB mỗi bài 2-4 (94,9 MiB) | nộp | `<LINK_DRIVE: bài 1>`, `<LINK_DRIVE: bài 2>`, `<LINK_DRIVE: bài 3>`, `<LINK_DRIVE: bài 4>` |
+| 1 | Mã nguồn repo (nhánh `main`) | - | mọi bài | [GitHub](https://github.com/quyen244/medial-retrieval) |
+| 2 | `data/queries/real_queries.jsonl` | 0,23 MB | mọi bài | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| 3 | `data/raw_documents/` | 5,4 GB (zip 2,1 GiB) | tầng chunk mọi bài | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `05_raw_documents.zip`; có sẵn ở HF dataset `quyenpro/vibiomir-raw-documents` (`TODO(kiểm):` public?) |
+| 4 | `data/raw_documents_index.json` | 30,3 MB | tầng chunk mọi bài | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| 5 | `data/backups/medical_docs-20261024-211206/` (snapshot Qdrant + manifest) | 7,0 GB | truy hồi lại từ đầu | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `04_qdrant_medical_docs_snapshot.zip`; có sẵn ở HF dataset `quyenpro/vibiomir-medical-docs` (`TODO(kiểm):` public?) |
+| 6 | `data/doc_texts.jsonl` | 2,14 GB | dựng lại index | không upload (file trung gian, sinh lại được) |
+| 7 | `data/doc_texts_8k.jsonl` | 4,08 GB | chấm ftrr, gán nhãn | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `03_doc_texts_8k.zip` |
+| 8 | `data/spelling/corrected_queries.jsonl` | 1,1 MB | ftrr | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| 9 | `data/tmp/phase1/doc_top300_bge_pool.jsonl` | 73,7 MB | bài 0-4 | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| 10 | `data/tmp/phase1/doc_d35_c44_top60_bge_pool.jsonl` | 13,6 MB | tầng chunk bài 0-4 | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| 11 | `data/tmp/phase1/rescore_bge.jsonl` | 8,9 MB | `fuse_submission.py` luôn mở | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| 12 | `data/tmp/phase1/doc_top300_ftrr_qcorr_full_pool.jsonl` | 86,3 MB | bài 1, 3, 4 | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| 13 | `data/tmp/phase1/doc_top300_ftrr_qcorr_pool.jsonl` (406 câu server) | khoảng 30 MB | tái hiện merge | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| 14 | `data/kaggle/out/ftrr_rest/` (điểm 794 câu Kaggle + log) | khoảng 4,8 MB | tái hiện merge | `không upload (file trung gian, sinh lại được); điểm đã gộp vào `doc_top300_ftrr_qcorr_full_pool.jsonl`` |
+| 15 | `data/labeling_doc_qcorr/` (`candidates.jsonl`, `texts.jsonl`) | 316 MB | gán nhãn LLM | không upload (file trung gian, sinh lại được) |
+| 16 | `data/labeling_doc_qcorr_fit/train.jsonl`, `val.jsonl` (tập SFT thật, khớp model card; `out_labels/` của server đã mất) | 93,0 MB + 6,9 MB | SFT | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `06_sft_reranker_data.zip` |
+| 17 | `data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_full_pool.jsonl` | 88,8 MB | pool gán nhãn | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `06_sft_reranker_data.zip` |
+| 18 | `artifact/labeling.zip` (trang gán nhãn) | 5,7 MB | minh hoạ nhãn tay | `không upload (file trung gian, sinh lại được); nhãn tay nằm trong git` |
+| 19 | Bài 0 `data/fuse_d160_c100_top300_orig_ctop60+top300_cap2700.zip` | 98,9 MB | nộp, đầu vào bài 1-4 | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `02_bai_nop_private.zip` |
+| 20 | Bài 1-4 trong `data/tmp/phase1/` | 98,9 MB (bài 1), 99,5 MB mỗi bài 2-4 (94,9 MiB) | nộp | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `02_bai_nop_private.zip`, [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `02_bai_nop_private.zip`, [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `02_bai_nop_private.zip`, [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `02_bai_nop_private.zip` |
 
 Checkpoint (không cần upload Drive, tải thẳng từ HuggingFace):
 
