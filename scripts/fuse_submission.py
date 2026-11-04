@@ -59,7 +59,10 @@ POOLS = {"top60": f"{D}/doc_d35_c44_top60_bge_pool.jsonl", "top300": f"{D}/doc_t
          "q3e_p1_retr": f"{D}/doc_top300_q3e4b_p1_retr_qcorr_pool.jsonl",
          "q3e_p2_retr": f"{D}/doc_top300_q3e4b_p2_retr_qcorr_pool.jsonl",
          "q3e_p1": f"{D}/doc_top300_q3e4b_p1_bge_qcorr_pool.jsonl",
-         "q3e_p1_q4b": f"{D}/doc_top300_q3e4b_p1_qwen3r4b_qcorr_pool.jsonl"}
+         "q3e_p1_q4b": f"{D}/doc_top300_q3e4b_p1_qwen3r4b_qcorr_pool.jsonl",
+         # pool top300 chấm lại bằng reranker fine-tune quyenpro/re-ranker-vibio, câu sửa, text 8k, len 2048
+         # (scripts/rerank_pool_ft.py trên server + scripts/kaggle_rerank_ft.py trên Kaggle, gộp bằng merge)
+         "ftrr_qc": f"{D}/doc_top300_ftrr_qcorr_full_pool.jsonl"}
 # Dump top-50 chunk mỗi câu từ index chunk `medical_documents` (Phase 0).
 CHUNK_EVIDENCE = "data/tmp/sub1200/D_ft_top50.jsonl"
 RRF_K = 60
