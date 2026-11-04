@@ -31,8 +31,9 @@ d160 đo hiệu ứng reranker sạch (cùng `m_doc` với SOTA); d100 đo xem �
 - Model: https://huggingface.co/quyenpro/re-ranker-vibio (public). SFT 1 epoch, 15.870 cặp / 263 câu, len 2048,
   batch hiệu dụng 32. Val pairwise (18 câu, nhãn chủ yếu là LLM): mọi cặp 0,7903 -> 0,8248; 1,0 so với 0,4: 0,6985 -> 0,7331.
   Nhãn: Qwen3-8B-AWQ, prompt `71b3b840a577`, precision mức 2 so với người = 0,60 (dễ dãi).
-- Server RTX 5060 Ti chấm được một phần pool bằng `scripts/rerank_pool_ft.py` (fp16, ~35 cặp/s), tự dừng sau 90 phút
-  (~10:11 ngày 2026-11-04), ra `data/doc_top300_ftrr_qcorr_pool.jsonl` trên server, khoảng 600+ câu.
+- Server RTX 5060 Ti chấm được một phần pool bằng `scripts/rerank_pool_ft.py` (fp16, ~33-35 cặp/s), dừng tay lúc
+  09:42 ngày 2026-11-04: `data/doc_top300_ftrr_qcorr_pool.jsonl` có **406 câu** (đủ 300 doc mỗi câu, 30 MB, không dòng hỏng).
+  Còn **794 câu** (238.200 cặp) cho Kaggle.
   Câu 1 chấm bf16 (lệch fp16 tối đa 0,008), còn lại fp16.
 
 ## Các bước
