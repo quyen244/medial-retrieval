@@ -106,6 +106,8 @@ def main(argv=None) -> int:
     p.add_argument("--warmup-ratio", type=float, default=0.1)
     p.add_argument("--max-length", type=int, default=MAX_LENGTH)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--eval-batch-size", type=int, default=32,
+                   help="batch khi chấm pairwise accuracy trên val; ở len 2048 trên 16 GB phải hạ (vd 8)")
     p.add_argument("--dry-run", action="store_true", help="chỉ đọc và thống kê dữ liệu")
     a = p.parse_args(argv)
 
@@ -140,7 +142,7 @@ def main(argv=None) -> int:
 
     print("\n[trước khi train]")
     smoke(model)
-    base_acc = pairwise_accuracy(model, val_rows, 32) if val_rows else None
+    base_acc = pairwise_accuracy(model, val_rows, a.eval_batch_size) if val_rows else None
     if base_acc is not None:
         print(f"  val pairwise accuracy (bản gốc): mọi cặp {base_acc[0]:.4f} | 1.0 so với 0.4: {base_acc[1]:.4f}")
 
@@ -185,7 +187,7 @@ def main(argv=None) -> int:
     print("\n[sau khi train]")
     smoke(model)
     if val_rows:
-        acc = pairwise_accuracy(model, val_rows, 32)
+        acc = pairwise_accuracy(model, val_rows, a.eval_batch_size)
         print(f"  val pairwise accuracy, mọi cặp:        {base_acc[0]:.4f} (gốc) -> {acc[0]:.4f} (fine-tune)")
         print(f"  val pairwise accuracy, 1.0 so với 0.4: {base_acc[1]:.4f} (gốc) -> {acc[1]:.4f} (fine-tune)")
     return 0

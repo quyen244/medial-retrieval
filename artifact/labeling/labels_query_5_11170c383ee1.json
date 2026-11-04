@@ -4,7 +4,7 @@
   "pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_pool.jsonl",
   "compare_pool": "data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_pool.jsonl",
   "fingerprint": "11170c383ee1",
-  "exported_at": "2026-11-03T18:05:11.134Z",
+  "exported_at": "2026-11-03T19:08:06.000Z",
   "labels": [
     {
       "rank_1024": 1,
@@ -18,25 +18,25 @@
       "rank_1024": 2,
       "rank_2048": 3,
       "doc_id": "665102",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T16:52:25.198Z"
+      "label": "unsure",
+      "note": "đổi 0->1: bệnh lao chung, cùng bối cảnh phòng tránh lây nhiễm (quy tắc 2026-11-04)",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 5,
       "rank_2048": 7,
       "doc_id": "137483",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T16:54:56.312Z"
+      "label": "unsure",
+      "note": "đổi 0->1: bệnh lao chung, cùng bối cảnh phòng tránh lây nhiễm (quy tắc 2026-11-04)",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 8,
       "rank_2048": 5,
       "doc_id": "186019",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T16:53:43.172Z"
+      "label": "unsure",
+      "note": "đổi 0->1: bệnh lao chung, cùng bối cảnh phòng tránh lây nhiễm (quy tắc 2026-11-04)",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 9,
@@ -50,9 +50,9 @@
       "rank_1024": 10,
       "rank_2048": 2,
       "doc_id": "663741",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T16:52:09.913Z"
+      "label": "unsure",
+      "note": "đổi 0->1: bệnh lao chung, cùng bối cảnh phòng tránh lây nhiễm (quy tắc 2026-11-04)",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 12,
@@ -66,9 +66,9 @@
       "rank_1024": 14,
       "rank_2048": 40,
       "doc_id": "49815",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T16:57:59.452Z"
+      "label": "unsure",
+      "note": "đổi 0->1: bệnh lao chung, cùng bối cảnh phòng tránh lây nhiễm (quy tắc 2026-11-04)",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 16,
@@ -90,17 +90,17 @@
       "rank_1024": 21,
       "rank_2048": 8,
       "doc_id": "186023",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T16:55:10.436Z"
+      "label": "unsure",
+      "note": "đổi 0->1: bệnh lao chung, cùng bối cảnh phòng tránh lây nhiễm (quy tắc 2026-11-04)",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 23,
       "rank_2048": 9,
       "doc_id": "178414",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T16:55:19.443Z"
+      "label": "unsure",
+      "note": "đổi 0->1: bệnh lao chung, cùng bối cảnh phòng tránh lây nhiễm (quy tắc 2026-11-04)",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 26,
@@ -122,9 +122,9 @@
       "rank_1024": 67,
       "rank_2048": 30,
       "doc_id": "417332",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T16:57:37.130Z"
+      "label": "unsure",
+      "note": "đổi 0->1: bệnh lao chung, cùng bối cảnh phòng tránh lây nhiễm (quy tắc 2026-11-04)",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 83,
@@ -194,9 +194,9 @@
       "rank_1024": 215,
       "rank_2048": 185,
       "doc_id": "18647",
-      "label": "irrelevant",
-      "note": "",
-      "updated_at": "2026-11-03T17:02:25.849Z"
+      "label": "unsure",
+      "note": "đổi 0->1: đúng đối tượng lao đa kháng, không trả lời cách phòng tránh",
+      "updated_at": "2026-11-03T19:08:06.000Z"
     },
     {
       "rank_1024": 219,
