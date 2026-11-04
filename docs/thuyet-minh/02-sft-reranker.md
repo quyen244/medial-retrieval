@@ -142,17 +142,17 @@ Script `after_labels_train.py` dựng hai file này chạy trên server và đã
 
 | Dữ liệu | Đường dẫn | Dung lượng | Cách lấy |
 |---|---|---:|---|
-| Câu sửa | `data/spelling/corrected_queries.jsonl` | 1,1 MB | `<LINK_DRIVE: data/spelling/corrected_queries.jsonl>` |
+| Câu sửa | `data/spelling/corrected_queries.jsonl` | 1,1 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
 | Nhãn tay | `artifact/labeling/labels_query_*.json` | 10 file, khoảng 6 KB mỗi file | trong git |
-| Trang gán nhãn | `artifact/labeling/query_*.html`, `artifact/labeling.zip` | 3,1-4,8 MB mỗi trang, zip 5,7 MB | `<LINK_DRIVE: artifact/labeling.zip>` |
-| Ứng viên + text gán nhãn | `data/labeling_doc_qcorr/candidates.jsonl`, `texts.jsonl` | 6,0 MB + 310 MB | `<LINK_DRIVE: data/labeling_doc_qcorr/>` |
-| Tập train/val SFT | `data/labeling_doc_qcorr_fit/train.jsonl`, `val.jsonl` | 93,0 MB + 6,9 MB | `<LINK_DRIVE: data/labeling_doc_qcorr_fit/>` |
-| Pool gán nhãn | `data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_full_pool.jsonl` | 88,8 MB | `<LINK_DRIVE: data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_full_pool.jsonl>` |
-| Văn bản dài | `data/doc_texts_8k.jsonl` | 4,08 GB | `<LINK_DRIVE: data/doc_texts_8k.jsonl>` |
-| Pool top300 (đầu vào chấm) | `data/tmp/phase1/doc_top300_bge_pool.jsonl` | 73,7 MB | `<LINK_DRIVE: data/tmp/phase1/doc_top300_bge_pool.jsonl>` |
-| Pool ftrr đủ 1.200 câu | `data/tmp/phase1/doc_top300_ftrr_qcorr_full_pool.jsonl` | 86,3 MB | `<LINK_DRIVE: data/tmp/phase1/doc_top300_ftrr_qcorr_full_pool.jsonl>` |
-| Phần chấm ở server | `data/tmp/phase1/doc_top300_ftrr_qcorr_pool.jsonl` (406 câu) | khoảng 30 MB | `<LINK_DRIVE: data/tmp/phase1/doc_top300_ftrr_qcorr_pool.jsonl>` |
-| Điểm Kaggle | `data/kaggle/out/ftrr_rest/scores_ftrr_rest.s0.jsonl`, `.s1.jsonl`, `log_ftrr_rest.txt` | 2,4 MB mỗi shard | `<LINK_DRIVE: data/kaggle/out/ftrr_rest/>` |
+| Trang gán nhãn | `artifact/labeling/query_*.html`, `artifact/labeling.zip` | 3,1-4,8 MB mỗi trang, zip 5,7 MB | `không upload (file trung gian, sinh lại được); nhãn tay nằm trong git` |
+| Ứng viên + text gán nhãn | `data/labeling_doc_qcorr/candidates.jsonl`, `texts.jsonl` | 6,0 MB + 310 MB | không upload (file trung gian, sinh lại được) |
+| Tập train/val SFT | `data/labeling_doc_qcorr_fit/train.jsonl`, `val.jsonl` | 93,0 MB + 6,9 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `06_sft_reranker_data.zip` |
+| Pool gán nhãn | `data/T28_rrf_bge_q3e/w0.6_qc_vi90_bge_q3etext2048_full_pool.jsonl` | 88,8 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `06_sft_reranker_data.zip` |
+| Văn bản dài | `data/doc_texts_8k.jsonl` | 4,08 GB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `03_doc_texts_8k.zip` |
+| Pool top300 (đầu vào chấm) | `data/tmp/phase1/doc_top300_bge_pool.jsonl` | 73,7 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| Pool ftrr đủ 1.200 câu | `data/tmp/phase1/doc_top300_ftrr_qcorr_full_pool.jsonl` | 86,3 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| Phần chấm ở server | `data/tmp/phase1/doc_top300_ftrr_qcorr_pool.jsonl` (406 câu) | khoảng 30 MB | [Drive](https://drive.google.com/drive/folders/1YDmbMep_DnX0eSjIW43awca_6F5O-Hlp?usp=sharing), gói `01_inputs_dung_bai.zip` |
+| Điểm Kaggle | `data/kaggle/out/ftrr_rest/scores_ftrr_rest.s0.jsonl`, `.s1.jsonl`, `log_ftrr_rest.txt` | 2,4 MB mỗi shard | `không upload (file trung gian, sinh lại được); điểm đã gộp vào `doc_top300_ftrr_qcorr_full_pool.jsonl`` |
 
 ## 3. Mô hình
 
